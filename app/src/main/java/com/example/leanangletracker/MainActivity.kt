@@ -223,8 +223,6 @@ private fun CombinedGaugeAndHistory(
 
             LeanHistoryGraph(
                 values = state.leanHistoryDeg,
-                maxLeftDeg = state.maxLeftDeg,
-                maxRightDeg = state.maxRightDeg,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
@@ -339,11 +337,11 @@ private fun TachoGauge(
 @Composable
 private fun LeanHistoryGraph(
     values: List<Float>,
-    maxLeftDeg: Float,
-    maxRightDeg: Float,
     modifier: Modifier = Modifier
 ) {
-    val maxAbsDisplay = maxOf(10f, maxOf(abs(maxLeftDeg), abs(maxRightDeg))).coerceAtMost(70f)
+    val upperBound = values.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+    val lowerBound = values.minOrNull()?.coerceAtMost(0f) ?: 0f
+    val amplitude = maxOf(10f, abs(upperBound), abs(lowerBound))
 
     Box(modifier = modifier.background(Color(0xFFF3F8FF), RoundedCornerShape(10.dp))) {
         Canvas(modifier = Modifier.fillMaxSize().padding(6.dp)) {
@@ -351,10 +349,10 @@ private fun LeanHistoryGraph(
             val height = size.height
             val centerY = height / 2f
 
-            fun yFor(deg: Float): Float = centerY - (deg / maxAbsDisplay) * (height * 0.42f)
+            fun yFor(deg: Float): Float = centerY - (deg / amplitude) * (height * 0.42f)
 
-            val topRef = yFor(maxAbsDisplay)
-            val bottomRef = yFor(-maxAbsDisplay)
+            val topRef = yFor(upperBound)
+            val bottomRef = yFor(lowerBound)
 
             drawLine(
                 color = Color(0xFF9DBBE8),
@@ -380,7 +378,7 @@ private fun LeanHistoryGraph(
                 val path = Path()
                 values.forEachIndexed { index, value ->
                     val x = index * stepX
-                    val y = yFor(value.coerceIn(-maxAbsDisplay, maxAbsDisplay))
+                    val y = yFor(value.coerceIn(-amplitude, amplitude))
                     if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
 
@@ -399,14 +397,14 @@ private fun LeanHistoryGraph(
             fontSize = 12.sp
         )
         Text(
-            text = "Upper bound (Max R): ${"%.1f".format(maxRightDeg.coerceAtLeast(0f))}°",
+            text = "Upper bound (Max R): ${"%.1f".format(upperBound)}°",
             modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 6.dp),
             color = Color(0xFF35567F),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold
         )
         Text(
-            text = "Lower bound (Max L): ${"%.1f".format(maxLeftDeg.coerceAtMost(0f))}°",
+            text = "Lower bound (Max L): ${"%.1f".format(lowerBound)}°",
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp),
             color = Color(0xFF35567F),
             fontSize = 10.sp,
