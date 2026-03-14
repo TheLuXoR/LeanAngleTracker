@@ -6,18 +6,15 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
 private data class Vec3(val x: Float, val y: Float, val z: Float) {
     operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
-    operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
     operator fun times(scale: Float) = Vec3(x * scale, y * scale, z * scale)
 
     fun dot(other: Vec3): Float = x * other.x + y * other.y + z * other.z
@@ -49,7 +46,10 @@ data class UiState(
     val calibrationStep: CalibrationStep = CalibrationStep.IDLE,
     val instructions: String = "Mount phone on bike, then start calibration.",
     val isCalibrated: Boolean = false,
-    val qualityHint: String = ""
+    val qualityHint: String = "",
+    val maxLeftDeg: Float = 0f,
+    val maxRightDeg: Float = 0f,
+    val leanHistoryDeg: List<Float> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
@@ -67,13 +67,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val gyroSamples = mutableListOf<Vec3>()
     private var bikeForwardAxis: Vec3? = null
 
+    private val leanHistory = ArrayDeque<Float>()
+    private val maxHistoryPoints = 180
+
     init {
-        gravitySensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-        }
-        gyroSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
-        }
+        gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        gyroSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+
         if (gravitySensor == null || gyroSensor == null) {
             _uiState.value = _uiState.value.copy(
                 instructions = "Required sensors not available on this phone."
@@ -85,10 +85,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         uprightUp = null
         bikeForwardAxis = null
         gyroSamples.clear()
+        leanHistory.clear()
+
         _uiState.value = _uiState.value.copy(
             calibrationStep = CalibrationStep.UPRIGHT,
             isCalibrated = false,
             leanAngleDeg = 0f,
+            maxLeftDeg = 0f,
+            maxRightDeg = 0f,
+            leanHistoryDeg = emptyList(),
             qualityHint = "",
             instructions = "Step 1/2: Hold bike upright and still. Tap 'Capture Upright'."
         )
@@ -106,6 +111,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun finishCalibration() {
         if (_uiState.value.calibrationStep != CalibrationStep.WIGGLE) return
         val up = uprightUp ?: return
+
         if (gyroSamples.size < 20) {
             _uiState.value = _uiState.value.copy(
                 qualityHint = "Not enough motion captured. Wiggle more and try again."
@@ -114,11 +120,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         val principal = principalAxisFromGyro(gyroSamples)
-        val forward = if (abs(principal.dot(up)) > 0.9f) {
-            null
-        } else {
-            principal.normalized()
-        }
+        val forward = if (abs(principal.dot(up)) > 0.9f) null else principal.normalized()
 
         if (forward == null) {
             _uiState.value = _uiState.value.copy(
@@ -140,6 +142,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         uprightUp = null
         bikeForwardAxis = null
         gyroSamples.clear()
+        leanHistory.clear()
         _uiState.value = UiState()
     }
 
@@ -155,9 +158,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             Sensor.TYPE_GYROSCOPE -> {
                 if (_uiState.value.calibrationStep == CalibrationStep.WIGGLE) {
                     gyroSamples += Vec3(event.values[0], event.values[1], event.values[2])
-                    if (gyroSamples.size > 2000) {
-                        gyroSamples.removeFirst()
-                    }
+                    if (gyroSamples.size > 2000) gyroSamples.removeFirst()
                 }
             }
         }
@@ -171,11 +172,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
         val leanRad = atan2(numerator, denominator)
-        val leanDeg = Math.toDegrees(leanRad.toDouble()).toFloat()
+        val leanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
 
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(leanAngleDeg = leanDeg)
-        }
+        leanHistory += leanDeg
+        if (leanHistory.size > maxHistoryPoints) leanHistory.removeFirst()
+
+        val previous = _uiState.value
+        _uiState.value = previous.copy(
+            leanAngleDeg = leanDeg,
+            maxLeftDeg = minOf(previous.maxLeftDeg, leanDeg),
+            maxRightDeg = maxOf(previous.maxRightDeg, leanDeg),
+            leanHistoryDeg = leanHistory.toList()
+        )
     }
 
     private fun principalAxisFromGyro(samples: List<Vec3>): Vec3 {
