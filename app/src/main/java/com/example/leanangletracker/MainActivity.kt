@@ -398,26 +398,19 @@ private fun LeanHistoryGraph(
             color = Color(0xFF35567F),
             fontSize = 12.sp
         )
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 8.dp, top = 6.dp)
-                .background(Color(0xE6FFFFFF), RoundedCornerShape(6.dp))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Max L ${"%.1f".format(abs(maxLeftDeg))}°",
-                color = Color(0xFF35567F),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Max R ${"%.1f".format(maxRightDeg)}°",
-                color = Color(0xFF35567F),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+        Text(
+            text = "Upper bound (Max R): ${"%.1f".format(maxRightDeg.coerceAtLeast(0f))}°",
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 6.dp),
+            color = Color(0xFF35567F),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "Lower bound (Max L): ${"%.1f".format(maxLeftDeg.coerceAtMost(0f))}°",
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp),
+            color = Color(0xFF35567F),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
