@@ -212,21 +212,28 @@ private fun CombinedGaugeAndHistory(
                 style = MaterialTheme.typography.titleMedium
             )
 
-            TachoGauge(
-                currentDeg = state.leanAngleDeg,
-                maxLeftDeg = state.maxLeftDeg,
-                maxRightDeg = state.maxRightDeg,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-            )
+            ) {
+                TachoGauge(
+                    currentDeg = state.leanAngleDeg,
+                    maxLeftDeg = state.maxLeftDeg,
+                    maxRightDeg = state.maxRightDeg,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 46.dp)
+                )
 
-            LeanHistoryGraph(
-                values = state.leanHistoryDeg,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-            )
+                LeanHistoryGraph(
+                    values = state.leanHistoryDeg,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(132.dp)
+                )
+            }
         }
     }
 }
