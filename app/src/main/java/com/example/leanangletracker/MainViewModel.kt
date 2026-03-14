@@ -49,7 +49,8 @@ data class UiState(
     val qualityHint: String = "",
     val maxLeftDeg: Float = 0f,
     val maxRightDeg: Float = 0f,
-    val leanHistoryDeg: List<Float> = emptyList()
+    val leanHistoryDeg: List<Float> = emptyList(),
+    val invertLeanAngle: Boolean = true
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
@@ -138,12 +139,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         )
     }
 
+    fun setInvertLeanAngle(invert: Boolean) {
+        val previous = _uiState.value
+        if (previous.invertLeanAngle == invert) return
+
+        val transformedHistory = previous.leanHistoryDeg.map { -it }
+        val transformedCurrent = -previous.leanAngleDeg
+
+        _uiState.value = previous.copy(
+            invertLeanAngle = invert,
+            leanAngleDeg = transformedCurrent,
+            maxLeftDeg = -previous.maxRightDeg,
+            maxRightDeg = -previous.maxLeftDeg,
+            leanHistoryDeg = transformedHistory
+        )
+
+        leanHistory.clear()
+        leanHistory.addAll(transformedHistory)
+    }
+
     fun resetCalibration() {
         uprightUp = null
         bikeForwardAxis = null
         gyroSamples.clear()
         leanHistory.clear()
-        _uiState.value = UiState()
+        _uiState.value = UiState(invertLeanAngle = _uiState.value.invertLeanAngle)
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -172,7 +192,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
         val leanRad = atan2(numerator, denominator)
-        val leanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
+        val rawLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
+        val leanDeg = if (_uiState.value.invertLeanAngle) -rawLeanDeg else rawLeanDeg
 
         leanHistory += leanDeg
         if (leanHistory.size > maxHistoryPoints) leanHistory.removeFirst()

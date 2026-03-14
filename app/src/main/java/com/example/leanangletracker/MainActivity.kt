@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,7 +60,8 @@ class MainActivity : ComponentActivity() {
                         onStartCalibration = viewModel::startCalibration,
                         onCaptureUpright = viewModel::captureUpright,
                         onFinishCalibration = viewModel::finishCalibration,
-                        onReset = viewModel::resetCalibration
+                        onReset = viewModel::resetCalibration,
+                        onToggleInvertLean = viewModel::setInvertLeanAngle
                     )
                 }
             }
@@ -73,7 +75,8 @@ private fun LeanAngleScreen(
     onStartCalibration: () -> Unit,
     onCaptureUpright: () -> Unit,
     onFinishCalibration: () -> Unit,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onToggleInvertLean: (Boolean) -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -104,6 +107,10 @@ private fun LeanAngleScreen(
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     CalibrationCard(state)
+                    SettingsCard(
+                        invertLean = state.invertLeanAngle,
+                        onToggleInvertLean = onToggleInvertLean
+                    )
                     Controls(
                         state = state,
                         onStartCalibration = onStartCalibration,
@@ -127,6 +134,10 @@ private fun LeanAngleScreen(
                         .weight(1f)
                 )
                 CalibrationCard(state)
+                SettingsCard(
+                    invertLean = state.invertLeanAngle,
+                    onToggleInvertLean = onToggleInvertLean
+                )
                 Controls(
                     state = state,
                     onStartCalibration = onStartCalibration,
@@ -161,6 +172,35 @@ private fun CalibrationCard(state: UiState) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = state.qualityHint, color = MaterialTheme.colorScheme.primary)
             }
+        }
+    }
+}
+
+@Composable
+private fun SettingsCard(
+    invertLean: Boolean,
+    onToggleInvertLean: (Boolean) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Settings", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = "Invert lean direction (default ON)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF35567F)
+                )
+            }
+            Switch(
+                checked = invertLean,
+                onCheckedChange = onToggleInvertLean
+            )
         }
     }
 }
