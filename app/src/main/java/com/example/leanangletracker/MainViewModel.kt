@@ -50,7 +50,8 @@ data class UiState(
     val maxLeftDeg: Float = 0f,
     val maxRightDeg: Float = 0f,
     val leanHistoryDeg: List<Float> = emptyList(),
-    val invertLeanAngle: Boolean = true
+    val invertLeanAngle: Boolean = true,
+    val historyWindowSeconds: Int = 20
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
@@ -68,8 +69,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val gyroSamples = mutableListOf<Vec3>()
     private var bikeForwardAxis: Vec3? = null
 
-    private val leanHistory = ArrayDeque<Float>()
-    private val maxHistoryPoints = 180
+    private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
+
+    private val leanHistory = ArrayDeque<TimedLean>()
 
     init {
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
@@ -154,8 +156,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             leanHistoryDeg = transformedHistory
         )
 
+        val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
         leanHistory.clear()
-        leanHistory.addAll(transformedHistory)
+        leanHistory.addAll(transformedTimedHistory)
+    }
+
+    fun setHistoryWindowSeconds(seconds: Int) {
+        val clamped = seconds.coerceIn(5, 120)
+        val previous = _uiState.value
+        if (previous.historyWindowSeconds == clamped) return
+
+        val currentTimestamp = leanHistory.lastOrNull()?.timestampNs
+        if (currentTimestamp != null) {
+            pruneHistory(currentTimestamp, clamped)
+        }
+
+        val historyValues = leanHistory.map { it.valueDeg }
+        val recalculatedLeft = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f
+        val recalculatedRight = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+
+        _uiState.value = previous.copy(
+            historyWindowSeconds = clamped,
+            leanHistoryDeg = historyValues,
+            maxLeftDeg = minOf(previous.maxLeftDeg, recalculatedLeft),
+            maxRightDeg = maxOf(previous.maxRightDeg, recalculatedRight)
+        )
     }
 
     fun resetCalibration() {
@@ -163,7 +188,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         bikeForwardAxis = null
         gyroSamples.clear()
         leanHistory.clear()
-        _uiState.value = UiState(invertLeanAngle = _uiState.value.invertLeanAngle)
+        _uiState.value = UiState(
+            invertLeanAngle = _uiState.value.invertLeanAngle,
+            historyWindowSeconds = _uiState.value.historyWindowSeconds
+        )
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -172,7 +200,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 val alpha = 0.92f
                 val raw = Vec3(event.values[0], event.values[1], event.values[2])
                 filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
-                updateLeanAngle()
+                updateLeanAngle(event.timestamp)
             }
 
             Sensor.TYPE_GYROSCOPE -> {
@@ -184,7 +212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    private fun updateLeanAngle() {
+    private fun updateLeanAngle(timestampNs: Long) {
         val upRef = uprightUp ?: return
         val forward = bikeForwardAxis ?: return
         val currentUp = (filteredGravity * -1f).normalized()
@@ -195,16 +223,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val rawLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
         val leanDeg = if (_uiState.value.invertLeanAngle) -rawLeanDeg else rawLeanDeg
 
-        leanHistory += leanDeg
-        if (leanHistory.size > maxHistoryPoints) leanHistory.removeFirst()
+        leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
 
         val previous = _uiState.value
+        pruneHistory(timestampNs, previous.historyWindowSeconds)
+
+        val visibleHistory = leanHistory.map { it.valueDeg }
+        val visibleLeft = visibleHistory.minOrNull()?.coerceAtMost(0f) ?: 0f
+        val visibleRight = visibleHistory.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+
         _uiState.value = previous.copy(
             leanAngleDeg = leanDeg,
-            maxLeftDeg = minOf(previous.maxLeftDeg, leanDeg),
-            maxRightDeg = maxOf(previous.maxRightDeg, leanDeg),
-            leanHistoryDeg = leanHistory.toList()
+            maxLeftDeg = minOf(previous.maxLeftDeg, visibleLeft),
+            maxRightDeg = maxOf(previous.maxRightDeg, visibleRight),
+            leanHistoryDeg = visibleHistory
         )
+    }
+
+    private fun pruneHistory(currentTimestampNs: Long, historyWindowSeconds: Int) {
+        val cutoff = currentTimestampNs - historyWindowSeconds * 1_000_000_000L
+        while (leanHistory.isNotEmpty() && leanHistory.first().timestampNs < cutoff) {
+            leanHistory.removeFirst()
+        }
     }
 
     private fun principalAxisFromGyro(samples: List<Vec3>): Vec3 {

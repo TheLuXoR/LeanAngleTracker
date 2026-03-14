@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
                         onCaptureUpright = viewModel::captureUpright,
                         onFinishCalibration = viewModel::finishCalibration,
                         onReset = viewModel::resetCalibration,
-                        onToggleInvertLean = viewModel::setInvertLeanAngle
+                        onToggleInvertLean = viewModel::setInvertLeanAngle,
+                        onSetHistoryWindow = viewModel::setHistoryWindowSeconds
                     )
                 }
             }
@@ -76,7 +77,8 @@ private fun LeanAngleScreen(
     onCaptureUpright: () -> Unit,
     onFinishCalibration: () -> Unit,
     onReset: () -> Unit,
-    onToggleInvertLean: (Boolean) -> Unit
+    onToggleInvertLean: (Boolean) -> Unit,
+    onSetHistoryWindow: (Int) -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -109,7 +111,9 @@ private fun LeanAngleScreen(
                     CalibrationCard(state)
                     SettingsCard(
                         invertLean = state.invertLeanAngle,
-                        onToggleInvertLean = onToggleInvertLean
+                        historyWindowSeconds = state.historyWindowSeconds,
+                        onToggleInvertLean = onToggleInvertLean,
+                        onSetHistoryWindow = onSetHistoryWindow
                     )
                     Controls(
                         state = state,
@@ -136,7 +140,9 @@ private fun LeanAngleScreen(
                 CalibrationCard(state)
                 SettingsCard(
                     invertLean = state.invertLeanAngle,
-                    onToggleInvertLean = onToggleInvertLean
+                    historyWindowSeconds = state.historyWindowSeconds,
+                    onToggleInvertLean = onToggleInvertLean,
+                    onSetHistoryWindow = onSetHistoryWindow
                 )
                 Controls(
                     state = state,
@@ -179,7 +185,9 @@ private fun CalibrationCard(state: UiState) {
 @Composable
 private fun SettingsCard(
     invertLean: Boolean,
-    onToggleInvertLean: (Boolean) -> Unit
+    historyWindowSeconds: Int,
+    onToggleInvertLean: (Boolean) -> Unit,
+    onSetHistoryWindow: (Int) -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -196,6 +204,16 @@ private fun SettingsCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF35567F)
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("History", style = MaterialTheme.typography.bodySmall, color = Color(0xFF35567F))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds - 5) }) { Text("-") }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("${historyWindowSeconds}s", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds + 5) }) { Text("+") }
+                }
             }
             Switch(
                 checked = invertLean,
