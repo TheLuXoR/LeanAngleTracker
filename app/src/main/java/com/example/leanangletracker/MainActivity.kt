@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -37,6 +38,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,7 +93,8 @@ private fun LeanAngleScreen(
                     listOf(Color(0xFF071A2E), Color(0xFF0D2D4F), Color(0xFF071A2E))
                 )
             )
-            .padding(horizontal = 16.dp, vertical = 20.dp)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         if (isLandscape) {
             Row(
@@ -160,7 +164,7 @@ private fun LeanAngleScreen(
 private fun Header() {
     Text(
         text = "Lean Angle Tracker",
-        style = MaterialTheme.typography.headlineSmall,
+        style = MaterialTheme.typography.headlineMedium,
         color = Color.White,
         fontWeight = FontWeight.SemiBold
     )
@@ -173,7 +177,7 @@ private fun CalibrationCard(state: UiState) {
             modifier = Modifier.padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = state.instructions)
+            Text(text = state.instructions, fontSize = 17.sp, lineHeight = 22.sp)
             if (state.qualityHint.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = state.qualityHint, color = MaterialTheme.colorScheme.primary)
@@ -201,18 +205,18 @@ private fun SettingsCard(
                 Text("Settings", style = MaterialTheme.typography.titleSmall)
                 Text(
                     text = "Invert lean direction (default ON)",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF35567F)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("History", style = MaterialTheme.typography.bodySmall, color = Color(0xFF35567F))
+                    Text("History", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF35567F))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds - 5) }) { Text("-") }
+                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds - 5) }) { Text("-", fontSize = 20.sp) }
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("${historyWindowSeconds}s", fontWeight = FontWeight.SemiBold)
+                    Text("${historyWindowSeconds}s", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds + 5) }) { Text("+") }
+                    Button(onClick = { onSetHistoryWindow(historyWindowSeconds + 5) }) { Text("+", fontSize = 20.sp) }
                 }
             }
             Switch(
@@ -233,22 +237,22 @@ private fun Controls(
 ) {
     when (state.calibrationStep) {
         CalibrationStep.IDLE,
-        CalibrationStep.READY -> Button(onClick = onStartCalibration, modifier = Modifier.fillMaxWidth()) {
-            Text("Start Calibration")
+        CalibrationStep.READY -> Button(onClick = onStartCalibration, modifier = Modifier.fillMaxWidth().height(58.dp)) {
+            Text("Start Calibration", fontSize = 18.sp)
         }
 
-        CalibrationStep.UPRIGHT -> Button(onClick = onCaptureUpright, modifier = Modifier.fillMaxWidth()) {
-            Text("Capture Upright")
+        CalibrationStep.UPRIGHT -> Button(onClick = onCaptureUpright, modifier = Modifier.fillMaxWidth().height(58.dp)) {
+            Text("Capture Upright", fontSize = 18.sp)
         }
 
-        CalibrationStep.WIGGLE -> Button(onClick = onFinishCalibration, modifier = Modifier.fillMaxWidth()) {
-            Text("Finish Calibration")
+        CalibrationStep.WIGGLE -> Button(onClick = onFinishCalibration, modifier = Modifier.fillMaxWidth().height(58.dp)) {
+            Text("Finish Calibration", fontSize = 18.sp)
         }
     }
 
     Spacer(modifier = Modifier.height(6.dp))
-    Button(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
-        Text("Reset")
+    Button(onClick = onReset, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Text("Reset", fontSize = 17.sp)
     }
 }
 
@@ -267,7 +271,7 @@ private fun CombinedGaugeAndHistory(
         ) {
             Text(
                 text = if (state.isCalibrated) "Live Lean" else "Calibration required",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleLarge
             )
 
             Box(
@@ -382,7 +386,7 @@ private fun TachoGauge(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             color = Color.White,
             fontWeight = FontWeight.Bold,
-            fontSize = 18.sp
+            fontSize = 26.sp
         )
 
         Row(
@@ -392,9 +396,9 @@ private fun TachoGauge(
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Max L ${"%.1f".format(abs(maxLeftDeg))}°", color = Color(0xFF9CC6FF), fontSize = 12.sp)
+            Text("Max L ${"%.1f".format(abs(maxLeftDeg))}°", color = Color(0xFF9CC6FF), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.width(12.dp))
-            Text("Max R ${"%.1f".format(maxRightDeg)}°", color = Color(0xFF9CC6FF), fontSize = 12.sp)
+            Text("Max R ${"%.1f".format(maxRightDeg)}°", color = Color(0xFF9CC6FF), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -459,21 +463,21 @@ private fun LeanHistoryGraph(
             text = "Lean history",
             modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 6.dp),
             color = Color(0xFF35567F),
-            fontSize = 12.sp
+            fontSize = 14.sp
         )
         Text(
             text = "Upper bound (Max R): ${"%.1f".format(upperBound)}°",
             modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 6.dp),
             color = Color(0xFF35567F),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
         )
         Text(
             text = "Lower bound (Max L): ${"%.1f".format(lowerBound)}°",
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp),
             color = Color(0xFF35567F),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
