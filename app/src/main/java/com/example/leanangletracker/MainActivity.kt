@@ -1,5 +1,6 @@
 package com.example.leanangletracker
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,12 +11,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -32,10 +35,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -70,7 +75,9 @@ private fun LeanAngleScreen(
     onFinishCalibration: () -> Unit,
     onReset: () -> Unit
 ) {
-    Column(
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -78,78 +85,150 @@ private fun LeanAngleScreen(
                     listOf(Color(0xFF071A2E), Color(0xFF0D2D4F), Color(0xFF071A2E))
                 )
             )
-            .padding(horizontal = 16.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "Lean Angle Tracker",
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        if (isLandscape) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(
-                    text = if (state.isCalibrated) "Live Lean" else "Calibration required",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                TachoGauge(
-                    currentDeg = state.leanAngleDeg,
-                    maxLeftDeg = state.maxLeftDeg,
-                    maxRightDeg = state.maxRightDeg,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                )
-            }
-        }
+                Column(modifier = Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Header()
+                    CombinedGaugeAndHistory(
+                        state = state,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(text = state.instructions)
-                if (state.qualityHint.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = state.qualityHint, color = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CalibrationCard(state)
+                    Controls(
+                        state = state,
+                        onStartCalibration = onStartCalibration,
+                        onCaptureUpright = onCaptureUpright,
+                        onFinishCalibration = onFinishCalibration,
+                        onReset = onReset
+                    )
                 }
             }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Header()
+                CombinedGaugeAndHistory(
+                    state = state,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+                CalibrationCard(state)
+                Controls(
+                    state = state,
+                    onStartCalibration = onStartCalibration,
+                    onCaptureUpright = onCaptureUpright,
+                    onFinishCalibration = onFinishCalibration,
+                    onReset = onReset
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Header() {
+    Text(
+        text = "Lean Angle Tracker",
+        style = MaterialTheme.typography.headlineSmall,
+        color = Color.White,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
+private fun CalibrationCard(state: UiState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = state.instructions)
+            if (state.qualityHint.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = state.qualityHint, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Controls(
+    state: UiState,
+    onStartCalibration: () -> Unit,
+    onCaptureUpright: () -> Unit,
+    onFinishCalibration: () -> Unit,
+    onReset: () -> Unit
+) {
+    when (state.calibrationStep) {
+        CalibrationStep.IDLE,
+        CalibrationStep.READY -> Button(onClick = onStartCalibration, modifier = Modifier.fillMaxWidth()) {
+            Text("Start Calibration")
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            LeanHistoryGraph(
-                values = state.leanHistoryDeg,
+        CalibrationStep.UPRIGHT -> Button(onClick = onCaptureUpright, modifier = Modifier.fillMaxWidth()) {
+            Text("Capture Upright")
+        }
+
+        CalibrationStep.WIGGLE -> Button(onClick = onFinishCalibration, modifier = Modifier.fillMaxWidth()) {
+            Text("Finish Calibration")
+        }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+    Button(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
+        Text("Reset")
+    }
+}
+
+@Composable
+private fun CombinedGaugeAndHistory(
+    state: UiState,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = if (state.isCalibrated) "Live Lean" else "Calibration required",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            TachoGauge(
+                currentDeg = state.leanAngleDeg,
+                maxLeftDeg = state.maxLeftDeg,
+                maxRightDeg = state.maxRightDeg,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
-                    .padding(10.dp)
+                    .weight(1f)
             )
-        }
 
-        when (state.calibrationStep) {
-            CalibrationStep.IDLE,
-            CalibrationStep.READY -> Button(onClick = onStartCalibration, modifier = Modifier.fillMaxWidth()) {
-                Text("Start Calibration")
-            }
-
-            CalibrationStep.UPRIGHT -> Button(onClick = onCaptureUpright, modifier = Modifier.fillMaxWidth()) {
-                Text("Capture Upright")
-            }
-
-            CalibrationStep.WIGGLE -> Button(onClick = onFinishCalibration, modifier = Modifier.fillMaxWidth()) {
-                Text("Finish Calibration")
-            }
-        }
-
-        Button(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
-            Text("Reset")
+            LeanHistoryGraph(
+                values = state.leanHistoryDeg,
+                maxLeftDeg = state.maxLeftDeg,
+                maxRightDeg = state.maxRightDeg,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            )
         }
     }
 }
@@ -162,21 +241,13 @@ private fun TachoGauge(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(260.dp)) {
+        Canvas(modifier = Modifier.size(250.dp)) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension * 0.43f
             val maxDisplay = 65f
 
-            drawCircle(
-                color = Color(0xFFEEF6FF),
-                radius = radius * 1.04f,
-                center = center
-            )
-            drawCircle(
-                color = Color(0xFF17263A),
-                radius = radius,
-                center = center
-            )
+            drawCircle(color = Color(0xFFEEF6FF), radius = radius * 1.04f, center = center)
+            drawCircle(color = Color(0xFF17263A), radius = radius, center = center)
 
             for (mark in -60..60 step 10) {
                 val theta = Math.toRadians(mark.toDouble() - 90.0)
@@ -207,28 +278,25 @@ private fun TachoGauge(
                 )
             }
 
-            val leftPeakTip = angleToTip(maxLeftDeg, 0.9f)
-            val rightPeakTip = angleToTip(maxRightDeg, 0.9f)
             drawLine(
                 color = Color(0x6693C5FD),
                 start = center,
-                end = leftPeakTip,
+                end = angleToTip(maxLeftDeg, 0.9f),
                 strokeWidth = 6f,
                 cap = StrokeCap.Round
             )
             drawLine(
                 color = Color(0x6693C5FD),
                 start = center,
-                end = rightPeakTip,
+                end = angleToTip(maxRightDeg, 0.9f),
                 strokeWidth = 6f,
                 cap = StrokeCap.Round
             )
 
-            val currentTip = angleToTip(currentDeg, 0.86f)
             drawLine(
                 color = Color(0xFFFF4D6D),
                 start = center,
-                end = currentTip,
+                end = angleToTip(currentDeg, 0.86f),
                 strokeWidth = 10f,
                 cap = StrokeCap.Round
             )
@@ -253,49 +321,94 @@ private fun TachoGauge(
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
         )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .background(Color(0xCC0A1A2B), RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Max L ${"%.1f".format(abs(maxLeftDeg))}°", color = Color(0xFF9CC6FF), fontSize = 12.sp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text("Max R ${"%.1f".format(maxRightDeg)}°", color = Color(0xFF9CC6FF), fontSize = 12.sp)
+        }
     }
 }
 
 @Composable
-private fun LeanHistoryGraph(values: List<Float>, modifier: Modifier = Modifier) {
+private fun LeanHistoryGraph(
+    values: List<Float>,
+    maxLeftDeg: Float,
+    maxRightDeg: Float,
+    modifier: Modifier = Modifier
+) {
+    val maxAbsDisplay = maxOf(10f, maxOf(abs(maxLeftDeg), abs(maxRightDeg))).coerceAtMost(70f)
+
     Box(modifier = modifier.background(Color(0xFFF3F8FF), RoundedCornerShape(10.dp))) {
         Canvas(modifier = Modifier.fillMaxSize().padding(6.dp)) {
             val width = size.width
             val height = size.height
             val centerY = height / 2f
-            val maxAbs = 65f
 
+            fun yFor(deg: Float): Float = centerY - (deg / maxAbsDisplay) * (height * 0.42f)
+
+            val topRef = yFor(maxAbsDisplay)
+            val bottomRef = yFor(-maxAbsDisplay)
+
+            drawLine(
+                color = Color(0xFF9DBBE8),
+                start = Offset(0f, topRef),
+                end = Offset(width, topRef),
+                strokeWidth = 1.5f
+            )
             drawLine(
                 color = Color(0xFFBCD4F6),
                 start = Offset(0f, centerY),
                 end = Offset(width, centerY),
                 strokeWidth = 2f
             )
-
-            if (values.size < 2) return@Canvas
-
-            val stepX = width / (values.size - 1)
-            val path = Path()
-            values.forEachIndexed { index, value ->
-                val x = index * stepX
-                val y = centerY - (value.coerceIn(-maxAbs, maxAbs) / maxAbs) * (height * 0.45f)
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-
-            drawPath(
-                path = path,
-                color = Color(0xFF1F78FF),
-                style = Stroke(width = 5f, cap = StrokeCap.Round)
+            drawLine(
+                color = Color(0xFF9DBBE8),
+                start = Offset(0f, bottomRef),
+                end = Offset(width, bottomRef),
+                strokeWidth = 1.5f
             )
+
+            if (values.size >= 2) {
+                val stepX = width / (values.size - 1)
+                val path = Path()
+                values.forEachIndexed { index, value ->
+                    val x = index * stepX
+                    val y = yFor(value.coerceIn(-maxAbsDisplay, maxAbsDisplay))
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+
+                drawPath(
+                    path = path,
+                    color = Color(0xFF1F78FF),
+                    style = Stroke(width = 4.5f, cap = StrokeCap.Round)
+                )
+            }
         }
 
         Text(
             text = "Lean history",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 6.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 6.dp),
             color = Color(0xFF35567F),
             fontSize = 12.sp
+        )
+        Text(
+            text = "+${"%.0f".format(maxAbsDisplay)}°",
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 6.dp),
+            color = Color(0xFF35567F),
+            fontSize = 11.sp
+        )
+        Text(
+            text = "-${"%.0f".format(maxAbsDisplay)}°",
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp),
+            color = Color(0xFF35567F),
+            fontSize = 11.sp
         )
     }
 }
