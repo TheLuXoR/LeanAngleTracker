@@ -29,6 +29,8 @@
 
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="action_settings">Settings</string>
+    <string name="action_finish_ride">Fahrt beenden</string>
+    <string name="value_speed_kmh">%1$.1f km/h</string>
     <string name="direction_right">R</string>
     <string name="direction_left">L</string>
     <string name="direction_up">UP</string>

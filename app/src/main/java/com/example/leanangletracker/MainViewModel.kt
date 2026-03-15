@@ -1,11 +1,18 @@
 package com.example.leanangletracker
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import androidx.annotation.StringRes
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,31 +63,53 @@ data class CalibrationUiState(
     val currentStepAmplitudeDeg: Float = 0f
 )
 
+data class TrackPoint(
+    val timestampMs: Long,
+    val latitude: Double,
+    val longitude: Double,
+    val speedKmh: Float,
+    val leanAngleDeg: Float,
+    val lapIndex: Int = 0
+)
+
+data class RideSession(
+    val startedAtMs: Long,
+    val endedAtMs: Long,
+    val points: List<TrackPoint>
+)
+
 data class TrackingUiState(
     val leanAngleDeg: Float = 0f,
     val maxLeftDeg: Float = 0f,
     val maxRightDeg: Float = 0f,
-    val leanHistoryDeg: List<Float> = emptyList()
+    val leanHistoryDeg: List<Float> = emptyList(),
+    val speedKmh: Float = 0f,
+    val gpsActive: Boolean = false,
+    val hasTrackData: Boolean = false
 )
 
 data class SettingsUiState(
     val invertLeanAngle: Boolean = true,
     val historyWindowSeconds: Int = 20,
     val useGyroFusion: Boolean = false,
-    val gyroscopeAvailable: Boolean = false
+    val gyroscopeAvailable: Boolean = false,
+    val gpsTrackingEnabled: Boolean = false,
+    val locationPermissionGranted: Boolean = false
 )
 
 data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),
     val tracking: TrackingUiState = TrackingUiState(),
-    val settings: SettingsUiState = SettingsUiState()
+    val settings: SettingsUiState = SettingsUiState(),
+    val completedRide: RideSession? = null
 )
 
-class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
+class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val locationManager = application.getSystemService(LocationManager::class.java)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -97,16 +126,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var uprightStableCounter = 0
     private var gyroLeanDeg = 0f
     private var lastGyroTimestampNs: Long? = null
+    private var speedKmh = 0f
+    private var activeRideStartedMs: Long? = null
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
+    private val ridePoints = mutableListOf<TrackPoint>()
 
     init {
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         gyroscopeSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
 
         updateSettingsState {
-            it.copy(gyroscopeAvailable = gyroscopeSensor != null)
+            it.copy(
+                gyroscopeAvailable = gyroscopeSensor != null,
+                locationPermissionGranted = hasLocationPermission()
+            )
         }
 
         if (gravitySensor == null) {
@@ -126,6 +161,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         _uiState.value = _uiState.value.copy(settings = transform(_uiState.value.settings))
     }
 
+    fun onLocationPermissionResult(granted: Boolean) {
+        updateSettingsState { it.copy(locationPermissionGranted = granted) }
+        if (granted && _uiState.value.settings.gpsTrackingEnabled) {
+            startLocationUpdates()
+        } else {
+            stopLocationUpdates()
+        }
+    }
+
+    fun setGpsTrackingEnabled(enabled: Boolean) {
+        updateSettingsState { it.copy(gpsTrackingEnabled = enabled) }
+        if (enabled && _uiState.value.settings.locationPermissionGranted) {
+            startLocationUpdates()
+        } else {
+            stopLocationUpdates()
+            speedKmh = 0f
+            updateTrackingState { it.copy(speedKmh = 0f, gpsActive = false) }
+        }
+    }
+
+    fun finishRide() {
+        val pointsSnapshot = ridePoints.toList()
+        val started = activeRideStartedMs ?: System.currentTimeMillis()
+        if (pointsSnapshot.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                completedRide = RideSession(
+                    startedAtMs = started,
+                    endedAtMs = System.currentTimeMillis(),
+                    points = pointsSnapshot
+                )
+            )
+        }
+        ridePoints.clear()
+        activeRideStartedMs = null
+        updateTrackingState { it.copy(hasTrackData = false) }
+    }
+
+    fun clearCompletedRide() {
+        _uiState.value = _uiState.value.copy(completedRide = null)
+    }
+
     fun startCalibration() {
         uprightUp = null
         leftUp = null
@@ -137,6 +213,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
         leanHistory.clear()
+        ridePoints.clear()
+        activeRideStartedMs = null
 
         updateCalibrationState {
             it.copy(
@@ -154,7 +232,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leanAngleDeg = 0f,
                 maxLeftDeg = 0f,
                 maxRightDeg = 0f,
-                leanHistoryDeg = emptyList()
+                leanHistoryDeg = emptyList(),
+                hasTrackData = false,
+                speedKmh = 0f
             )
         }
     }
@@ -392,7 +472,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leanAngleDeg = leanDeg,
                 maxLeftDeg = minOf(previous.tracking.maxLeftDeg, visibleLeft),
                 maxRightDeg = maxOf(previous.tracking.maxRightDeg, visibleRight),
-                leanHistoryDeg = visibleHistory
+                leanHistoryDeg = visibleHistory,
+                speedKmh = speedKmh,
+                gpsActive = previous.settings.gpsTrackingEnabled && previous.settings.locationPermissionGranted,
+                hasTrackData = ridePoints.isNotEmpty()
             )
         )
     }
@@ -429,10 +512,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-75f, 75f)
     }
 
+    private fun hasLocationPermission(): Boolean {
+        val context = getApplication<Application>()
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun startLocationUpdates() {
+        if (!hasLocationPermission()) return
+
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        providers.forEach { provider ->
+            if (locationManager.isProviderEnabled(provider)) {
+                locationManager.requestLocationUpdates(provider, 1000L, 1f, this)
+            }
+        }
+        updateTrackingState { it.copy(gpsActive = true) }
+    }
+
+    private fun stopLocationUpdates() {
+        locationManager.removeUpdates(this)
+        updateTrackingState { it.copy(gpsActive = false) }
+    }
+
+    override fun onLocationChanged(location: Location) {
+        speedKmh = (location.speed * 3.6f).coerceAtLeast(0f)
+        val now = System.currentTimeMillis()
+        val lean = _uiState.value.tracking.leanAngleDeg
+
+        if (_uiState.value.settings.gpsTrackingEnabled) {
+            if (activeRideStartedMs == null) activeRideStartedMs = now
+            ridePoints += TrackPoint(
+                timestampMs = now,
+                latitude = location.latitude,
+                longitude = location.longitude,
+                speedKmh = speedKmh,
+                leanAngleDeg = lean,
+                lapIndex = 0
+            )
+        }
+
+        updateTrackingState {
+            it.copy(
+                speedKmh = speedKmh,
+                gpsActive = _uiState.value.settings.gpsTrackingEnabled && _uiState.value.settings.locationPermissionGranted,
+                hasTrackData = ridePoints.isNotEmpty()
+            )
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     override fun onCleared() {
         sensorManager.unregisterListener(this)
+        stopLocationUpdates()
         super.onCleared()
     }
 }

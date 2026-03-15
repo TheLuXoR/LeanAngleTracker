@@ -37,6 +37,7 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onToggleInvertLean: (Boolean) -> Unit,
     onToggleGyroFusion: (Boolean) -> Unit,
+    onToggleGpsTracking: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onResetExtrema: () -> Unit,
     onStartCalibration: () -> Unit
@@ -82,18 +83,23 @@ internal fun SettingsScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Gyro-Fusion", fontSize = 18.sp)
+                        Text(if (state.gyroscopeAvailable) "Genauer bei dynamischer Fahrt" else "Gyroskop nicht verfügbar", fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(checked = state.useGyroFusion, onCheckedChange = onToggleGyroFusion, enabled = state.gyroscopeAvailable)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("GPS Tracking", fontSize = 18.sp)
                         Text(
-                            if (state.gyroscopeAvailable) "Genauer bei dynamischer Fahrt"
-                            else "Gyroskop nicht verfügbar",
+                            if (state.locationPermissionGranted) "Geschwindigkeit + Track-Aufzeichnung aktivierbar"
+                            else "Standortberechtigung fehlt",
                             fontSize = 13.sp
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = state.useGyroFusion,
-                        onCheckedChange = onToggleGyroFusion,
-                        enabled = state.gyroscopeAvailable
-                    )
+                    Switch(checked = state.gpsTrackingEnabled, onCheckedChange = onToggleGpsTracking)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
