@@ -65,7 +65,9 @@ data class TrackingUiState(
 
 data class SettingsUiState(
     val invertLeanAngle: Boolean = true,
-    val historyWindowSeconds: Int = 20
+    val historyWindowSeconds: Int = 20,
+    val useGyroFusion: Boolean = false,
+    val gyroscopeAvailable: Boolean = false
 )
 
 data class UiState(
@@ -78,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -92,12 +95,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var peakTiltDegInStep = 0f
     private var peakTiltVectorInStep: Vec3? = null
     private var uprightStableCounter = 0
+    private var gyroLeanDeg = 0f
+    private var lastGyroTimestampNs: Long? = null
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
 
     init {
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        gyroscopeSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+
+        updateSettingsState {
+            it.copy(gyroscopeAvailable = gyroscopeSensor != null)
+        }
 
         if (gravitySensor == null) {
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
@@ -124,6 +134,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         peakTiltDegInStep = 0f
         peakTiltVectorInStep = null
         uprightStableCounter = 0
+        gyroLeanDeg = 0f
+        lastGyroTimestampNs = null
         leanHistory.clear()
 
         updateCalibrationState {
@@ -223,6 +235,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         )
     }
 
+    fun setUseGyroFusion(enabled: Boolean) {
+        val shouldUse = enabled && gyroscopeSensor != null
+        val current = _uiState.value
+        _uiState.value = current.copy(settings = current.settings.copy(useGyroFusion = shouldUse))
+    }
+
     fun resetExtrema() {
         val historyValues = _uiState.value.tracking.leanHistoryDeg
         updateTrackingState {
@@ -234,18 +252,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        when (event.sensor.type) {
+            Sensor.TYPE_ACCELEROMETER -> {
+                val alpha = 0.92f
+                val raw = Vec3(event.values[0], event.values[1], event.values[2])
+                filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
 
-        val alpha = 0.92f
-        val raw = Vec3(event.values[0], event.values[1], event.values[2])
-        filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
+                when (_uiState.value.calibration.calibrationStep) {
+                    CalibrationStep.LEFT_MEASURING,
+                    CalibrationStep.RIGHT_MEASURING -> handleMeasurementStep()
 
-        when (_uiState.value.calibration.calibrationStep) {
-            CalibrationStep.LEFT_MEASURING,
-            CalibrationStep.RIGHT_MEASURING -> handleMeasurementStep()
+                    CalibrationStep.READY -> updateLeanAngle(event.timestamp)
+                    else -> Unit
+                }
+            }
 
-            CalibrationStep.READY -> updateLeanAngle(event.timestamp)
-            else -> Unit
+            Sensor.TYPE_GYROSCOPE -> updateGyroLean(event)
         }
     }
 
@@ -314,6 +336,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         forward = (forward - up * forward.dot(up)).normalized()
         bikeForwardAxis = forward
+        gyroLeanDeg = 0f
+        lastGyroTimestampNs = null
 
         updateCalibrationState {
             it.copy(
@@ -340,8 +364,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
         val leanRad = atan2(numerator, denominator)
-        val rawLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
-        val leanDeg = if (_uiState.value.settings.invertLeanAngle) -rawLeanDeg else rawLeanDeg
+        val accelLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
+
+        val useFusion = _uiState.value.settings.useGyroFusion && gyroscopeSensor != null
+        val fusedLeanDeg = if (useFusion) {
+            val fused = (0.96f * gyroLeanDeg) + (0.04f * accelLeanDeg)
+            gyroLeanDeg = fused.coerceIn(-75f, 75f)
+            gyroLeanDeg
+        } else {
+            gyroLeanDeg = accelLeanDeg
+            accelLeanDeg
+        }
+
+        val leanDeg = if (_uiState.value.settings.invertLeanAngle) -fusedLeanDeg else fusedLeanDeg
 
         leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
 
@@ -367,6 +402,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         while (leanHistory.isNotEmpty() && leanHistory.first().timestampNs < cutoff) {
             leanHistory.removeFirst()
         }
+    }
+
+    private fun updateGyroLean(event: SensorEvent) {
+        if (_uiState.value.calibration.calibrationStep != CalibrationStep.READY) {
+            lastGyroTimestampNs = null
+            return
+        }
+
+        if (!_uiState.value.settings.useGyroFusion) {
+            lastGyroTimestampNs = event.timestamp
+            return
+        }
+
+        val forward = bikeForwardAxis ?: return
+        val previousTimestamp = lastGyroTimestampNs
+        lastGyroTimestampNs = event.timestamp
+        if (previousTimestamp == null) return
+
+        val dt = (event.timestamp - previousTimestamp) / 1_000_000_000f
+        if (dt <= 0f || dt > 0.2f) return
+
+        val omega = Vec3(event.values[0], event.values[1], event.values[2])
+        val rollRateRadPerSec = omega.dot(forward)
+        val deltaDeg = Math.toDegrees((rollRateRadPerSec * dt).toDouble()).toFloat()
+        gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-75f, 75f)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
