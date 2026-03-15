@@ -31,7 +31,6 @@ import com.example.leanangletracker.RideSession
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
@@ -171,12 +170,8 @@ private fun OSMTrackMap(
             })
             map.overlays.add(tapOverlay)
 
-            if (points.size >= 2) {
-                val bounds = BoundingBox.fromGeoPointsSafe(points)
-                map.zoomToBoundingBox(bounds, true, 96)
-            } else {
-                map.controller.animateTo(selectedGeoPoint)
-            }
+            map.controller.setZoom(17.0)
+            map.controller.animateTo(selectedGeoPoint)
 
             map.invalidate()
         }

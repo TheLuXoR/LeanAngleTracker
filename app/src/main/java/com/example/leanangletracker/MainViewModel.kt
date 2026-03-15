@@ -128,6 +128,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var lastGyroTimestampNs: Long? = null
     private var speedKmh = 0f
     private var activeRideStartedMs: Long? = null
+    private var locationUpdatesRunning = false
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
@@ -193,9 +194,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 )
             )
         }
+        stopLocationUpdates()
+        updateSettingsState { it.copy(gpsTrackingEnabled = false) }
         ridePoints.clear()
         activeRideStartedMs = null
-        updateTrackingState { it.copy(hasTrackData = false) }
+        speedKmh = 0f
+        updateTrackingState { it.copy(hasTrackData = false, speedKmh = 0f, gpsActive = false) }
     }
 
     fun clearCompletedRide() {
@@ -519,23 +523,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun startLocationUpdates() {
-        if (!hasLocationPermission()) return
+        if (!hasLocationPermission() || locationUpdatesRunning) return
 
-        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-        providers.forEach { provider ->
-            if (locationManager.isProviderEnabled(provider)) {
-                locationManager.requestLocationUpdates(provider, 1000L, 1f, this)
-            }
+        val provider = when {
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> null
         }
+
+        if (provider == null) {
+            updateTrackingState { it.copy(gpsActive = false) }
+            return
+        }
+
+        locationManager.requestLocationUpdates(provider, 1000L, 2f, this)
+        locationUpdatesRunning = true
         updateTrackingState { it.copy(gpsActive = true) }
     }
 
     private fun stopLocationUpdates() {
+        if (!locationUpdatesRunning) {
+            updateTrackingState { it.copy(gpsActive = false) }
+            return
+        }
         locationManager.removeUpdates(this)
+        locationUpdatesRunning = false
         updateTrackingState { it.copy(gpsActive = false) }
     }
 
     override fun onLocationChanged(location: Location) {
+        if (location.hasAccuracy() && location.accuracy > 60f) return
+
         speedKmh = (location.speed * 3.6f).coerceAtLeast(0f)
         val now = System.currentTimeMillis()
         val lean = _uiState.value.tracking.leanAngleDeg
