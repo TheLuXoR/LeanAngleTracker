@@ -36,7 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.R
-import com.example.leanangletracker.UiState
+import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizard
 import kotlin.math.abs
 import kotlin.math.cos
@@ -44,7 +45,8 @@ import kotlin.math.sin
 
 @Composable
 internal fun LeanAngleScreen(
-    state: UiState,
+    trackingState: TrackingUiState,
+    calibrationState: CalibrationUiState,
     onOpenSettings: () -> Unit,
     onCaptureUpright: () -> Unit,
     onStartLeftMeasurement: () -> Unit,
@@ -63,9 +65,9 @@ internal fun LeanAngleScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        if (!state.isCalibrated) {
+        if (!calibrationState.isCalibrated) {
             CalibrationWizard(
-                state = state,
+                state = calibrationState,
                 onCaptureUpright = onCaptureUpright,
                 onStartLeftMeasurement = onStartLeftMeasurement,
                 onStartRightMeasurement = onStartRightMeasurement
@@ -75,7 +77,7 @@ internal fun LeanAngleScreen(
 
         if (isLandscape) {
             Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GaugeRoadView(state = state, modifier = Modifier.weight(1f).fillMaxSize())
+                GaugeRoadView(state = trackingState, modifier = Modifier.weight(1f).fillMaxSize())
                 Button(
                     onClick = onOpenSettings,
                     modifier = Modifier.align(Alignment.Top).height(56.dp)
@@ -91,14 +93,14 @@ internal fun LeanAngleScreen(
                     Text(stringResource(R.string.screen_title_lean_angle), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Button(onClick = onOpenSettings, modifier = Modifier.height(50.dp)) { Text(stringResource(R.string.action_settings), fontSize = 16.sp) }
                 }
-                GaugeRoadView(state = state, modifier = Modifier.fillMaxSize())
+                GaugeRoadView(state = trackingState, modifier = Modifier.fillMaxSize())
             }
         }
     }
 }
 
 @Composable
-private fun GaugeRoadView(state: UiState, modifier: Modifier = Modifier) {
+private fun GaugeRoadView(state: TrackingUiState, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
             TachoGauge(

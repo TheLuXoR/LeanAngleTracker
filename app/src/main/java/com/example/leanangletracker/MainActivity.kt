@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
                     val route = resolveRoute(
                         introStage = routeUiState.introStage,
                         showSettings = routeUiState.showSettings,
-                        isCalibrated = state.isCalibrated
+                        isCalibrated = state.calibration.isCalibrated
                     )
 
                     AnimatedContent(targetState = route, label = "app_route") { currentRoute ->
@@ -64,14 +64,15 @@ class MainActivity : ComponentActivity() {
                             )
 
                             AppRoute.Tracking -> renderTrackingRoute(
-                                state = state,
+                                trackingState = state.tracking,
+                                calibrationState = state.calibration,
                                 onOpenSettings = {
                                     routeUiState = routeUiState.copy(showSettings = true)
                                 }
                             )
 
                             AppRoute.Settings -> renderSettingsRoute(
-                                state = state,
+                                state = state.settings,
                                 onBack = {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                 },
@@ -118,11 +119,13 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun renderTrackingRoute(
-        state: UiState,
+        trackingState: TrackingUiState,
+        calibrationState: CalibrationUiState,
         onOpenSettings: () -> Unit
     ) {
         LeanAngleScreen(
-            state = state,
+            trackingState = trackingState,
+            calibrationState = calibrationState,
             onOpenSettings = onOpenSettings,
             onCaptureUpright = viewModel::captureUpright,
             onStartLeftMeasurement = viewModel::startLeftMeasurement,
@@ -132,7 +135,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun renderSettingsRoute(
-        state: UiState,
+        state: SettingsUiState,
         onBack: () -> Unit,
         onStartCalibration: () -> Unit
     ) {

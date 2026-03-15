@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
-import com.example.leanangletracker.UiState
+import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.ui.components.InfoChip
 import com.example.leanangletracker.ui.components.PrimaryActionButton
 import kotlin.math.abs
@@ -50,7 +50,7 @@ import kotlin.math.sin
 
 @Composable
 internal fun CalibrationWizard(
-    state: UiState,
+    state: CalibrationUiState,
     onCaptureUpright: () -> Unit,
     onStartLeftMeasurement: () -> Unit,
     onStartRightMeasurement: () -> Unit

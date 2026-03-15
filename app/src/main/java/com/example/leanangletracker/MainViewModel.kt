@@ -46,20 +46,32 @@ enum class CalibrationStep {
     READY
 }
 
-data class UiState(
-    val leanAngleDeg: Float = 0f,
+data class CalibrationUiState(
     val calibrationStep: CalibrationStep = CalibrationStep.UPRIGHT,
     @StringRes val instructionsResId: Int = R.string.instructions_upright,
     val isCalibrated: Boolean = false,
     @StringRes val qualityHintResId: Int? = R.string.hint_operate_only_zero_position,
-    val maxLeftDeg: Float = 0f,
-    val maxRightDeg: Float = 0f,
-    val leanHistoryDeg: List<Float> = emptyList(),
-    val invertLeanAngle: Boolean = true,
-    val historyWindowSeconds: Int = 20,
     val leftCalibrationAmplitudeDeg: Float = 0f,
     val rightCalibrationAmplitudeDeg: Float = 0f,
     val currentStepAmplitudeDeg: Float = 0f
+)
+
+data class TrackingUiState(
+    val leanAngleDeg: Float = 0f,
+    val maxLeftDeg: Float = 0f,
+    val maxRightDeg: Float = 0f,
+    val leanHistoryDeg: List<Float> = emptyList()
+)
+
+data class SettingsUiState(
+    val invertLeanAngle: Boolean = true,
+    val historyWindowSeconds: Int = 20
+)
+
+data class UiState(
+    val calibration: CalibrationUiState = CalibrationUiState(),
+    val tracking: TrackingUiState = TrackingUiState(),
+    val settings: SettingsUiState = SettingsUiState()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
@@ -88,10 +100,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
 
         if (gravitySensor == null) {
-            _uiState.value = _uiState.value.copy(
-                instructionsResId = R.string.instructions_sensor_missing
-            )
+            updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
+    }
+
+    private inline fun updateCalibrationState(transform: (CalibrationUiState) -> CalibrationUiState) {
+        _uiState.value = _uiState.value.copy(calibration = transform(_uiState.value.calibration))
+    }
+
+    private inline fun updateTrackingState(transform: (TrackingUiState) -> TrackingUiState) {
+        _uiState.value = _uiState.value.copy(tracking = transform(_uiState.value.tracking))
+    }
+
+    private inline fun updateSettingsState(transform: (SettingsUiState) -> SettingsUiState) {
+        _uiState.value = _uiState.value.copy(settings = transform(_uiState.value.settings))
     }
 
     fun startCalibration() {
@@ -104,34 +126,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         uprightStableCounter = 0
         leanHistory.clear()
 
-        _uiState.value = _uiState.value.copy(
-            calibrationStep = CalibrationStep.UPRIGHT,
-            isCalibrated = false,
-            leanAngleDeg = 0f,
-            maxLeftDeg = 0f,
-            maxRightDeg = 0f,
-            leanHistoryDeg = emptyList(),
-            qualityHintResId = R.string.hint_operate_only_zero_position,
-            instructionsResId = R.string.instructions_upright,
-            leftCalibrationAmplitudeDeg = 0f,
-            rightCalibrationAmplitudeDeg = 0f,
-            currentStepAmplitudeDeg = 0f
-        )
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = CalibrationStep.UPRIGHT,
+                isCalibrated = false,
+                qualityHintResId = R.string.hint_operate_only_zero_position,
+                instructionsResId = R.string.instructions_upright,
+                leftCalibrationAmplitudeDeg = 0f,
+                rightCalibrationAmplitudeDeg = 0f,
+                currentStepAmplitudeDeg = 0f
+            )
+        }
+        updateTrackingState {
+            it.copy(
+                leanAngleDeg = 0f,
+                maxLeftDeg = 0f,
+                maxRightDeg = 0f,
+                leanHistoryDeg = emptyList()
+            )
+        }
     }
 
     fun captureUpright() {
-        if (_uiState.value.calibrationStep != CalibrationStep.UPRIGHT) return
+        if (_uiState.value.calibration.calibrationStep != CalibrationStep.UPRIGHT) return
         uprightUp = (filteredGravity * -1f).normalized()
 
-        _uiState.value = _uiState.value.copy(
-            calibrationStep = CalibrationStep.LEFT_READY,
-            instructionsResId = R.string.instructions_start_left_measurement,
-            qualityHintResId = R.string.hint_after_start_tilt_left
-        )
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = CalibrationStep.LEFT_READY,
+                instructionsResId = R.string.instructions_start_left_measurement,
+                qualityHintResId = R.string.hint_after_start_tilt_left
+            )
+        }
     }
 
     fun startLeftMeasurement() {
-        if (_uiState.value.calibrationStep != CalibrationStep.LEFT_READY) return
+        if (_uiState.value.calibration.calibrationStep != CalibrationStep.LEFT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.LEFT_MEASURING,
             instructionResId = R.string.instructions_tilt_left_then_return
@@ -139,7 +169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun startRightMeasurement() {
-        if (_uiState.value.calibrationStep != CalibrationStep.RIGHT_READY) return
+        if (_uiState.value.calibration.calibrationStep != CalibrationStep.RIGHT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.RIGHT_MEASURING,
             instructionResId = R.string.instructions_tilt_right_then_return
@@ -150,51 +180,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         peakTiltDegInStep = 0f
         peakTiltVectorInStep = null
         uprightStableCounter = 0
-        _uiState.value = _uiState.value.copy(
-            calibrationStep = nextStep,
-            instructionsResId = instructionResId,
-            currentStepAmplitudeDeg = 0f,
-            qualityHintResId = null
-        )
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = nextStep,
+                instructionsResId = instructionResId,
+                currentStepAmplitudeDeg = 0f,
+                qualityHintResId = null
+            )
+        }
     }
 
     fun setInvertLeanAngle(invert: Boolean) {
         val previous = _uiState.value
-        if (previous.invertLeanAngle == invert) return
+        if (previous.settings.invertLeanAngle == invert) return
 
-        val transformedHistory = previous.leanHistoryDeg.map { -it }
+        val transformedHistory = previous.tracking.leanHistoryDeg.map { -it }
         val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
 
         leanHistory.clear()
         leanHistory.addAll(transformedTimedHistory)
 
         _uiState.value = previous.copy(
-            invertLeanAngle = invert,
-            leanAngleDeg = -previous.leanAngleDeg,
-            maxLeftDeg = -previous.maxRightDeg,
-            maxRightDeg = -previous.maxLeftDeg,
-            leanHistoryDeg = transformedHistory
+            settings = previous.settings.copy(invertLeanAngle = invert),
+            tracking = previous.tracking.copy(
+                leanAngleDeg = -previous.tracking.leanAngleDeg,
+                maxLeftDeg = -previous.tracking.maxRightDeg,
+                maxRightDeg = -previous.tracking.maxLeftDeg,
+                leanHistoryDeg = transformedHistory
+            )
         )
     }
 
     fun setHistoryWindowSeconds(seconds: Int) {
         val clamped = seconds.coerceIn(5, 120)
         val previous = _uiState.value
-        if (previous.historyWindowSeconds == clamped) return
+        if (previous.settings.historyWindowSeconds == clamped) return
 
         leanHistory.lastOrNull()?.let { pruneHistory(it.timestampNs, clamped) }
         _uiState.value = previous.copy(
-            historyWindowSeconds = clamped,
-            leanHistoryDeg = leanHistory.map { it.valueDeg }
+            settings = previous.settings.copy(historyWindowSeconds = clamped),
+            tracking = previous.tracking.copy(leanHistoryDeg = leanHistory.map { it.valueDeg })
         )
     }
 
     fun resetExtrema() {
-        val historyValues = _uiState.value.leanHistoryDeg
-        _uiState.value = _uiState.value.copy(
-            maxLeftDeg = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f,
-            maxRightDeg = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
-        )
+        val historyValues = _uiState.value.tracking.leanHistoryDeg
+        updateTrackingState {
+            it.copy(
+                maxLeftDeg = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f,
+                maxRightDeg = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+            )
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -204,7 +240,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val raw = Vec3(event.values[0], event.values[1], event.values[2])
         filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
 
-        when (_uiState.value.calibrationStep) {
+        when (_uiState.value.calibration.calibrationStep) {
             CalibrationStep.LEFT_MEASURING,
             CalibrationStep.RIGHT_MEASURING -> handleMeasurementStep()
 
@@ -223,7 +259,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             peakTiltVectorInStep = currentUp
         }
 
-        _uiState.value = _uiState.value.copy(currentStepAmplitudeDeg = peakTiltDegInStep)
+        updateCalibrationState { it.copy(currentStepAmplitudeDeg = peakTiltDegInStep) }
 
         if (angleDeg < 4f) {
             uprightStableCounter++
@@ -235,16 +271,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val returnedUpright = uprightStableCounter > 14
         if (!enoughMotion || !returnedUpright) return
 
-        when (_uiState.value.calibrationStep) {
+        when (_uiState.value.calibration.calibrationStep) {
             CalibrationStep.LEFT_MEASURING -> {
                 leftUp = peakTiltVectorInStep ?: return
-                _uiState.value = _uiState.value.copy(
-                    calibrationStep = CalibrationStep.RIGHT_READY,
-                    instructionsResId = R.string.instructions_start_right_measurement,
-                    qualityHintResId = R.string.hint_after_start_tilt_right,
-                    leftCalibrationAmplitudeDeg = peakTiltDegInStep,
-                    currentStepAmplitudeDeg = 0f
-                )
+                updateCalibrationState {
+                    it.copy(
+                        calibrationStep = CalibrationStep.RIGHT_READY,
+                        instructionsResId = R.string.instructions_start_right_measurement,
+                        qualityHintResId = R.string.hint_after_start_tilt_right,
+                        leftCalibrationAmplitudeDeg = peakTiltDegInStep,
+                        currentStepAmplitudeDeg = 0f
+                    )
+                }
             }
 
             CalibrationStep.RIGHT_MEASURING -> {
@@ -263,26 +301,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         var forward = left.cross(right).normalized()
         if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
-            _uiState.value = _uiState.value.copy(
-                qualityHintResId = R.string.hint_calibration_uncertain,
-                calibrationStep = CalibrationStep.LEFT_READY,
-                instructionsResId = R.string.instructions_start_left_measurement,
-                currentStepAmplitudeDeg = 0f
-            )
+            updateCalibrationState {
+                it.copy(
+                    qualityHintResId = R.string.hint_calibration_uncertain,
+                    calibrationStep = CalibrationStep.LEFT_READY,
+                    instructionsResId = R.string.instructions_start_left_measurement,
+                    currentStepAmplitudeDeg = 0f
+                )
+            }
             return
         }
 
         forward = (forward - up * forward.dot(up)).normalized()
         bikeForwardAxis = forward
 
-        _uiState.value = _uiState.value.copy(
-            calibrationStep = CalibrationStep.READY,
-            isCalibrated = true,
-            instructionsResId = R.string.instructions_calibrated,
-            qualityHintResId = null,
-            rightCalibrationAmplitudeDeg = rightAmplitudeDeg,
-            currentStepAmplitudeDeg = 0f
-        )
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = CalibrationStep.READY,
+                isCalibrated = true,
+                instructionsResId = R.string.instructions_calibrated,
+                qualityHintResId = null,
+                rightCalibrationAmplitudeDeg = rightAmplitudeDeg,
+                currentStepAmplitudeDeg = 0f
+            )
+        }
     }
 
     private fun angleBetweenDeg(a: Vec3, b: Vec3): Float {
@@ -299,22 +341,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val denominator = upRef.dot(currentUp)
         val leanRad = atan2(numerator, denominator)
         val rawLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
-        val leanDeg = if (_uiState.value.invertLeanAngle) -rawLeanDeg else rawLeanDeg
+        val leanDeg = if (_uiState.value.settings.invertLeanAngle) -rawLeanDeg else rawLeanDeg
 
         leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
 
         val previous = _uiState.value
-        pruneHistory(timestampNs, previous.historyWindowSeconds)
+        pruneHistory(timestampNs, previous.settings.historyWindowSeconds)
 
         val visibleHistory = leanHistory.map { it.valueDeg }
         val visibleLeft = visibleHistory.minOrNull()?.coerceAtMost(0f) ?: 0f
         val visibleRight = visibleHistory.maxOrNull()?.coerceAtLeast(0f) ?: 0f
 
         _uiState.value = previous.copy(
-            leanAngleDeg = leanDeg,
-            maxLeftDeg = minOf(previous.maxLeftDeg, visibleLeft),
-            maxRightDeg = maxOf(previous.maxRightDeg, visibleRight),
-            leanHistoryDeg = visibleHistory
+            tracking = previous.tracking.copy(
+                leanAngleDeg = leanDeg,
+                maxLeftDeg = minOf(previous.tracking.maxLeftDeg, visibleLeft),
+                maxRightDeg = maxOf(previous.tracking.maxRightDeg, visibleRight),
+                leanHistoryDeg = visibleHistory
+            )
         )
     }
 

@@ -28,12 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.leanangletracker.UiState
+import com.example.leanangletracker.SettingsUiState
 import com.example.leanangletracker.ui.components.InfoChip
 
 @Composable
 internal fun SettingsScreen(
-    state: UiState,
+    state: SettingsUiState,
     onBack: () -> Unit,
     onToggleInvertLean: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
