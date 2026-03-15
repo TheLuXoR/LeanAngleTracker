@@ -35,10 +35,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationStep
+import com.example.leanangletracker.R
 import com.example.leanangletracker.UiState
 import com.example.leanangletracker.ui.components.InfoChip
 import com.example.leanangletracker.ui.components.PrimaryActionButton
@@ -58,14 +60,9 @@ internal fun CalibrationWizard(
     if (showInfo) {
         AlertDialog(
             onDismissRequest = { showInfo = false },
-            confirmButton = { Button(onClick = { showInfo = false }) { Text("OK") } },
-            title = { Text("Kalibrierung") },
-            text = {
-                Text(
-                    "Nur in Null-Lage tippen.\n" +
-                        "Nach Start einer Messung das Motorrad ruhig in die Richtung neigen und wieder aufrichten."
-                )
-            }
+            confirmButton = { Button(onClick = { showInfo = false }) { Text(stringResource(R.string.dialog_ok)) } },
+            title = { Text(stringResource(R.string.calibration_title)) },
+            text = { Text(stringResource(R.string.calibration_info_text)) }
         )
     }
 
@@ -77,14 +74,14 @@ internal fun CalibrationWizard(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Kalibrierung", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.calibration_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
                     InfoChip { showInfo = true }
                 }
 
                 BikeTiltAnimation(step = state.calibrationStep, modifier = Modifier.fillMaxWidth().height(130.dp))
 
-                Text(text = state.instructions, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Text(text = stringResource(state.instructionsResId), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
 
                 CalibrationAmplitudeBars(
                     leftAmp = state.leftCalibrationAmplitudeDeg,
@@ -92,17 +89,17 @@ internal fun CalibrationWizard(
                     currentAmp = state.currentStepAmplitudeDeg
                 )
 
-                Text(text = "⚠️ Nur in Null-Lage bedienen.", color = Color(0xFFC05757), fontSize = 15.sp)
-                if (state.qualityHint.isNotBlank()) {
-                    Text(text = state.qualityHint, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
+                Text(text = stringResource(R.string.warning_only_zero_position), color = Color(0xFFC05757), fontSize = 15.sp)
+                state.qualityHintResId?.let { hintResId ->
+                    Text(text = stringResource(hintResId), color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
                 }
 
                 when (state.calibrationStep) {
-                    CalibrationStep.UPRIGHT -> PrimaryActionButton("Aufrecht erfassen", onCaptureUpright)
-                    CalibrationStep.LEFT_READY -> PrimaryActionButton("Links-Messung starten", onStartLeftMeasurement)
-                    CalibrationStep.RIGHT_READY -> PrimaryActionButton("Rechts-Messung starten", onStartRightMeasurement)
+                    CalibrationStep.UPRIGHT -> PrimaryActionButton(stringResource(R.string.action_capture_upright), onCaptureUpright)
+                    CalibrationStep.LEFT_READY -> PrimaryActionButton(stringResource(R.string.action_start_left_measurement), onStartLeftMeasurement)
+                    CalibrationStep.RIGHT_READY -> PrimaryActionButton(stringResource(R.string.action_start_right_measurement), onStartRightMeasurement)
                     CalibrationStep.LEFT_MEASURING,
-                    CalibrationStep.RIGHT_MEASURING -> Text("Messung läuft…", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    CalibrationStep.RIGHT_MEASURING -> Text(stringResource(R.string.measurement_running), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     CalibrationStep.READY -> Unit
                 }
             }
@@ -156,9 +153,9 @@ private fun CalibrationAmplitudeBars(leftAmp: Float, rightAmp: Float, currentAmp
     fun barWidth(value: Float): Float = (value / maxAmp).coerceIn(0f, 1f)
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        AmpRow(label = "L", value = leftAmp, widthFraction = barWidth(leftAmp), color = Color(0xFF4EA3FF))
-        AmpRow(label = "R", value = rightAmp, widthFraction = barWidth(rightAmp), color = Color(0xFF4EA3FF))
-        AmpRow(label = "Now", value = currentAmp, widthFraction = barWidth(currentAmp), color = Color(0xFFFF7B7B))
+        AmpRow(label = stringResource(R.string.label_left_short), value = leftAmp, widthFraction = barWidth(leftAmp), color = Color(0xFF4EA3FF))
+        AmpRow(label = stringResource(R.string.label_right_short), value = rightAmp, widthFraction = barWidth(rightAmp), color = Color(0xFF4EA3FF))
+        AmpRow(label = stringResource(R.string.label_now_short), value = currentAmp, widthFraction = barWidth(currentAmp), color = Color(0xFFFF7B7B))
     }
 }
 
@@ -175,6 +172,6 @@ private fun AmpRow(label: String, value: Float, widthFraction: Float, color: Col
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text("${"%.1f".format(value)}°", fontSize = 13.sp)
+        Text(stringResource(R.string.value_degrees_one_decimal, value), fontSize = 13.sp)
     }
 }

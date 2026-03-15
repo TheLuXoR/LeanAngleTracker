@@ -31,9 +31,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.UiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizard
 import kotlin.math.abs
@@ -77,7 +79,7 @@ internal fun LeanAngleScreen(
                 Button(
                     onClick = onOpenSettings,
                     modifier = Modifier.align(Alignment.Top).height(56.dp)
-                ) { Text("Settings", fontSize = 18.sp) }
+                ) { Text(stringResource(R.string.action_settings), fontSize = 18.sp) }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -86,8 +88,8 @@ internal fun LeanAngleScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Lean Angle", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Button(onClick = onOpenSettings, modifier = Modifier.height(50.dp)) { Text("Settings", fontSize = 16.sp) }
+                    Text(stringResource(R.string.screen_title_lean_angle), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Button(onClick = onOpenSettings, modifier = Modifier.height(50.dp)) { Text(stringResource(R.string.action_settings), fontSize = 16.sp) }
                 }
                 GaugeRoadView(state = state, modifier = Modifier.fillMaxSize())
             }
@@ -173,13 +175,13 @@ private fun TachoGauge(
         }
 
         val direction = when {
-            currentDeg > 1f -> "R"
-            currentDeg < -1f -> "L"
-            else -> "UP"
+            currentDeg > 1f -> stringResource(R.string.direction_right)
+            currentDeg < -1f -> stringResource(R.string.direction_left)
+            else -> stringResource(R.string.direction_up)
         }
 
         Text(
-            text = "${"%.1f".format(currentDeg)}° $direction",
+            text = stringResource(R.string.value_current_degrees_with_direction, currentDeg, direction),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .background(Color(0xCC0A1A2B), RoundedCornerShape(8.dp))
@@ -196,9 +198,9 @@ private fun TachoGauge(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Max L ${"%.1f".format(abs(maxLeftDeg))}°", color = Color(0xFF9CC6FF), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.value_max_left, abs(maxLeftDeg)), color = Color(0xFF9CC6FF), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.width(12.dp))
-            Text("Max R ${"%.1f".format(maxRightDeg)}°", color = Color(0xFF9CC6FF), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.value_max_right, maxRightDeg), color = Color(0xFF9CC6FF), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -234,8 +236,8 @@ private fun LeanHistoryGraph(values: List<Float>, modifier: Modifier = Modifier)
             }
         }
 
-        Text("History / Straße", modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 8.dp), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Text("Upper bound (Max R): ${"%.1f".format(upperBound)}°", modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 8.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text("Lower bound (Max L): ${"%.1f".format(lowerBound)}°", modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.history_title), modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 8.dp), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.history_upper_bound, upperBound), modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 8.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.history_lower_bound, lowerBound), modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
