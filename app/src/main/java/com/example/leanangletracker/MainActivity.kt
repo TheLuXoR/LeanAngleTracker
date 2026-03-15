@@ -50,7 +50,8 @@ class MainActivity : ComponentActivity() {
                         viewModel.onLocationPermissionResult(granted)
                     }
 
-                    LaunchedEffect(Unit) {
+                    LaunchedEffect(routeUiState.introStage) {
+                        if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
                         delay(900)
                         routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
                     }

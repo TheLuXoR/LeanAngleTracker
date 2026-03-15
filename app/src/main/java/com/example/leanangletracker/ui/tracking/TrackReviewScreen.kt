@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,8 +62,8 @@ internal fun TrackReviewScreen(
         return
     }
 
-    var selectedIndex by remember { mutableStateOf(rideSession.points.lastIndex) }
-    var sliderValue by remember { mutableFloatStateOf(rideSession.points.lastIndex.toFloat()) }
+    var selectedIndex by rememberSaveable(rideSession.startedAtMs) { mutableStateOf(rideSession.points.lastIndex) }
+    var sliderValue by rememberSaveable(rideSession.startedAtMs) { mutableFloatStateOf(rideSession.points.lastIndex.toFloat()) }
     val selectedPoint = rideSession.points[selectedIndex]
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
