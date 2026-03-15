@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,8 +36,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.R
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizard
 import kotlin.math.abs
@@ -48,6 +49,8 @@ internal fun LeanAngleScreen(
     trackingState: TrackingUiState,
     calibrationState: CalibrationUiState,
     onOpenSettings: () -> Unit,
+    onFinishRide: () -> Unit,
+    modifier: Modifier = Modifier,
     onCaptureUpright: () -> Unit,
     onStartLeftMeasurement: () -> Unit,
     onStartRightMeasurement: () -> Unit
@@ -55,7 +58,7 @@ internal fun LeanAngleScreen(
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
@@ -78,10 +81,16 @@ internal fun LeanAngleScreen(
         if (isLandscape) {
             Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 GaugeRoadView(state = trackingState, modifier = Modifier.weight(1f).fillMaxSize())
-                Button(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.align(Alignment.Top).height(56.dp)
-                ) { Text(stringResource(R.string.action_settings), fontSize = 18.sp) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onOpenSettings, modifier = Modifier.height(56.dp)) {
+                        Text(stringResource(R.string.action_settings), fontSize = 18.sp)
+                    }
+                    if (trackingState.hasTrackData) {
+                        Button(onClick = onFinishRide, modifier = Modifier.height(56.dp)) {
+                            Text(stringResource(R.string.action_finish_ride), fontSize = 16.sp)
+                        }
+                    }
+                }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -91,7 +100,16 @@ internal fun LeanAngleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(stringResource(R.string.screen_title_lean_angle), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Button(onClick = onOpenSettings, modifier = Modifier.height(50.dp)) { Text(stringResource(R.string.action_settings), fontSize = 16.sp) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (trackingState.hasTrackData) {
+                            Button(onClick = onFinishRide, modifier = Modifier.height(50.dp)) {
+                                Text(stringResource(R.string.action_finish_ride), fontSize = 14.sp)
+                            }
+                        }
+                        Button(onClick = onOpenSettings, modifier = Modifier.height(50.dp)) {
+                            Text(stringResource(R.string.action_settings), fontSize = 16.sp)
+                        }
+                    }
                 }
                 GaugeRoadView(state = trackingState, modifier = Modifier.fillMaxSize())
             }
@@ -102,14 +120,17 @@ internal fun LeanAngleScreen(
 @Composable
 private fun GaugeRoadView(state: TrackingUiState, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
-        Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             TachoGauge(
                 currentDeg = state.leanAngleDeg,
                 maxLeftDeg = state.maxLeftDeg,
                 maxRightDeg = state.maxRightDeg,
+                speedKmh = state.speedKmh,
+                showSpeed = state.gpsActive,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 80.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(8.dp)
             )
 
             LeanHistoryGraph(
@@ -117,7 +138,7 @@ private fun GaugeRoadView(state: TrackingUiState, modifier: Modifier = Modifier)
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(170.dp)
+                    .height(220.dp)
             )
         }
     }
@@ -128,10 +149,12 @@ private fun TachoGauge(
     currentDeg: Float,
     maxLeftDeg: Float,
     maxRightDeg: Float,
+    speedKmh: Float,
+    showSpeed: Boolean,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.height(330.dp).width(330.dp)) {
+        Canvas(modifier = Modifier.height(320.dp).width(320.dp)) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension * 0.43f
             val maxDisplay = 65f
@@ -176,6 +199,20 @@ private fun TachoGauge(
             drawCircle(color = Color(0xFFFF4D6D), radius = 8f, center = center)
         }
 
+        if (showSpeed) {
+            Text(
+                text = stringResource(R.string.value_speed_kmh, speedKmh),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 105.dp)
+                    .background(Color(0xCC0A1A2B), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                color = Color(0xFF8BFFDA),
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp
+            )
+        }
+
         val direction = when {
             currentDeg > 1f -> stringResource(R.string.direction_right)
             currentDeg < -1f -> stringResource(R.string.direction_left)
@@ -186,6 +223,7 @@ private fun TachoGauge(
             text = stringResource(R.string.value_current_degrees_with_direction, currentDeg, direction),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .padding(bottom = if (showSpeed) 60.dp else 16.dp)
                 .background(Color(0xCC0A1A2B), RoundedCornerShape(8.dp))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             color = Color.White,

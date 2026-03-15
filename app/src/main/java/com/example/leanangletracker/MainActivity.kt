@@ -1,9 +1,12 @@
 package com.example.leanangletracker
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,16 +17,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.leanangletracker.ui.intro.IntroScreen
 import com.example.leanangletracker.ui.intro.IntroStage
 import com.example.leanangletracker.ui.navigation.AppRoute
 import com.example.leanangletracker.ui.settings.SettingsScreen
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
+import com.example.leanangletracker.ui.tracking.TrackReviewScreen
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -40,6 +44,12 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(RouteUiState())
                     }
 
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted ->
+                        viewModel.onLocationPermissionResult(granted)
+                    }
+
                     LaunchedEffect(Unit) {
                         delay(900)
                         routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
@@ -48,7 +58,9 @@ class MainActivity : ComponentActivity() {
                     val route = resolveRoute(
                         introStage = routeUiState.introStage,
                         showSettings = routeUiState.showSettings,
-                        isCalibrated = state.calibration.isCalibrated
+                        showTrackReview = routeUiState.showTrackReview,
+                        isCalibrated = state.calibration.isCalibrated,
+                        hasCompletedRide = state.completedRide != null
                     )
 
                     AnimatedContent(targetState = route, label = "app_route") { currentRoute ->
@@ -68,6 +80,10 @@ class MainActivity : ComponentActivity() {
                                 calibrationState = state.calibration,
                                 onOpenSettings = {
                                     routeUiState = routeUiState.copy(showSettings = true)
+                                },
+                                onFinishRide = {
+                                    viewModel.finishRide()
+                                    routeUiState = routeUiState.copy(showTrackReview = true)
                                 }
                             )
 
@@ -76,11 +92,27 @@ class MainActivity : ComponentActivity() {
                                 onBack = {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                 },
+                                onRequestLocationPermission = {
+                                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                },
                                 onStartCalibration = {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
                                 }
                             )
+
+                            AppRoute.TrackReview -> {
+                                val completedRide = state.completedRide
+                                if (completedRide != null) {
+                                    TrackReviewScreen(
+                                        rideSession = completedRide,
+                                        onBack = {
+                                            viewModel.clearCompletedRide()
+                                            routeUiState = routeUiState.copy(showTrackReview = false)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -91,17 +123,14 @@ class MainActivity : ComponentActivity() {
     private fun resolveRoute(
         introStage: IntroStage,
         showSettings: Boolean,
-        isCalibrated: Boolean
+        showTrackReview: Boolean,
+        isCalibrated: Boolean,
+        hasCompletedRide: Boolean
     ): AppRoute {
-        if (introStage != IntroStage.DONE) {
-            return AppRoute.Intro(introStage)
-        }
+        if (introStage != IntroStage.DONE) return AppRoute.Intro(introStage)
+        if (showTrackReview && hasCompletedRide) return AppRoute.TrackReview
 
-        return if (showSettings && isCalibrated) {
-            AppRoute.Settings
-        } else {
-            AppRoute.Tracking
-        }
+        return if (showSettings && isCalibrated) AppRoute.Settings else AppRoute.Tracking
     }
 
     @Composable
@@ -110,23 +139,21 @@ class MainActivity : ComponentActivity() {
         onMountedConfirm: () -> Unit,
         onTransitionFinished: () -> Unit
     ) {
-        IntroScreen(
-            stage = stage,
-            onMountedConfirm = onMountedConfirm,
-            onTransitionFinished = onTransitionFinished
-        )
+        IntroScreen(stage = stage, onMountedConfirm = onMountedConfirm, onTransitionFinished = onTransitionFinished)
     }
 
     @Composable
     private fun renderTrackingRoute(
         trackingState: TrackingUiState,
         calibrationState: CalibrationUiState,
-        onOpenSettings: () -> Unit
+        onOpenSettings: () -> Unit,
+        onFinishRide: () -> Unit
     ) {
         LeanAngleScreen(
             trackingState = trackingState,
             calibrationState = calibrationState,
             onOpenSettings = onOpenSettings,
+            onFinishRide = onFinishRide,
             onCaptureUpright = viewModel::captureUpright,
             onStartLeftMeasurement = viewModel::startLeftMeasurement,
             onStartRightMeasurement = viewModel::startRightMeasurement
@@ -137,6 +164,7 @@ class MainActivity : ComponentActivity() {
     private fun renderSettingsRoute(
         state: SettingsUiState,
         onBack: () -> Unit,
+        onRequestLocationPermission: () -> Unit,
         onStartCalibration: () -> Unit
     ) {
         SettingsScreen(
@@ -144,6 +172,12 @@ class MainActivity : ComponentActivity() {
             onBack = onBack,
             onToggleInvertLean = viewModel::setInvertLeanAngle,
             onToggleGyroFusion = viewModel::setUseGyroFusion,
+            onToggleGpsTracking = { enabled ->
+                if (enabled && !state.locationPermissionGranted) {
+                    onRequestLocationPermission()
+                }
+                viewModel.setGpsTrackingEnabled(enabled)
+            },
             onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
             onResetExtrema = viewModel::resetExtrema,
             onStartCalibration = onStartCalibration
@@ -153,15 +187,17 @@ class MainActivity : ComponentActivity() {
 
 private data class RouteUiState(
     val introStage: IntroStage = IntroStage.LOADING,
-    val showSettings: Boolean = false
+    val showSettings: Boolean = false,
+    val showTrackReview: Boolean = false
 ) {
     companion object {
         val Saver: Saver<RouteUiState, Any> = listSaver(
-            save = { listOf(it.introStage.name, it.showSettings) },
+            save = { listOf(it.introStage.name, it.showSettings, it.showTrackReview) },
             restore = {
                 RouteUiState(
                     introStage = IntroStage.valueOf(it[0] as String),
-                    showSettings = it[1] as Boolean
+                    showSettings = it[1] as Boolean,
+                    showTrackReview = it[2] as Boolean
                 )
             }
         )
