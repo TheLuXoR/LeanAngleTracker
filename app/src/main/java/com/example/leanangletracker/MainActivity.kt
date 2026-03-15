@@ -13,12 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.leanangletracker.ui.intro.IntroScreen
 import com.example.leanangletracker.ui.intro.IntroStage
 import com.example.leanangletracker.ui.navigation.AppRoute
@@ -152,7 +152,7 @@ private data class RouteUiState(
     val showSettings: Boolean = false
 ) {
     companion object {
-        val Saver: Saver<RouteUiState, List<Any>> = listSaver(
+        val Saver: Saver<RouteUiState, Any> = listSaver(
             save = { listOf(it.introStage.name, it.showSettings) },
             restore = {
                 RouteUiState(

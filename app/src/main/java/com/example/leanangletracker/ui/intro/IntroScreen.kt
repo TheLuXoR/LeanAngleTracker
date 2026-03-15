@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.font.FontWeight
 
-internal enum class IntroStage { LOADING, ATTACH_PROMPT, TRANSITION_OUT, DONE }
+enum class IntroStage { LOADING, ATTACH_PROMPT, TRANSITION_OUT, DONE }
 
 @Composable
 internal fun IntroScreen(
