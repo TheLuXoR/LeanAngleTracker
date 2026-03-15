@@ -36,6 +36,7 @@ internal fun SettingsScreen(
     state: SettingsUiState,
     onBack: () -> Unit,
     onToggleInvertLean: (Boolean) -> Unit,
+    onToggleGyroFusion: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onResetExtrema: () -> Unit,
     onStartCalibration: () -> Unit
@@ -76,6 +77,23 @@ internal fun SettingsScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Lean invertieren", fontSize = 18.sp)
                     Switch(checked = state.invertLeanAngle, onCheckedChange = onToggleInvertLean)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Gyro-Fusion", fontSize = 18.sp)
+                        Text(
+                            if (state.gyroscopeAvailable) "Genauer bei dynamischer Fahrt"
+                            else "Gyroskop nicht verfügbar",
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = state.useGyroFusion,
+                        onCheckedChange = onToggleGyroFusion,
+                        enabled = state.gyroscopeAvailable
+                    )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

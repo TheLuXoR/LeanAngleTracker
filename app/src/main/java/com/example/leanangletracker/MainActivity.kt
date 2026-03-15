@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
             state = state,
             onBack = onBack,
             onToggleInvertLean = viewModel::setInvertLeanAngle,
+            onToggleGyroFusion = viewModel::setUseGyroFusion,
             onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
             onResetExtrema = viewModel::resetExtrema,
             onStartCalibration = onStartCalibration
