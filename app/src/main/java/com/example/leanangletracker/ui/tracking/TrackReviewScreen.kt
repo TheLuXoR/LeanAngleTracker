@@ -4,30 +4,29 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.ui.theme.SecondaryBlue
+import com.example.leanangletracker.ui.theme.TextSecondary
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -40,6 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrackReviewScreen(
     rideSession: RideSession,
@@ -49,66 +49,110 @@ internal fun TrackReviewScreen(
     Configuration.getInstance().userAgentValue = context.packageName
 
     if (rideSession.points.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("Keine GPS-Daten verfügbar", style = MaterialTheme.typography.headlineSmall)
-            Button(onClick = onBack) { Text("Zurück") }
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Keine GPS-Daten verfügbar", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onBack) { Text("Zurück") }
+            }
         }
         return
     }
 
-    var selectedIndex by rememberSaveable(rideSession.startedAtMs) { mutableStateOf(rideSession.points.lastIndex) }
-    var sliderValue by rememberSaveable(rideSession.startedAtMs) { mutableFloatStateOf(rideSession.points.lastIndex.toFloat()) }
+    var selectedIndex by rememberSaveable(rideSession.startedAtMs) { mutableIntStateOf(rideSession.points.lastIndex) }
     val selectedPoint = rideSession.points[selectedIndex]
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         if (uri != null) exportGpx(context, uri, rideSession)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("Streckenanalyse", style = MaterialTheme.typography.headlineSmall)
-
-        OSMTrackMap(
-            rideSession = rideSession,
-            selectedIndex = selectedIndex,
-            onMapPointSelected = { index ->
-                selectedIndex = index
-                sliderValue = index.toFloat()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        )
-
-        Slider(
-            value = sliderValue,
-            onValueChange = {
-                sliderValue = it
-                selectedIndex = it.toInt().coerceIn(0, rideSession.points.lastIndex)
-            },
-            valueRange = 0f..rideSession.points.lastIndex.toFloat()
-        )
-
-        Text("Zeit: ${formatTime(selectedPoint.timestampMs)} · Speed: ${"%.1f".format(selectedPoint.speedKmh)} km/h · Lean: ${"%.1f".format(selectedPoint.leanAngleDeg)}°")
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onBack, modifier = Modifier.weight(1f).height(52.dp)) { Text("Zurück") }
-            Button(
-                onClick = { exportLauncher.launch("lean-angle-track-${rideSession.startedAtMs}.gpx") },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) { Text("GPX exportieren") }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Ride Analysis", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { exportLauncher.launch("lean-angle-track-${rideSession.startedAtMs}.gpx") }) {
+                        Icon(Icons.Default.Share, contentDescription = "Export GPX")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
         }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(24.dp))
+            ) {
+                OSMTrackMap(
+                    rideSession = rideSession,
+                    selectedIndex = selectedIndex,
+                    onMapPointSelected = { selectedIndex = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
-        Text("Vorbereitet für Rennstrecke: jeder Punkt enthält lapIndex (derzeit 0).", style = MaterialTheme.typography.bodySmall)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
+                        StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
+                        StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
+                    }
+
+                    Slider(
+                        value = selectedIndex.toFloat(),
+                        onValueChange = { selectedIndex = it.toInt().coerceIn(0, rideSession.points.lastIndex) },
+                        valueRange = 0f..rideSession.points.lastIndex.toFloat(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        )
+                    )
+
+                    Text(
+                        text = "Slide to review specific parts of your ride. Export as GPX to use in external telemetry tools.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        Text(value, style = MaterialTheme.typography.titleLarge, color = SecondaryBlue, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -126,6 +170,7 @@ private fun OSMTrackMap(
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(16.0)
+            // Dark mode for map (filter) - if desired, but default is fine for now
         }
     }
 
@@ -142,16 +187,19 @@ private fun OSMTrackMap(
 
             val routeOverlay = Polyline().apply {
                 setPoints(points)
-                outlinePaint.strokeWidth = 9f
+                outlinePaint.apply {
+                    color = android.graphics.Color.parseColor("#00B4FF")
+                    strokeWidth = 12f
+                    strokeCap = android.graphics.Paint.Cap.ROUND
+                }
             }
             map.overlays.add(routeOverlay)
 
             val selectedGeoPoint = points[selectedIndex]
             val marker = Marker(map).apply {
                 position = selectedGeoPoint
-                title = "Ausgewählter Punkt"
-                snippet = "${rideSession.points[selectedIndex].speedKmh.toInt()} km/h, Lean ${"%.1f".format(rideSession.points[selectedIndex].leanAngleDeg)}°"
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                icon = context.getDrawable(android.R.drawable.presence_online) // Simple dot
             }
             map.overlays.add(marker)
 
@@ -170,7 +218,6 @@ private fun OSMTrackMap(
             })
             map.overlays.add(tapOverlay)
 
-            map.controller.setZoom(17.0)
             map.controller.animateTo(selectedGeoPoint)
 
             map.invalidate()

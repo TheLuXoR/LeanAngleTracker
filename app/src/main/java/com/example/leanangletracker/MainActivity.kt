@@ -10,22 +10,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.leanangletracker.ui.intro.IntroScreen
 import com.example.leanangletracker.ui.intro.IntroStage
 import com.example.leanangletracker.ui.navigation.AppRoute
 import com.example.leanangletracker.ui.settings.SettingsScreen
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
 import com.example.leanangletracker.ui.tracking.TrackReviewScreen
 import kotlinx.coroutines.delay
@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            LeanAngleTrackerTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val state by viewModel.uiState.collectAsStateWithLifecycle()
                     var routeUiState by rememberSaveable(stateSaver = RouteUiState.Saver) {
