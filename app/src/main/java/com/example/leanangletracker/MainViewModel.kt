@@ -10,11 +10,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
 private data class Vec3(val x: Float, val y: Float, val z: Float) {
     operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
+    operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
     operator fun times(scale: Float) = Vec3(x * scale, y * scale, z * scale)
 
     fun dot(other: Vec3): Float = x * other.x + y * other.y + z * other.z
@@ -35,30 +37,34 @@ private data class Vec3(val x: Float, val y: Float, val z: Float) {
 }
 
 enum class CalibrationStep {
-    IDLE,
     UPRIGHT,
-    WIGGLE,
+    LEFT_READY,
+    LEFT_MEASURING,
+    RIGHT_READY,
+    RIGHT_MEASURING,
     READY
 }
 
 data class UiState(
     val leanAngleDeg: Float = 0f,
-    val calibrationStep: CalibrationStep = CalibrationStep.IDLE,
-    val instructions: String = "Mount phone on bike, then start calibration.",
+    val calibrationStep: CalibrationStep = CalibrationStep.UPRIGHT,
+    val instructions: String = "1/3 Aufrecht hinstellen",
     val isCalibrated: Boolean = false,
-    val qualityHint: String = "",
+    val qualityHint: String = "Vorsicht: Bedienung nur in Null-Lage.",
     val maxLeftDeg: Float = 0f,
     val maxRightDeg: Float = 0f,
     val leanHistoryDeg: List<Float> = emptyList(),
     val invertLeanAngle: Boolean = true,
-    val historyWindowSeconds: Int = 20
+    val historyWindowSeconds: Int = 20,
+    val leftCalibrationAmplitudeDeg: Float = 0f,
+    val rightCalibrationAmplitudeDeg: Float = 0f,
+    val currentStepAmplitudeDeg: Float = 0f
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener {
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    private val gyroSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -66,28 +72,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var filteredGravity = Vec3(0f, 0f, 9.81f)
 
     private var uprightUp: Vec3? = null
-    private val gyroSamples = mutableListOf<Vec3>()
+    private var leftUp: Vec3? = null
+    private var rightUp: Vec3? = null
     private var bikeForwardAxis: Vec3? = null
 
-    private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
+    private var peakTiltDegInStep = 0f
+    private var peakTiltVectorInStep: Vec3? = null
+    private var uprightStableCounter = 0
 
+    private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
 
     init {
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
-        gyroSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
 
-        if (gravitySensor == null || gyroSensor == null) {
+        if (gravitySensor == null) {
             _uiState.value = _uiState.value.copy(
-                instructions = "Required sensors not available on this phone."
+                instructions = "Beschleunigungssensor fehlt"
             )
         }
     }
 
     fun startCalibration() {
         uprightUp = null
+        leftUp = null
+        rightUp = null
         bikeForwardAxis = null
-        gyroSamples.clear()
+        peakTiltDegInStep = 0f
+        peakTiltVectorInStep = null
+        uprightStableCounter = 0
         leanHistory.clear()
 
         _uiState.value = _uiState.value.copy(
@@ -97,47 +110,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             maxLeftDeg = 0f,
             maxRightDeg = 0f,
             leanHistoryDeg = emptyList(),
-            qualityHint = "",
-            instructions = "Step 1/2: Hold bike upright and still. Tap 'Capture Upright'."
+            qualityHint = "Vorsicht: Bedienung nur in Null-Lage.",
+            instructions = "1/3 Aufrecht hinstellen",
+            leftCalibrationAmplitudeDeg = 0f,
+            rightCalibrationAmplitudeDeg = 0f,
+            currentStepAmplitudeDeg = 0f
         )
     }
 
     fun captureUpright() {
         if (_uiState.value.calibrationStep != CalibrationStep.UPRIGHT) return
         uprightUp = (filteredGravity * -1f).normalized()
+
         _uiState.value = _uiState.value.copy(
-            calibrationStep = CalibrationStep.WIGGLE,
-            instructions = "Step 2/2: Lean bike left-right a few times. Tap 'Finish Calibration'."
+            calibrationStep = CalibrationStep.LEFT_READY,
+            instructions = "2/3 Links-Messung starten (nur aufrecht tippen)",
+            qualityHint = "Nach Start: Motorrad links neigen und wieder aufrichten."
         )
     }
 
-    fun finishCalibration() {
-        if (_uiState.value.calibrationStep != CalibrationStep.WIGGLE) return
-        val up = uprightUp ?: return
+    fun startLeftMeasurement() {
+        if (_uiState.value.calibrationStep != CalibrationStep.LEFT_READY) return
+        prepareMeasurementStep(
+            nextStep = CalibrationStep.LEFT_MEASURING,
+            instruction = "Links neigen → zurück aufrecht"
+        )
+    }
 
-        if (gyroSamples.size < 20) {
-            _uiState.value = _uiState.value.copy(
-                qualityHint = "Not enough motion captured. Wiggle more and try again."
-            )
-            return
-        }
+    fun startRightMeasurement() {
+        if (_uiState.value.calibrationStep != CalibrationStep.RIGHT_READY) return
+        prepareMeasurementStep(
+            nextStep = CalibrationStep.RIGHT_MEASURING,
+            instruction = "Rechts neigen → zurück aufrecht"
+        )
+    }
 
-        val principal = principalAxisFromGyro(gyroSamples)
-        val forward = if (abs(principal.dot(up)) > 0.9f) null else principal.normalized()
-
-        if (forward == null) {
-            _uiState.value = _uiState.value.copy(
-                qualityHint = "Wiggle motion ambiguous. Try larger side-to-side lean."
-            )
-            return
-        }
-
-        bikeForwardAxis = forward
+    private fun prepareMeasurementStep(nextStep: CalibrationStep, instruction: String) {
+        peakTiltDegInStep = 0f
+        peakTiltVectorInStep = null
+        uprightStableCounter = 0
         _uiState.value = _uiState.value.copy(
-            calibrationStep = CalibrationStep.READY,
-            isCalibrated = true,
-            instructions = "Calibrated. Ride safe! Lean angle is now live.",
-            qualityHint = "Calibration complete."
+            calibrationStep = nextStep,
+            instructions = instruction,
+            currentStepAmplitudeDeg = 0f,
+            qualityHint = ""
         )
     }
 
@@ -146,19 +162,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (previous.invertLeanAngle == invert) return
 
         val transformedHistory = previous.leanHistoryDeg.map { -it }
-        val transformedCurrent = -previous.leanAngleDeg
+        val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
+
+        leanHistory.clear()
+        leanHistory.addAll(transformedTimedHistory)
 
         _uiState.value = previous.copy(
             invertLeanAngle = invert,
-            leanAngleDeg = transformedCurrent,
+            leanAngleDeg = -previous.leanAngleDeg,
             maxLeftDeg = -previous.maxRightDeg,
             maxRightDeg = -previous.maxLeftDeg,
             leanHistoryDeg = transformedHistory
         )
-
-        val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
-        leanHistory.clear()
-        leanHistory.addAll(transformedTimedHistory)
     }
 
     fun setHistoryWindowSeconds(seconds: Int) {
@@ -166,50 +181,112 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val previous = _uiState.value
         if (previous.historyWindowSeconds == clamped) return
 
-        val currentTimestamp = leanHistory.lastOrNull()?.timestampNs
-        if (currentTimestamp != null) {
-            pruneHistory(currentTimestamp, clamped)
-        }
-
-        val historyValues = leanHistory.map { it.valueDeg }
-        val recalculatedLeft = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f
-        val recalculatedRight = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
-
+        leanHistory.lastOrNull()?.let { pruneHistory(it.timestampNs, clamped) }
         _uiState.value = previous.copy(
             historyWindowSeconds = clamped,
-            leanHistoryDeg = historyValues,
-            maxLeftDeg = minOf(previous.maxLeftDeg, recalculatedLeft),
-            maxRightDeg = maxOf(previous.maxRightDeg, recalculatedRight)
+            leanHistoryDeg = leanHistory.map { it.valueDeg }
         )
     }
 
-    fun resetCalibration() {
-        uprightUp = null
-        bikeForwardAxis = null
-        gyroSamples.clear()
-        leanHistory.clear()
-        _uiState.value = UiState(
-            invertLeanAngle = _uiState.value.invertLeanAngle,
-            historyWindowSeconds = _uiState.value.historyWindowSeconds
+    fun resetExtrema() {
+        val historyValues = _uiState.value.leanHistoryDeg
+        _uiState.value = _uiState.value.copy(
+            maxLeftDeg = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f,
+            maxRightDeg = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
         )
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        when (event.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> {
-                val alpha = 0.92f
-                val raw = Vec3(event.values[0], event.values[1], event.values[2])
-                filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
-                updateLeanAngle(event.timestamp)
+        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+
+        val alpha = 0.92f
+        val raw = Vec3(event.values[0], event.values[1], event.values[2])
+        filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
+
+        when (_uiState.value.calibrationStep) {
+            CalibrationStep.LEFT_MEASURING,
+            CalibrationStep.RIGHT_MEASURING -> handleMeasurementStep()
+
+            CalibrationStep.READY -> updateLeanAngle(event.timestamp)
+            else -> Unit
+        }
+    }
+
+    private fun handleMeasurementStep() {
+        val up = uprightUp ?: return
+        val currentUp = (filteredGravity * -1f).normalized()
+        val angleDeg = angleBetweenDeg(up, currentUp)
+
+        if (angleDeg > peakTiltDegInStep) {
+            peakTiltDegInStep = angleDeg
+            peakTiltVectorInStep = currentUp
+        }
+
+        _uiState.value = _uiState.value.copy(currentStepAmplitudeDeg = peakTiltDegInStep)
+
+        if (angleDeg < 4f) {
+            uprightStableCounter++
+        } else {
+            uprightStableCounter = 0
+        }
+
+        val enoughMotion = peakTiltDegInStep > 8f
+        val returnedUpright = uprightStableCounter > 14
+        if (!enoughMotion || !returnedUpright) return
+
+        when (_uiState.value.calibrationStep) {
+            CalibrationStep.LEFT_MEASURING -> {
+                leftUp = peakTiltVectorInStep ?: return
+                _uiState.value = _uiState.value.copy(
+                    calibrationStep = CalibrationStep.RIGHT_READY,
+                    instructions = "3/3 Rechts-Messung starten (nur aufrecht tippen)",
+                    qualityHint = "Nach Start: Motorrad rechts neigen und wieder aufrichten.",
+                    leftCalibrationAmplitudeDeg = peakTiltDegInStep,
+                    currentStepAmplitudeDeg = 0f
+                )
             }
 
-            Sensor.TYPE_GYROSCOPE -> {
-                if (_uiState.value.calibrationStep == CalibrationStep.WIGGLE) {
-                    gyroSamples += Vec3(event.values[0], event.values[1], event.values[2])
-                    if (gyroSamples.size > 2000) gyroSamples.removeFirst()
-                }
+            CalibrationStep.RIGHT_MEASURING -> {
+                rightUp = peakTiltVectorInStep ?: return
+                finalizeCalibration(peakTiltDegInStep)
             }
+
+            else -> Unit
         }
+    }
+
+    private fun finalizeCalibration(rightAmplitudeDeg: Float) {
+        val up = uprightUp ?: return
+        val left = leftUp ?: return
+        val right = rightUp ?: return
+
+        var forward = left.cross(right).normalized()
+        if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
+            _uiState.value = _uiState.value.copy(
+                qualityHint = "Kalibrierung unsicher. Bitte erneut starten und stärker neigen.",
+                calibrationStep = CalibrationStep.LEFT_READY,
+                instructions = "2/3 Links-Messung starten (nur aufrecht tippen)",
+                currentStepAmplitudeDeg = 0f
+            )
+            return
+        }
+
+        forward = (forward - up * forward.dot(up)).normalized()
+        bikeForwardAxis = forward
+
+        _uiState.value = _uiState.value.copy(
+            calibrationStep = CalibrationStep.READY,
+            isCalibrated = true,
+            instructions = "Kalibriert",
+            qualityHint = "",
+            rightCalibrationAmplitudeDeg = rightAmplitudeDeg,
+            currentStepAmplitudeDeg = 0f
+        )
+    }
+
+    private fun angleBetweenDeg(a: Vec3, b: Vec3): Float {
+        val dot = a.dot(b).coerceIn(-1f, 1f)
+        return Math.toDegrees(acos(dot).toDouble()).toFloat()
     }
 
     private fun updateLeanAngle(timestampNs: Long) {
@@ -245,19 +322,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         while (leanHistory.isNotEmpty() && leanHistory.first().timestampNs < cutoff) {
             leanHistory.removeFirst()
         }
-    }
-
-    private fun principalAxisFromGyro(samples: List<Vec3>): Vec3 {
-        var axis = Vec3(1f, 0f, 0f)
-        repeat(16) {
-            var next = Vec3(0f, 0f, 0f)
-            for (s in samples) {
-                val p = axis.dot(s)
-                next += s * p
-            }
-            axis = next.normalized()
-        }
-        return axis
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
