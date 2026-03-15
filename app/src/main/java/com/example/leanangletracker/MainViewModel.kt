@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,9 +49,9 @@ enum class CalibrationStep {
 data class UiState(
     val leanAngleDeg: Float = 0f,
     val calibrationStep: CalibrationStep = CalibrationStep.UPRIGHT,
-    val instructions: String = "1/3 Aufrecht hinstellen",
+    @StringRes val instructionsResId: Int = R.string.instructions_upright,
     val isCalibrated: Boolean = false,
-    val qualityHint: String = "Vorsicht: Bedienung nur in Null-Lage.",
+    @StringRes val qualityHintResId: Int? = R.string.hint_operate_only_zero_position,
     val maxLeftDeg: Float = 0f,
     val maxRightDeg: Float = 0f,
     val leanHistoryDeg: List<Float> = emptyList(),
@@ -88,7 +89,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         if (gravitySensor == null) {
             _uiState.value = _uiState.value.copy(
-                instructions = "Beschleunigungssensor fehlt"
+                instructionsResId = R.string.instructions_sensor_missing
             )
         }
     }
@@ -110,8 +111,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             maxLeftDeg = 0f,
             maxRightDeg = 0f,
             leanHistoryDeg = emptyList(),
-            qualityHint = "Vorsicht: Bedienung nur in Null-Lage.",
-            instructions = "1/3 Aufrecht hinstellen",
+            qualityHintResId = R.string.hint_operate_only_zero_position,
+            instructionsResId = R.string.instructions_upright,
             leftCalibrationAmplitudeDeg = 0f,
             rightCalibrationAmplitudeDeg = 0f,
             currentStepAmplitudeDeg = 0f
@@ -124,8 +125,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         _uiState.value = _uiState.value.copy(
             calibrationStep = CalibrationStep.LEFT_READY,
-            instructions = "2/3 Links-Messung starten (nur aufrecht tippen)",
-            qualityHint = "Nach Start: Motorrad links neigen und wieder aufrichten."
+            instructionsResId = R.string.instructions_start_left_measurement,
+            qualityHintResId = R.string.hint_after_start_tilt_left
         )
     }
 
@@ -133,7 +134,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (_uiState.value.calibrationStep != CalibrationStep.LEFT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.LEFT_MEASURING,
-            instruction = "Links neigen → zurück aufrecht"
+            instructionResId = R.string.instructions_tilt_left_then_return
         )
     }
 
@@ -141,19 +142,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (_uiState.value.calibrationStep != CalibrationStep.RIGHT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.RIGHT_MEASURING,
-            instruction = "Rechts neigen → zurück aufrecht"
+            instructionResId = R.string.instructions_tilt_right_then_return
         )
     }
 
-    private fun prepareMeasurementStep(nextStep: CalibrationStep, instruction: String) {
+    private fun prepareMeasurementStep(nextStep: CalibrationStep, @StringRes instructionResId: Int) {
         peakTiltDegInStep = 0f
         peakTiltVectorInStep = null
         uprightStableCounter = 0
         _uiState.value = _uiState.value.copy(
             calibrationStep = nextStep,
-            instructions = instruction,
+            instructionsResId = instructionResId,
             currentStepAmplitudeDeg = 0f,
-            qualityHint = ""
+            qualityHintResId = null
         )
     }
 
@@ -239,8 +240,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leftUp = peakTiltVectorInStep ?: return
                 _uiState.value = _uiState.value.copy(
                     calibrationStep = CalibrationStep.RIGHT_READY,
-                    instructions = "3/3 Rechts-Messung starten (nur aufrecht tippen)",
-                    qualityHint = "Nach Start: Motorrad rechts neigen und wieder aufrichten.",
+                    instructionsResId = R.string.instructions_start_right_measurement,
+                    qualityHintResId = R.string.hint_after_start_tilt_right,
                     leftCalibrationAmplitudeDeg = peakTiltDegInStep,
                     currentStepAmplitudeDeg = 0f
                 )
@@ -263,9 +264,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         var forward = left.cross(right).normalized()
         if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
             _uiState.value = _uiState.value.copy(
-                qualityHint = "Kalibrierung unsicher. Bitte erneut starten und stärker neigen.",
+                qualityHintResId = R.string.hint_calibration_uncertain,
                 calibrationStep = CalibrationStep.LEFT_READY,
-                instructions = "2/3 Links-Messung starten (nur aufrecht tippen)",
+                instructionsResId = R.string.instructions_start_left_measurement,
                 currentStepAmplitudeDeg = 0f
             )
             return
@@ -277,8 +278,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         _uiState.value = _uiState.value.copy(
             calibrationStep = CalibrationStep.READY,
             isCalibrated = true,
-            instructions = "Kalibriert",
-            qualityHint = "",
+            instructionsResId = R.string.instructions_calibrated,
+            qualityHintResId = null,
             rightCalibrationAmplitudeDeg = rightAmplitudeDeg,
             currentStepAmplitudeDeg = 0f
         )
