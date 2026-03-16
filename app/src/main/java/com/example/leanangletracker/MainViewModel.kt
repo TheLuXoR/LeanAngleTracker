@@ -86,7 +86,9 @@ data class TrackingUiState(
     val leanHistoryDeg: List<Float> = emptyList(),
     val speedKmh: Float = 0f,
     val gpsActive: Boolean = false,
-    val hasTrackData: Boolean = false
+    val hasTrackData: Boolean = false,
+    val gpsTrackingEnabled: Boolean = false,
+    val trackingStarted: Boolean = false
 )
 
 data class SettingsUiState(
@@ -165,22 +167,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun onLocationPermissionResult(granted: Boolean) {
         updateSettingsState { it.copy(locationPermissionGranted = granted) }
-        if (granted && _uiState.value.settings.gpsTrackingEnabled) {
-            startLocationUpdates()
-        } else {
+        if (!granted) {
             stopLocationUpdates()
+            updateTrackingState { it.copy(trackingStarted = false) }
+        }
+        updateTrackingState {
+            it.copy(
+                gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled && granted,
+                gpsActive = locationUpdatesRunning && granted
+            )
         }
     }
 
     fun setGpsTrackingEnabled(enabled: Boolean) {
         updateSettingsState { it.copy(gpsTrackingEnabled = enabled) }
-        if (enabled && _uiState.value.settings.locationPermissionGranted) {
-            startLocationUpdates()
-        } else {
+        if (!enabled) {
             stopLocationUpdates()
+            ridePoints.clear()
+            activeRideStartedMs = null
             speedKmh = 0f
-            updateTrackingState { it.copy(speedKmh = 0f, gpsActive = false) }
+            updateTrackingState {
+                it.copy(speedKmh = 0f, gpsActive = false, hasTrackData = false, trackingStarted = false)
+            }
         }
+        updateTrackingState {
+            it.copy(gpsTrackingEnabled = enabled && _uiState.value.settings.locationPermissionGranted)
+        }
+    }
+
+    fun startTracking() {
+        val state = _uiState.value
+        if (!state.settings.gpsTrackingEnabled || !state.settings.locationPermissionGranted) return
+        if (!locationUpdatesRunning) {
+            startLocationUpdates()
+        }
+        activeRideStartedMs = System.currentTimeMillis()
+        updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
     }
 
     fun finishRide() {
@@ -200,7 +222,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         ridePoints.clear()
         activeRideStartedMs = null
         speedKmh = 0f
-        updateTrackingState { it.copy(hasTrackData = false, speedKmh = 0f, gpsActive = false) }
+        updateTrackingState {
+            it.copy(
+                hasTrackData = false,
+                speedKmh = 0f,
+                gpsActive = false,
+                gpsTrackingEnabled = false,
+                trackingStarted = false
+            )
+        }
     }
 
     fun clearCompletedRide() {
@@ -239,7 +269,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 maxRightDeg = 0f,
                 leanHistoryDeg = emptyList(),
                 hasTrackData = false,
-                speedKmh = 0f
+                speedKmh = 0f,
+                trackingStarted = false
             )
         }
     }
@@ -479,7 +510,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 maxRightDeg = maxOf(previous.tracking.maxRightDeg, visibleRight),
                 leanHistoryDeg = visibleHistory,
                 speedKmh = speedKmh,
-                gpsActive = previous.settings.gpsTrackingEnabled && previous.settings.locationPermissionGranted,
+                gpsActive = locationUpdatesRunning,
                 hasTrackData = ridePoints.isNotEmpty()
             )
         )
@@ -561,7 +592,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val lean = _uiState.value.tracking.leanAngleDeg
 
         if (_uiState.value.settings.gpsTrackingEnabled) {
-            if (activeRideStartedMs == null) activeRideStartedMs = now
+            if (_uiState.value.tracking.trackingStarted && activeRideStartedMs == null) activeRideStartedMs = now
+            if (!_uiState.value.tracking.trackingStarted) {
+                updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning) }
+                return
+            }
             ridePoints += TrackPoint(
                 timestampMs = now,
                 latitude = location.latitude,
@@ -575,7 +610,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         updateTrackingState {
             it.copy(
                 speedKmh = speedKmh,
-                gpsActive = _uiState.value.settings.gpsTrackingEnabled && _uiState.value.settings.locationPermissionGranted,
+                gpsActive = locationUpdatesRunning,
                 hasTrackData = ridePoints.isNotEmpty()
             )
         }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ internal fun LeanAngleScreen(
     trackingState: TrackingUiState,
     calibrationState: CalibrationUiState,
     onOpenSettings: () -> Unit,
+    onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
     modifier: Modifier = Modifier,
     onCaptureUpright: () -> Unit,
@@ -99,8 +101,16 @@ internal fun LeanAngleScreen(
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (trackingState.hasTrackData) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (trackingState.gpsTrackingEnabled && !trackingState.trackingStarted) {
+                        FilledTonalIconButton(onClick = onStartTracking) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = "Start Tracking"
+                            )
+                        }
+                    }
+                    if (trackingState.trackingStarted) {
                         IconButton(
                             onClick = onFinishRide,
                             modifier = Modifier
