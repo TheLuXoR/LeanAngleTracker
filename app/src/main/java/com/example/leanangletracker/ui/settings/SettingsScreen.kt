@@ -36,6 +36,7 @@ internal fun SettingsScreen(
     onToggleGyroFusion: (Boolean) -> Unit,
     onToggleGpsTracking: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
+    onSetRecorderIntervalMs: (Int) -> Unit,
     onResetExtrema: () -> Unit,
     onStartCalibration: () -> Unit
 ) {
@@ -135,6 +136,42 @@ internal fun SettingsScreen(
                         
                         IconButton(
                             onClick = { onSetHistoryWindow(state.historyWindowSeconds + 5) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+
+            SettingsGroup(title = "RECORDING") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Recorder Tick", style = MaterialTheme.typography.titleMedium)
+                        Text("50ms to 1000ms in 50ms steps", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs - 50) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
+                        }
+
+                        Text(
+                            text = "${state.recorderIntervalMs}ms",
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        IconButton(
+                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs + 50) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))

@@ -103,6 +103,7 @@ data class TrackingUiState(
 data class SettingsUiState(
     val invertLeanAngle: Boolean = true,
     val historyWindowSeconds: Int = 20,
+    val recorderIntervalMs: Int = 200,
     val useGyroFusion: Boolean = false,
     val gyroscopeAvailable: Boolean = false,
     val gpsTrackingEnabled: Boolean = false,
@@ -119,7 +120,9 @@ data class UiState(
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
 
     private companion object {
-        const val RECORDER_INTERVAL_MS = 200L
+        const val RECORDER_INTERVAL_MIN_MS = 50
+        const val RECORDER_INTERVAL_MAX_MS = 1_000
+        const val RECORDER_INTERVAL_STEP_MS = 50
         const val GPS_FRESHNESS_THRESHOLD_MS = 2_500L
     }
 
@@ -378,6 +381,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             settings = previous.settings.copy(historyWindowSeconds = clamped),
             tracking = previous.tracking.copy(leanHistoryDeg = leanHistory.map { it.valueDeg })
         )
+    }
+
+    fun setRecorderIntervalMs(intervalMs: Int) {
+        val stepped = (intervalMs / RECORDER_INTERVAL_STEP_MS) * RECORDER_INTERVAL_STEP_MS
+        val clamped = stepped.coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
+        val previous = _uiState.value
+        if (previous.settings.recorderIntervalMs == clamped) return
+
+        _uiState.value = previous.copy(settings = previous.settings.copy(recorderIntervalMs = clamped))
     }
 
     fun setUseGyroFusion(enabled: Boolean) {
@@ -650,7 +662,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (recorderJob?.isActive == true) return
         recorderJob = viewModelScope.launch {
             while (isActive) {
-                delay(RECORDER_INTERVAL_MS)
+                val intervalMs = _uiState.value.settings.recorderIntervalMs
+                    .coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
+                delay(intervalMs.toLong())
                 recordFusedSample()
             }
         }
