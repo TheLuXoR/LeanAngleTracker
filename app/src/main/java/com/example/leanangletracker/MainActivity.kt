@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenSettings = {
                                     routeUiState = routeUiState.copy(showSettings = true)
                                 },
+                                onStartTracking = viewModel::startTracking,
                                 onFinishRide = {
                                     viewModel.finishRide()
                                     routeUiState = routeUiState.copy(showTrackReview = true)
@@ -148,12 +149,14 @@ class MainActivity : ComponentActivity() {
         trackingState: TrackingUiState,
         calibrationState: CalibrationUiState,
         onOpenSettings: () -> Unit,
+        onStartTracking: () -> Unit,
         onFinishRide: () -> Unit
     ) {
         LeanAngleScreen(
             trackingState = trackingState,
             calibrationState = calibrationState,
             onOpenSettings = onOpenSettings,
+            onStartTracking = onStartTracking,
             onFinishRide = onFinishRide,
             onCaptureUpright = viewModel::captureUpright,
             onStartLeftMeasurement = viewModel::startLeftMeasurement,
