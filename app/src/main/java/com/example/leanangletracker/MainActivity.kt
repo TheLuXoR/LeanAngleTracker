@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
                 viewModel.setGpsTrackingEnabled(enabled)
             },
             onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
+            onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
             onResetExtrema = viewModel::resetExtrema,
             onStartCalibration = onStartCalibration
         )
