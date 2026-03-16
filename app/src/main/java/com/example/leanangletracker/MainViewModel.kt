@@ -588,8 +588,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 speedKmh = speedKmh,
                 gpsActive = locationUpdatesRunning,
                 hasTrackData = ridePoints.isNotEmpty(),
-                currentLatitude = location.latitude,
-                currentLongitude = location.longitude
+                currentLatitude = latestGpsLocation?.latitude,
+                currentLongitude = latestGpsLocation?.longitude
             )
         )
     }
