@@ -8,24 +8,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,19 +22,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
-import com.example.leanangletracker.ui.components.InfoChip
-import com.example.leanangletracker.ui.components.PrimaryActionButton
+import com.example.leanangletracker.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
@@ -62,28 +53,64 @@ internal fun CalibrationWizard(
     if (showInfo) {
         AlertDialog(
             onDismissRequest = { showInfo = false },
-            confirmButton = { Button(onClick = { showInfo = false }) { Text(stringResource(R.string.dialog_ok)) } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
             title = { Text(stringResource(R.string.calibration_title)) },
             text = { Text(stringResource(R.string.calibration_info_text)) }
         )
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.calibration_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    InfoChip { showInfo = true }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.calibration_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    IconButton(onClick = { showInfo = true }) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                            contentDescription = "Info",
+                            tint = TextSecondary
+                        )
+                    }
                 }
 
-                BikeTiltAnimation(step = state.calibrationStep, modifier = Modifier.fillMaxWidth().height(130.dp))
+                BikeTiltAnimation(
+                    step = state.calibrationStep,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                )
 
-                Text(text = stringResource(state.instructionsResId), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = stringResource(state.instructionsResId),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
                 CalibrationAmplitudeBars(
                     leftAmp = state.leftCalibrationAmplitudeDeg,
@@ -91,21 +118,54 @@ internal fun CalibrationWizard(
                     currentAmp = state.currentStepAmplitudeDeg
                 )
 
-                Text(text = stringResource(R.string.warning_only_zero_position), color = Color(0xFFC05757), fontSize = 15.sp)
-                state.qualityHintResId?.let { hintResId ->
-                    Text(text = stringResource(hintResId), color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
+                if (state.qualityHintResId != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(state.qualityHintResId),
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
                 when (state.calibrationStep) {
-                    CalibrationStep.UPRIGHT -> PrimaryActionButton(stringResource(R.string.action_capture_upright), onCaptureUpright)
-                    CalibrationStep.LEFT_READY -> PrimaryActionButton(stringResource(R.string.action_start_left_measurement), onStartLeftMeasurement)
-                    CalibrationStep.RIGHT_READY -> PrimaryActionButton(stringResource(R.string.action_start_right_measurement), onStartRightMeasurement)
+                    CalibrationStep.UPRIGHT -> CalibrationButton(stringResource(R.string.action_capture_upright), onCaptureUpright)
+                    CalibrationStep.LEFT_READY -> CalibrationButton(stringResource(R.string.action_start_left_measurement), onStartLeftMeasurement)
+                    CalibrationStep.RIGHT_READY -> CalibrationButton(stringResource(R.string.action_start_right_measurement), onStartRightMeasurement)
                     CalibrationStep.LEFT_MEASURING,
-                    CalibrationStep.RIGHT_MEASURING -> Text(stringResource(R.string.measurement_running), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    CalibrationStep.RIGHT_MEASURING -> {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.measurement_running), style = MaterialTheme.typography.labelLarge)
+                    }
                     CalibrationStep.READY -> Unit
                 }
+                
+                Text(
+                    text = stringResource(R.string.warning_only_zero_position),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ErrorRed.copy(alpha = 0.8f)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun CalibrationButton(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -121,59 +181,90 @@ private fun BikeTiltAnimation(step: CalibrationStep, modifier: Modifier = Modifi
 
     val tilt = when (step) {
         CalibrationStep.LEFT_READY,
-        CalibrationStep.LEFT_MEASURING -> -22f
-
+        CalibrationStep.LEFT_MEASURING -> -25f
         CalibrationStep.RIGHT_READY,
-        CalibrationStep.RIGHT_MEASURING -> 22f
+        CalibrationStep.RIGHT_MEASURING -> 25f
         else -> 0f
     }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
 
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val baseY = h * 0.78f
-        drawLine(Color(0xFF8392A5), Offset(0f, baseY), Offset(w, baseY), strokeWidth = 6f)
+        val baseY = h * 0.8f
+        
+        // Ground
+        drawLine(
+            color = Color.White.copy(alpha = 0.1f),
+            start = Offset(w * 0.1f, baseY),
+            end = Offset(w * 0.9f, baseY),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
 
-        val dynamicTilt = tilt * (0.7f + 0.3f * abs(phase))
+        val dynamicTilt = tilt * (0.6f + 0.4f * abs(phase))
         val radians = Math.toRadians(dynamicTilt.toDouble())
         val cx = w * 0.5f
-        val cy = h * 0.56f
-        val len = 84f
+        val cy = h * 0.55f
+        val len = 100f
         val dx = (len * sin(radians)).toFloat()
         val dy = (len * cos(radians)).toFloat()
 
-        drawLine(Color(0xFF2F3E52), Offset(cx - dx, cy + dy * 0.35f), Offset(cx + dx, cy - dy), strokeWidth = 10f, cap = StrokeCap.Round)
-        drawCircle(Color(0xFF2F3E52), radius = 16f, center = Offset(cx - dx * 0.85f, cy + dy * 0.30f), style = Stroke(5f))
-        drawCircle(Color(0xFF2F3E52), radius = 16f, center = Offset(cx + dx * 0.85f, cy - dy * 0.85f), style = Stroke(5f))
+        // Bike representation
+        drawLine(
+            color = if (tilt != 0f) primaryColor else Color.White.copy(alpha = 0.6f),
+            start = Offset(cx - dx * 0.5f, cy + dy * 0.5f),
+            end = Offset(cx + dx, cy - dy),
+            strokeWidth = 8.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        
+        drawCircle(
+            color = secondaryColor.copy(alpha = 0.8f),
+            radius = 12.dp.toPx(),
+            center = Offset(cx - dx * 0.7f, cy + dy * 0.4f),
+            style = Stroke(4.dp.toPx())
+        )
     }
 }
 
 @Composable
 private fun CalibrationAmplitudeBars(leftAmp: Float, rightAmp: Float, currentAmp: Float) {
-    val maxAmp = maxOf(20f, leftAmp, rightAmp, currentAmp)
+    val maxAmp = maxOf(30f, leftAmp, rightAmp, currentAmp)
 
-    fun barWidth(value: Float): Float = (value / maxAmp).coerceIn(0f, 1f)
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        AmpRow(label = stringResource(R.string.label_left_short), value = leftAmp, widthFraction = barWidth(leftAmp), color = Color(0xFF4EA3FF))
-        AmpRow(label = stringResource(R.string.label_right_short), value = rightAmp, widthFraction = barWidth(rightAmp), color = Color(0xFF4EA3FF))
-        AmpRow(label = stringResource(R.string.label_now_short), value = currentAmp, widthFraction = barWidth(currentAmp), color = Color(0xFFFF7B7B))
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        AmpRow(label = stringResource(R.string.label_left_short), value = leftAmp, fraction = leftAmp / maxAmp, color = SecondaryBlue)
+        AmpRow(label = stringResource(R.string.label_right_short), value = rightAmp, fraction = rightAmp / maxAmp, color = SecondaryBlue)
+        AmpRow(label = stringResource(R.string.label_now_short), value = currentAmp, fraction = currentAmp / maxAmp, color = PrimaryOrange)
     }
 }
 
 @Composable
-private fun AmpRow(label: String, value: Float, widthFraction: Float, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.width(36.dp), fontWeight = FontWeight.Bold)
-        Box(modifier = Modifier.weight(1f).height(16.dp).background(Color(0xFFE6ECF3), RoundedCornerShape(6.dp))) {
+private fun AmpRow(label: String, value: Float, fraction: Float, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(label, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(12.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(widthFraction)
-                    .height(16.dp)
-                    .background(color, RoundedCornerShape(6.dp))
+                    .fillMaxWidth(fraction.coerceIn(0.01f, 1f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(color)
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.value_degrees_one_decimal, value), fontSize = 13.sp)
+        Text(
+            stringResource(R.string.value_degrees_one_decimal, value),
+            modifier = Modifier.width(50.dp).padding(start = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.End
+        )
     }
 }

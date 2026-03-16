@@ -17,7 +17,7 @@
     <string name="calibration_title">Kalibrierung</string>
     <string name="dialog_ok">OK</string>
     <string name="calibration_info_text">Nur in Null-Lage tippen.&#10;Nach Start einer Messung das Motorrad ruhig in die Richtung neigen und wieder aufrichten.</string>
-    <string name="warning_only_zero_position">⚠️ Nur in Null-Lage bedienen.</string>
+    <string name="warning_only_zero_position">⚠️ Pass auf, das du dein Motorrad nicht .</string>
     <string name="action_capture_upright">Aufrecht erfassen</string>
     <string name="action_start_left_measurement">Links-Messung starten</string>
     <string name="action_start_right_measurement">Rechts-Messung starten</string>
@@ -37,7 +37,7 @@
     <string name="value_current_degrees_with_direction">%1$.1f° %2$s</string>
     <string name="value_max_left">Max L %1$.1f°</string>
     <string name="value_max_right">Max R %1$.1f°</string>
-    <string name="history_title">History / Straße</string>
+    <string name="history_title">History</string>
     <string name="history_upper_bound">Upper bound (Max R): %1$.1f°</string>
     <string name="history_lower_bound">Lower bound (Max L): %1$.1f°</string>
 </resources>

@@ -1,40 +1,33 @@
 package com.example.leanangletracker.ui.settings
 
 import android.content.res.Configuration
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.SettingsUiState
-import com.example.leanangletracker.ui.components.InfoChip
+import com.example.leanangletracker.ui.theme.AccentGreen
+import com.example.leanangletracker.ui.theme.TextSecondary
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
     state: SettingsUiState,
@@ -52,80 +45,175 @@ internal fun SettingsScreen(
     if (showInfo) {
         AlertDialog(
             onDismissRequest = { showInfo = false },
-            confirmButton = { Button(onClick = { showInfo = false }) { Text("OK") } },
-            title = { Text("Info") },
-            text = { Text("Weniger ist mehr: Diese Seite enthält nur die wichtigsten Optionen.") }
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            title = { Text("App Info") },
+            text = { Text("Lean Angle Tracker helps you monitor your riding dynamics. Use Gyro-Fusion for better accuracy during aggressive cornering.") }
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 10.dp else 12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Settings", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showInfo = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Info")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                InfoChip { showInfo = true }
+            SettingsGroup(title = "SENSORS & TRACKING") {
+                SettingsSwitchItem(
+                    title = "Invert Lean Angle",
+                    subtitle = "Flip left/right if phone is mounted upside down",
+                    checked = state.invertLeanAngle,
+                    onCheckedChange = onToggleInvertLean
+                )
+                
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                
+                SettingsSwitchItem(
+                    title = "Gyro-Fusion",
+                    subtitle = if (state.gyroscopeAvailable) "More accurate during dynamic riding" else "Gyroscope not available",
+                    checked = state.useGyroFusion,
+                    onCheckedChange = onToggleGyroFusion,
+                    enabled = state.gyroscopeAvailable
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+
+                SettingsSwitchItem(
+                    title = "GPS Tracking",
+                    subtitle = if (state.locationPermissionGranted) "Speed + route recording" else "Location permission required",
+                    checked = state.gpsTrackingEnabled,
+                    onCheckedChange = onToggleGpsTracking
+                )
             }
-            Button(onClick = onBack) { Text("Zurück") }
-        }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Lean invertieren", fontSize = 18.sp)
-                    Switch(checked = state.invertLeanAngle, onCheckedChange = onToggleInvertLean)
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            SettingsGroup(title = "VISUALS") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Gyro-Fusion", fontSize = 18.sp)
-                        Text(if (state.gyroscopeAvailable) "Genauer bei dynamischer Fahrt" else "Gyroskop nicht verfügbar", fontSize = 13.sp)
+                        Text("History Window", style = MaterialTheme.typography.titleMedium)
+                        Text("Time shown in history graph", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(checked = state.useGyroFusion, onCheckedChange = onToggleGyroFusion, enabled = state.gyroscopeAvailable)
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("GPS Tracking", fontSize = 18.sp)
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { onSetHistoryWindow(state.historyWindowSeconds - 5) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
+                        }
+                        
                         Text(
-                            if (state.locationPermissionGranted) "Geschwindigkeit + Track-Aufzeichnung aktivierbar"
-                            else "Standortberechtigung fehlt",
-                            fontSize = 13.sp
+                            text = "${state.historyWindowSeconds}s",
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
+                        
+                        IconButton(
+                            onClick = { onSetHistoryWindow(state.historyWindowSeconds + 5) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
+                        }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(checked = state.gpsTrackingEnabled, onCheckedChange = onToggleGpsTracking)
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("History", fontSize = 18.sp)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Button(onClick = { onSetHistoryWindow(state.historyWindowSeconds - 5) }) { Text("-") }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("${state.historyWindowSeconds}s", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = { onSetHistoryWindow(state.historyWindowSeconds + 5) }) { Text("+") }
                 }
             }
-        }
 
-        Button(onClick = onResetExtrema, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("Max-Werte zurücksetzen", fontSize = 18.sp)
-        }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                Button(
+                    onClick = onResetExtrema,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Text("Reset Max Values", style = MaterialTheme.typography.titleMedium)
+                }
 
-        Button(onClick = onStartCalibration, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("Kalibrierung neu starten", fontSize = 18.sp)
+                OutlinedButton(
+                    onClick = onStartCalibration,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp)
+                ) {
+                    Text("Recalibrate Device", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSwitchItem(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = if (enabled) Color.Unspecified else TextSecondary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = AccentGreen,
+                checkedTrackColor = AccentGreen.copy(alpha = 0.3f)
+            )
+        )
     }
 }

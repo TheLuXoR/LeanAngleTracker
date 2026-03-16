@@ -20,8 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,15 +32,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import androidx.compose.ui.text.font.FontWeight
 
 enum class IntroStage { LOADING, ATTACH_PROMPT, TRANSITION_OUT, DONE }
 
@@ -65,27 +70,55 @@ internal fun IntroScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF051524), Color(0xFF0A2A45))))
+            .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(20.dp),
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Card(modifier = Modifier.fillMaxWidth().alpha(if (stage == IntroStage.TRANSITION_OUT) 0.35f else 1f)) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (stage == IntroStage.TRANSITION_OUT) 0f else 1f)
+                .clip(RoundedCornerShape(24.dp)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
             Column(
-                modifier = Modifier.padding(18.dp),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                PhoneBikeAnimation(modifier = Modifier.size(220.dp), pulse = pulse)
+                PhoneBikeAnimation(modifier = Modifier.size(240.dp), pulse = pulse)
 
-                when (stage) {
-                    IntroStage.LOADING -> Text("Initialisiere…", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    else -> Text("Telefon am Motorrad befestigen", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val titleText = when (stage) {
+                        IntroStage.LOADING -> "Initialisiere…"
+                        else -> "Telefon am Motorrad befestigen"
+                    }
+                    Text(
+                        text = titleText,
+                        style = MaterialTheme.typography.headlineSmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    if (stage == IntroStage.ATTACH_PROMPT) {
+                        Text(
+                            text = "Bitte stellen Sie sicher, dass das Telefon fest in einer Halterung sitzt.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
                 }
 
                 AnimatedVisibility(visible = stage == IntroStage.ATTACH_PROMPT) {
-                    Button(onClick = onMountedConfirm, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                        Text("Befestigt", fontSize = 18.sp)
+                    Button(
+                        onClick = onMountedConfirm,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Befestigt", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -95,22 +128,49 @@ internal fun IntroScreen(
 
 @Composable
 private fun PhoneBikeAnimation(modifier: Modifier, pulse: Float) {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val roadY = h * 0.78f
+        val roadY = h * 0.85f
 
-        drawLine(Color(0xCCFFFFFF), Offset(0f, roadY), Offset(w, roadY), strokeWidth = 8f)
-        drawCircle(Color(0xFF2E3E52), radius = 24f, center = Offset(w * 0.27f, roadY - 18f), style = Stroke(8f))
-        drawCircle(Color(0xFF2E3E52), radius = 24f, center = Offset(w * 0.73f, roadY - 18f), style = Stroke(8f))
-        drawLine(Color(0xFF2E3E52), Offset(w * 0.27f, roadY - 18f), Offset(w * 0.54f, roadY - 70f), strokeWidth = 8f)
-        drawLine(Color(0xFF2E3E52), Offset(w * 0.54f, roadY - 70f), Offset(w * 0.73f, roadY - 18f), strokeWidth = 8f)
+        // Road
+        drawLine(
+            brush = Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.3f), Color.Transparent)),
+            start = Offset(0f, roadY),
+            end = Offset(w, roadY),
+            strokeWidth = 4f
+        )
+
+        // Bike simple representation
+        val bikeColor = secondary.copy(alpha = 0.8f)
+        drawCircle(bikeColor, radius = 20f, center = Offset(w * 0.3f, roadY - 20f), style = Stroke(6f))
+        drawCircle(bikeColor, radius = 20f, center = Offset(w * 0.7f, roadY - 20f), style = Stroke(6f))
+        drawLine(bikeColor, Offset(w * 0.3f, roadY - 20f), Offset(w * 0.5f, roadY - 60f), strokeWidth = 6f)
+        drawLine(bikeColor, Offset(w * 0.5f, roadY - 60f), Offset(w * 0.7f, roadY - 20f), strokeWidth = 6f)
+
+        // Phone with pulse
+        val phoneW = w * 0.18f
+        val phoneH = h * 0.32f
+        val phoneX = w * 0.41f
+        val phoneY = h * 0.25f
 
         drawRoundRect(
-            color = Color(0xFF9CD0FF).copy(alpha = pulse),
-            topLeft = Offset(w * 0.42f, h * 0.24f),
-            size = Size(w * 0.16f, h * 0.30f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f, 18f)
+            color = primary.copy(alpha = pulse),
+            topLeft = Offset(phoneX, phoneY),
+            size = Size(phoneW, phoneH),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx())
+        )
+        
+        drawRoundRect(
+            color = primary,
+            topLeft = Offset(phoneX, phoneY),
+            size = Size(phoneW, phoneH),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+            style = Stroke(width = 3.dp.toPx())
         )
     }
 }
