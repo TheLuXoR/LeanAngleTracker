@@ -37,7 +37,7 @@
     <string name="value_current_degrees_with_direction">%1$.1f° %2$s</string>
     <string name="value_max_left">Max L %1$.1f°</string>
     <string name="value_max_right">Max R %1$.1f°</string>
-    <string name="history_title">History / Straße</string>
+    <string name="history_title">History</string>
     <string name="history_upper_bound">Upper bound (Max R): %1$.1f°</string>
     <string name="history_lower_bound">Lower bound (Max L): %1$.1f°</string>
 </resources>

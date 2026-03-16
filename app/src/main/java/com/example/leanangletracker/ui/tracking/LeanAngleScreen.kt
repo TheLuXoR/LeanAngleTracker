@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationUiState
@@ -32,7 +34,14 @@ import com.example.leanangletracker.ui.calibration.CalibrationWizard
 import com.example.leanangletracker.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
+
+@Composable
+@Preview
+private fun Gauge() {
+    TachoGauge(10f, 10f, 10f)
+}
 
 @Composable
 internal fun LeanAngleScreen(
@@ -98,7 +107,11 @@ internal fun LeanAngleScreen(
                                 .clip(CircleShape)
                                 .background(ErrorRed.copy(alpha = 0.2f))
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Finish", tint = ErrorRed)
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Finish",
+                                tint = ErrorRed
+                            )
                         }
                     }
                     IconButton(
@@ -107,7 +120,11 @@ internal fun LeanAngleScreen(
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -121,13 +138,15 @@ internal fun LeanAngleScreen(
                         currentDeg = trackingState.leanAngleDeg,
                         maxLeftDeg = trackingState.maxLeftDeg,
                         maxRightDeg = trackingState.maxRightDeg,
-                        speedKmh = trackingState.speedKmh,
-                        showSpeed = trackingState.gpsActive,
-                        modifier = Modifier.weight(1.2f).fillMaxHeight()
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .fillMaxHeight()
                     )
                     LeanHistoryGraph(
                         values = trackingState.leanHistoryDeg,
-                        modifier = Modifier.weight(1f).fillMaxHeight()
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
             } else {
@@ -135,26 +154,28 @@ internal fun LeanAngleScreen(
                     currentDeg = trackingState.leanAngleDeg,
                     maxLeftDeg = trackingState.maxLeftDeg,
                     maxRightDeg = trackingState.maxRightDeg,
-                    speedKmh = trackingState.speedKmh,
-                    showSpeed = trackingState.gpsActive,
-                    modifier = Modifier.weight(1.5f).fillMaxWidth()
+                    modifier = Modifier
+                        .weight(1.5f)
+                        .fillMaxWidth()
                 )
+                Spacer(Modifier.weight(1f))
                 LeanHistoryGraph(
                     values = trackingState.leanHistoryDeg,
-                    modifier = Modifier.weight(1f).fillMaxWidth()
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
                 )
             }
         }
     }
 }
 
+
 @Composable
 private fun TachoGauge(
     currentDeg: Float,
     maxLeftDeg: Float,
     maxRightDeg: Float,
-    speedKmh: Float,
-    showSpeed: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -162,130 +183,108 @@ private fun TachoGauge(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(24.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.fillMaxSize(0.85f)) {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val radius = size.minDimension * 0.45f
-                val maxDisplay = 65f
+        Column {
+            Box(
+                modifier = Modifier
+                    .aspectRatio(2.0f),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize(0.85f)) {
+                    val center = Offset(size.width / 2f, size.height)
+                    val radius = min(size.width / 2f, size.height)
+                    val maxDisplay = 65f
 
-                // Gauge Background
-                drawCircle(
-                    color = GaugeBackground,
-                    radius = radius,
-                    center = center
-                )
-                
-                // Border
-                drawCircle(
-                    color = Color.Blue.copy(0.3f),
-                    radius = radius,
-                    center = center,
-                    style = Stroke(width = 4.dp.toPx())
-                )
-
-                // Scale marks
-                for (mark in -60..60 step 10) {
-                    val theta = Math.toRadians(mark.toDouble() - 90.0)
-                    val isMajor = mark % 30 == 0
-                    val outer = Offset(
-                        x = center.x + (radius * 0.95f * cos(theta)).toFloat(),
-                        y = center.y + (radius * 0.95f * sin(theta)).toFloat()
+                    // Gauge Background
+                    drawArc(
+                        color = GaugeBackground,
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = true,
+                        topLeft = Offset(center.x - radius, center.y - radius),
+                        size = Size(radius * 2, radius * 2)
                     )
-                    val innerFactor = if (isMajor) 0.82f else 0.88f
-                    val inner = Offset(
-                        x = center.x + (radius * innerFactor * cos(theta)).toFloat(),
-                        y = center.y + (radius * innerFactor * sin(theta)).toFloat()
+                    // Border
+                    drawArc(
+                        color = Color.Blue.copy(0.3f),
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = Offset(center.x - radius, center.y - radius),
+                        size = Size(radius * 2, radius * 2),
+                        style = Stroke(width = 4.dp.toPx())
+                    )
+
+                    // Scale marks
+                    for (mark in -60..60 step 10) {
+                        val theta = Math.toRadians(mark.toDouble() - 90.0)
+                        val isMajor = mark % 30 == 0
+                        val outer = Offset(
+                            x = center.x + (radius * 0.95f * cos(theta)).toFloat(),
+                            y = center.y + (radius * 0.95f * sin(theta)).toFloat()
+                        )
+                        val innerFactor = if (isMajor) 0.82f else 0.88f
+                        val inner = Offset(
+                            x = center.x + (radius * innerFactor * cos(theta)).toFloat(),
+                            y = center.y + (radius * innerFactor * sin(theta)).toFloat()
+                        )
+                        drawLine(
+                            color = if (mark == 0) AccentGreen else GaugeScale.copy(alpha = 0.6f),
+                            start = inner,
+                            end = outer,
+                            strokeWidth = if (isMajor) 4.dp.toPx() else 2.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+
+                    fun angleToTip(deg: Float, lengthFactor: Float): Offset {
+                        val clamped = deg.coerceIn(-maxDisplay, maxDisplay)
+                        val theta = Math.toRadians(clamped.toDouble() - 90.0)
+                        return Offset(
+                            x = center.x + (radius * lengthFactor * cos(theta)).toFloat(),
+                            y = center.y + (radius * lengthFactor * sin(theta)).toFloat()
+                        )
+                    }
+
+                    // Max indications
+                    drawLine(
+                        SecondaryBlue.copy(alpha = 0.4f),
+                        center,
+                        angleToTip(maxLeftDeg, 0.9f),
+                        4.dp.toPx(),
+                        StrokeCap.Round
                     )
                     drawLine(
-                        color = if (mark == 0) AccentGreen else GaugeScale.copy(alpha = 0.6f),
-                        start = inner,
-                        end = outer,
-                        strokeWidth = if (isMajor) 4.dp.toPx() else 2.dp.toPx(),
+                        SecondaryBlue.copy(alpha = 0.4f),
+                        center,
+                        angleToTip(maxRightDeg, 0.9f),
+                        4.dp.toPx(),
+                        StrokeCap.Round
+                    )
+
+                    // Current needle
+                    drawLine(
+                        brush = Brush.linearGradient(listOf(GaugeNeedle, PrimaryOrange)),
+                        start = center,
+                        end = angleToTip(currentDeg, 0.88f),
+                        strokeWidth = 8.dp.toPx(),
                         cap = StrokeCap.Round
                     )
+
+                    // Center hub
+                    drawCircle(color = Color.White, radius = 12.dp.toPx(), center = center)
+                    drawCircle(color = GaugeNeedle, radius = 6.dp.toPx(), center = center)
                 }
 
-                fun angleToTip(deg: Float, lengthFactor: Float): Offset {
-                    val clamped = deg.coerceIn(-maxDisplay, maxDisplay)
-                    val theta = Math.toRadians(clamped.toDouble() - 90.0)
-                    return Offset(
-                        x = center.x + (radius * lengthFactor * cos(theta)).toFloat(),
-                        y = center.y + (radius * lengthFactor * sin(theta)).toFloat()
-                    )
-                }
-
-                // Max indications
-                drawLine(SecondaryBlue.copy(alpha = 0.4f), center, angleToTip(maxLeftDeg, 0.9f), 4.dp.toPx(), StrokeCap.Round)
-                drawLine(SecondaryBlue.copy(alpha = 0.4f), center, angleToTip(maxRightDeg, 0.9f), 4.dp.toPx(), StrokeCap.Round)
-                
-                // Current needle
-                drawLine(
-                    brush = Brush.linearGradient(listOf(GaugeNeedle, PrimaryOrange)),
-                    start = center,
-                    end = angleToTip(currentDeg, 0.88f),
-                    strokeWidth = 8.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-
-                // Center hub
-                drawCircle(color = Color.White, radius = 12.dp.toPx(), center = center)
-                drawCircle(color = GaugeNeedle, radius = 6.dp.toPx(), center = center)
-            }
-
-            // Speed Display
-            if (showSpeed) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center).padding(top = 80.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // Max Values
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(24.dp)
                 ) {
-                    Text(
-                        text = speedKmh.toInt().toString(),
-                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 48.sp),
-                        color = Color.White
-                    )
-                    Text(
-                        text = "km/h",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextSecondary
-                    )
+                    MaxValItem("MAX L", abs(maxLeftDeg))
+                    Spacer(modifier.weight(1f))
+                    MaxValItem("MAX R", maxRightDeg)
                 }
-            }
-
-            // Degree Display
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                val direction = when {
-                    currentDeg > 1f -> "RIGHT"
-                    currentDeg < -1f -> "LEFT"
-                    else -> "CENTER"
-                }
-                Text(
-                    text = "${abs(currentDeg).toInt()}°",
-                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 56.sp),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    text = direction,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = TextSecondary,
-                    letterSpacing = 2.sp
-                )
-            }
-
-            // Max Values
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(32.dp)
-            ) {
-                MaxValItem("MAX L", abs(maxLeftDeg))
-                MaxValItem("MAX R", maxRightDeg)
             }
         }
     }
@@ -311,50 +310,79 @@ private fun LeanHistoryGraph(values: List<Float>, modifier: Modifier = Modifier)
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                stringResource(R.string.history_title).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = TextSecondary,
-                letterSpacing = 1.sp
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
+            val lowerBound = values.maxOrNull()?.coerceAtLeast(10f) ?: 10f
+            val upperBound = values.minOrNull()?.coerceAtMost(-10f) ?: -10f
+            val amplitude = maxOf(20f, abs(upperBound), abs(lowerBound))
 
-            Box(modifier = Modifier.weight(1f)) {
-                val upperBound = values.maxOrNull()?.coerceAtLeast(10f) ?: 10f
-                val lowerBound = values.minOrNull()?.coerceAtMost(-10f) ?: -10f
-                val amplitude = maxOf(20f, abs(upperBound), abs(lowerBound))
+            Row {
+                Text(
+                    stringResource(R.string.history_title).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextSecondary,
+                    letterSpacing = 1.sp
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.history_upper_bound, upperBound),
+                    modifier = Modifier
+                        .padding(end = 8.dp, top = 2.dp),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val width = size.width
-                    val height = size.height
-                    val centerY = height / 2f
 
-                    fun yFor(deg: Float): Float = centerY - (deg / amplitude) * (height * 0.45f)
+            Canvas(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                val width = size.width
+                val height = size.height
+                val centerY = height / 2f
 
-                    // Grid Lines
-                    drawLine(Color.White.copy(alpha = 0.9f), Offset(0f, centerY), Offset(width, centerY), 1.dp.toPx())
-                    drawLine(Color.White.copy(alpha = 0.9f), Offset(0f, yFor(amplitude/2)), Offset(width, yFor(amplitude/2)), 1.dp.toPx())
-                    drawLine(Color.White.copy(alpha = 0.9f), Offset(0f, yFor(-amplitude/2)), Offset(width, yFor(-amplitude/2)), 1.dp.toPx())
+                fun yFor(deg: Float): Float = centerY - (deg / amplitude) * (height * 0.45f)
 
-                    if (values.size >= 2) {
-                        val stepX = width / (values.size - 1)
-                        val path = Path()
-                        values.forEachIndexed { index, value ->
-                            val x = index * stepX
-                            val y = yFor(value.coerceIn(-amplitude, amplitude))
-                            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                        }
-                        drawPath(
-                            path = path,
-                            brush = Brush.verticalGradient(
-                                listOf(PrimaryOrange, SecondaryBlue)
-                            ),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        )
+                // Grid Lines
+                val roadY = yFor(upperBound)
+                drawLine(
+                    Color(0x66FFFFFF),
+                    Offset(0f, roadY),
+                    Offset(width, roadY),
+                    4f,
+                    StrokeCap.Round
+                )
+                drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 2f)
+                drawLine(
+                    Color(0x66FFFFFF),
+                    Offset(0f, yFor(lowerBound)),
+                    Offset(width, yFor(lowerBound)),
+                    2f
+                )
+
+
+                if (values.size >= 2) {
+                    val stepX = width / (values.size - 1)
+                    val path = Path()
+                    values.forEachIndexed { index, value ->
+                        val x = index * stepX
+                        val y = yFor(value.coerceIn(-amplitude, amplitude))
+                        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                     }
+                    drawPath(
+                        path = path,
+                        brush = Brush.verticalGradient(
+                            listOf(PrimaryOrange, SecondaryBlue)
+                        ),
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    )
                 }
             }
+            Text(
+                stringResource(R.string.history_lower_bound, lowerBound),
+                modifier = Modifier
+                    .padding(end = 8.dp).align(Alignment.End),
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
