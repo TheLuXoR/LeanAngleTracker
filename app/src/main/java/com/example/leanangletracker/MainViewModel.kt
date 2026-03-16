@@ -97,7 +97,13 @@ data class TrackingUiState(
     val gpsActive: Boolean = false,
     val hasTrackData: Boolean = false,
     val gpsTrackingEnabled: Boolean = false,
-    val trackingStarted: Boolean = false
+    val trackingStarted: Boolean = false,
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null,
+    val elapsedTimeMs: Long = 0L,
+    val averageSpeedKmh: Float = 0f,
+    val trackLengthKm: Float = 0f,
+    val averageLeanAngleDeg: Float = 0f
 )
 
 data class SettingsUiState(
@@ -154,6 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var latestGpsLocation: Location? = null
     private var latestGpsTimestampNs: Long? = null
     private var recorderJob: Job? = null
+    private var trackLengthMeters = 0f
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
@@ -210,9 +217,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             latestGpsLocation = null
             latestGpsTimestampNs = null
             speedKmh = 0f
+            trackLengthMeters = 0f
             stopRecorder()
             updateTrackingState {
-                it.copy(speedKmh = 0f, gpsActive = false, hasTrackData = false, trackingStarted = false)
+                it.copy(
+                    speedKmh = 0f,
+                    gpsActive = false,
+                    hasTrackData = false,
+                    trackingStarted = false,
+                    currentLatitude = null,
+                    currentLongitude = null,
+                    elapsedTimeMs = 0L,
+                    averageSpeedKmh = 0f,
+                    trackLengthKm = 0f,
+                    averageLeanAngleDeg = 0f
+                )
             }
         }
         updateTrackingState {
@@ -251,13 +270,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestGpsLocation = null
         latestGpsTimestampNs = null
         speedKmh = 0f
+        trackLengthMeters = 0f
         updateTrackingState {
             it.copy(
                 hasTrackData = false,
                 speedKmh = 0f,
                 gpsActive = false,
                 gpsTrackingEnabled = false,
-                trackingStarted = false
+                trackingStarted = false,
+                currentLatitude = null,
+                currentLongitude = null,
+                elapsedTimeMs = 0L,
+                averageSpeedKmh = 0f,
+                trackLengthKm = 0f,
+                averageLeanAngleDeg = 0f
             )
         }
     }
@@ -281,6 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         activeRideStartedMs = null
         latestGpsLocation = null
         latestGpsTimestampNs = null
+        trackLengthMeters = 0f
         stopRecorder()
 
         updateCalibrationState {
@@ -302,7 +329,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leanHistoryDeg = emptyList(),
                 hasTrackData = false,
                 speedKmh = 0f,
-                trackingStarted = false
+                trackingStarted = false,
+                currentLatitude = null,
+                currentLongitude = null,
+                elapsedTimeMs = 0L,
+                averageSpeedKmh = 0f,
+                trackLengthKm = 0f,
+                averageLeanAngleDeg = 0f
             )
         }
     }
@@ -554,7 +587,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leanHistoryDeg = visibleHistory,
                 speedKmh = speedKmh,
                 gpsActive = locationUpdatesRunning,
-                hasTrackData = ridePoints.isNotEmpty()
+                hasTrackData = ridePoints.isNotEmpty(),
+                currentLatitude = location.latitude,
+                currentLongitude = location.longitude
             )
         )
     }
@@ -639,7 +674,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 activeRideStartedMs = System.currentTimeMillis()
             }
             if (!_uiState.value.tracking.trackingStarted) {
-                updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning) }
+                updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning, currentLatitude = location.latitude, currentLongitude = location.longitude) }
                 return
             }
         }
@@ -648,7 +683,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             it.copy(
                 speedKmh = speedKmh,
                 gpsActive = locationUpdatesRunning,
-                hasTrackData = ridePoints.isNotEmpty()
+                hasTrackData = ridePoints.isNotEmpty(),
+                currentLatitude = location.latitude,
+                currentLongitude = location.longitude
             )
         }
     }
@@ -688,8 +725,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val fusedSpeedKmh = (gps.speed * 3.6f).coerceAtLeast(0f)
         speedKmh = fusedSpeedKmh
 
+        val nowMs = System.currentTimeMillis()
+        val previousPoint = ridePoints.lastOrNull()
+        if (previousPoint != null) {
+            trackLengthMeters += distanceMeters(
+                previousPoint.latitude,
+                previousPoint.longitude,
+                gps.latitude,
+                gps.longitude
+            )
+        }
+
         ridePoints += TrackPoint(
-            timestampMs = System.currentTimeMillis(),
+            timestampMs = nowMs,
             latitude = gps.latitude,
             longitude = gps.longitude,
             speedKmh = fusedSpeedKmh,
@@ -700,13 +748,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             lapIndex = 0
         )
 
+        val elapsedMs = activeRideStartedMs?.let { (nowMs - it).coerceAtLeast(0L) } ?: 0L
+        val avgSpeed = if (ridePoints.isNotEmpty()) ridePoints.map { it.speedKmh }.average().toFloat() else 0f
+        val avgLean = if (ridePoints.isNotEmpty()) ridePoints.map { kotlin.math.abs(it.leanAngleDeg.toDouble()) }.average().toFloat() else 0f
+
         updateTrackingState {
             it.copy(
                 speedKmh = fusedSpeedKmh,
                 gpsActive = locationUpdatesRunning,
-                hasTrackData = true
+                hasTrackData = true,
+                currentLatitude = gps.latitude,
+                currentLongitude = gps.longitude,
+                elapsedTimeMs = elapsedMs,
+                averageSpeedKmh = avgSpeed,
+                trackLengthKm = trackLengthMeters / 1000f,
+                averageLeanAngleDeg = avgLean
             )
         }
+    }
+
+
+    private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return results[0].coerceAtLeast(0f)
     }
 
     override fun onCleared() {

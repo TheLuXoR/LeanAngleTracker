@@ -37,6 +37,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import java.util.Locale
 
 @Composable
 @Preview
@@ -140,6 +141,12 @@ internal fun LeanAngleScreen(
             }
 
             if (isLandscape) {
+                if (trackingState.trackingStarted) {
+                    TrackingStatsCard(
+                        trackingState = trackingState,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -160,6 +167,12 @@ internal fun LeanAngleScreen(
                     )
                 }
             } else {
+                if (trackingState.trackingStarted) {
+                    TrackingStatsCard(
+                        trackingState = trackingState,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 TachoGauge(
                     currentDeg = trackingState.leanAngleDeg,
                     maxLeftDeg = trackingState.maxLeftDeg,
@@ -177,6 +190,48 @@ internal fun LeanAngleScreen(
                 )
             }
         }
+    }
+}
+
+
+@Composable
+private fun TrackingStatsCard(
+    trackingState: TrackingUiState,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val locationText = if (trackingState.currentLatitude != null && trackingState.currentLongitude != null) {
+                String.format(Locale.US, "%.6f, %.6f", trackingState.currentLatitude, trackingState.currentLongitude)
+            } else {
+                "n/a"
+            }
+            Text("speed: ${"%.1f".format(Locale.US, trackingState.speedKmh)} km/h")
+            Text("location: $locationText")
+            Text("elapsedTime: ${formatElapsedTime(trackingState.elapsedTimeMs)}")
+            Text("avg spd: ${"%.1f".format(Locale.US, trackingState.averageSpeedKmh)} km/h")
+            Text("trackLenght: ${"%.2f".format(Locale.US, trackingState.trackLengthKm)} km")
+            Text("avg leanAngle: ${"%.1f".format(Locale.US, trackingState.averageLeanAngleDeg)}°")
+        }
+    }
+}
+
+private fun formatElapsedTime(elapsedMs: Long): String {
+    val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
 
