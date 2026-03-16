@@ -160,7 +160,8 @@ class MainActivity : ComponentActivity() {
             onFinishRide = onFinishRide,
             onCaptureUpright = viewModel::captureUpright,
             onStartLeftMeasurement = viewModel::startLeftMeasurement,
-            onStartRightMeasurement = viewModel::startRightMeasurement
+            onStartRightMeasurement = viewModel::startRightMeasurement,
+            onContinueCalibrationFallback = viewModel::continueCalibrationFallback
         )
     }
 

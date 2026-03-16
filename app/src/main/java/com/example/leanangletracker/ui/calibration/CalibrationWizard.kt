@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,7 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
@@ -46,7 +44,8 @@ internal fun CalibrationWizard(
     state: CalibrationUiState,
     onCaptureUpright: () -> Unit,
     onStartLeftMeasurement: () -> Unit,
-    onStartRightMeasurement: () -> Unit
+    onStartRightMeasurement: () -> Unit,
+    onContinueFallback: () -> Unit
 ) {
     var showInfo by rememberSaveable { mutableStateOf(false) }
 
@@ -137,13 +136,28 @@ internal fun CalibrationWizard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 when (state.calibrationStep) {
-                    CalibrationStep.UPRIGHT -> CalibrationButton(stringResource(R.string.action_capture_upright), onCaptureUpright)
+                    CalibrationStep.UPRIGHT -> CalibrationButton(stringResource(R.string.action_confirm_bike_upright), onCaptureUpright)
                     CalibrationStep.LEFT_READY -> CalibrationButton(stringResource(R.string.action_start_left_measurement), onStartLeftMeasurement)
                     CalibrationStep.RIGHT_READY -> CalibrationButton(stringResource(R.string.action_start_right_measurement), onStartRightMeasurement)
                     CalibrationStep.LEFT_MEASURING,
                     CalibrationStep.RIGHT_MEASURING -> {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Text(stringResource(R.string.measurement_running), style = MaterialTheme.typography.labelLarge)
+                        RecognitionProgress(
+                            tiltProgress = state.tiltRecognitionProgress,
+                            uprightProgress = state.uprightRecognitionProgress
+                        )
+                        OutlinedButton(onClick = onContinueFallback, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = stringResource(
+                                    if (state.calibrationStep == CalibrationStep.LEFT_MEASURING) {
+                                        R.string.action_continue_to_right
+                                    } else {
+                                        R.string.action_finish_calibration
+                                    }
+                                )
+                            )
+                        }
                     }
                     CalibrationStep.READY -> Unit
                 }
@@ -238,6 +252,16 @@ private fun CalibrationAmplitudeBars(leftAmp: Float, rightAmp: Float, currentAmp
         AmpRow(label = stringResource(R.string.label_left_short), value = leftAmp, fraction = leftAmp / maxAmp, color = SecondaryBlue)
         AmpRow(label = stringResource(R.string.label_right_short), value = rightAmp, fraction = rightAmp / maxAmp, color = SecondaryBlue)
         AmpRow(label = stringResource(R.string.label_now_short), value = currentAmp, fraction = currentAmp / maxAmp, color = PrimaryOrange)
+    }
+}
+
+@Composable
+private fun RecognitionProgress(tiltProgress: Float, uprightProgress: Float) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.label_tilt_recognition_progress), style = MaterialTheme.typography.labelMedium)
+        LinearProgressIndicator(progress = { tiltProgress }, modifier = Modifier.fillMaxWidth())
+        Text(stringResource(R.string.label_return_upright_progress), style = MaterialTheme.typography.labelMedium)
+        LinearProgressIndicator(progress = { uprightProgress }, modifier = Modifier.fillMaxWidth())
     }
 }
 

@@ -55,7 +55,8 @@ internal fun LeanAngleScreen(
     modifier: Modifier = Modifier,
     onCaptureUpright: () -> Unit,
     onStartLeftMeasurement: () -> Unit,
-    onStartRightMeasurement: () -> Unit
+    onStartRightMeasurement: () -> Unit,
+    onContinueCalibrationFallback: () -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -70,7 +71,8 @@ internal fun LeanAngleScreen(
                 state = calibrationState,
                 onCaptureUpright = onCaptureUpright,
                 onStartLeftMeasurement = onStartLeftMeasurement,
-                onStartRightMeasurement = onStartRightMeasurement
+                onStartRightMeasurement = onStartRightMeasurement,
+                onContinueFallback = onContinueCalibrationFallback
             )
             return@Box
         }

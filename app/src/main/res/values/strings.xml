@@ -2,11 +2,11 @@
     <string name="app_name">Lean Angle Tracker</string>
 
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">1/3 Aufrecht hinstellen</string>
+    <string name="instructions_upright">1/3 Ist das Bike aufrecht?</string>
     <string name="instructions_start_left_measurement">2/3 Links-Messung starten (nur aufrecht tippen)</string>
-    <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht</string>
+    <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_start_right_measurement">3/3 Rechts-Messung starten (nur aufrecht tippen)</string>
-    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht</string>
+    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_calibrated">Kalibriert</string>
 
     <string name="hint_operate_only_zero_position">Vorsicht: Bedienung nur in Null-Lage.</string>
@@ -17,11 +17,16 @@
     <string name="calibration_title">Kalibrierung</string>
     <string name="dialog_ok">OK</string>
     <string name="calibration_info_text">Nur in Null-Lage tippen.&#10;Nach Start einer Messung das Motorrad ruhig in die Richtung neigen und wieder aufrichten.</string>
-    <string name="warning_only_zero_position">⚠️ Pass auf, das du dein Motorrad nicht .</string>
+    <string name="warning_only_zero_position">⚠️ Vorsicht: Motorrad immer kontrolliert bewegen und sicher abstützen.</string>
     <string name="action_capture_upright">Aufrecht erfassen</string>
+    <string name="action_confirm_bike_upright">Ja, Bike ist aufrecht</string>
     <string name="action_start_left_measurement">Links-Messung starten</string>
     <string name="action_start_right_measurement">Rechts-Messung starten</string>
     <string name="measurement_running">Messung läuft…</string>
+    <string name="action_continue_to_right">Weiter mit Rechts-Neigung</string>
+    <string name="action_finish_calibration">Kalibrierung jetzt abschließen</string>
+    <string name="label_tilt_recognition_progress">Neigungs-Erkennung</string>
+    <string name="label_return_upright_progress">Rückkehr zur Aufrecht-Position</string>
     <string name="label_left_short">L</string>
     <string name="label_right_short">R</string>
     <string name="label_now_short">Now</string>
