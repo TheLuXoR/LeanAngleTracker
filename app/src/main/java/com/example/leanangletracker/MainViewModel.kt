@@ -2,6 +2,7 @@ package com.example.leanangletracker
 
 import android.Manifest
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -67,7 +68,9 @@ data class CalibrationUiState(
     @StringRes val qualityHintResId: Int? = R.string.hint_operate_only_zero_position,
     val leftCalibrationAmplitudeDeg: Float = 0f,
     val rightCalibrationAmplitudeDeg: Float = 0f,
-    val currentStepAmplitudeDeg: Float = 0f
+    val currentStepAmplitudeDeg: Float = 0f,
+    val tiltRecognitionProgress: Float = 0f,
+    val uprightRecognitionProgress: Float = 0f
 )
 
 data class TrackPoint(
@@ -130,6 +133,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val RECORDER_INTERVAL_MAX_MS = 1_000
         const val RECORDER_INTERVAL_STEP_MS = 50
         const val GPS_FRESHNESS_THRESHOLD_MS = 2_500L
+        const val PREFS_NAME = "lean_angle_tracker_prefs"
+        const val KEY_INVERT = "invert_lean"
+        const val KEY_HISTORY_WINDOW = "history_window_s"
+        const val KEY_RECORDER_INTERVAL = "recorder_interval_ms"
+        const val KEY_USE_GYRO = "use_gyro_fusion"
+        const val KEY_GPS_ENABLED = "gps_enabled"
+        const val KEY_CALIBRATED = "is_calibrated"
+        const val KEY_UPRIGHT_X = "upright_x"
+        const val KEY_UPRIGHT_Y = "upright_y"
+        const val KEY_UPRIGHT_Z = "upright_z"
+        const val KEY_FORWARD_X = "forward_x"
+        const val KEY_FORWARD_Y = "forward_y"
+        const val KEY_FORWARD_Z = "forward_z"
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
@@ -139,6 +155,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private var filteredGravity = Vec3(0f, 0f, 9.81f)
 
@@ -177,9 +194,97 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             )
         }
 
+        loadPersistedState()
+
         if (gravitySensor == null) {
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
+    }
+
+    private fun loadPersistedState() {
+        val savedInvert = prefs.getBoolean(KEY_INVERT, true)
+        val savedHistory = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120)
+        val savedRecorder = prefs.getInt(KEY_RECORDER_INTERVAL, 200).coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
+        val savedUseGyro = prefs.getBoolean(KEY_USE_GYRO, false)
+        val savedGps = prefs.getBoolean(KEY_GPS_ENABLED, false)
+
+        updateSettingsState {
+            it.copy(
+                invertLeanAngle = savedInvert,
+                historyWindowSeconds = savedHistory,
+                recorderIntervalMs = savedRecorder,
+                useGyroFusion = savedUseGyro && gyroscopeSensor != null,
+                gpsTrackingEnabled = savedGps && it.locationPermissionGranted
+            )
+        }
+        updateTrackingState {
+            it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
+        }
+
+        if (!prefs.getBoolean(KEY_CALIBRATED, false)) return
+
+        val savedUpright = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)?.normalized() ?: return
+        val savedForward = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)?.normalized() ?: return
+
+        uprightUp = savedUpright
+        bikeForwardAxis = savedForward
+        gyroLeanDeg = 0f
+        lastGyroTimestampNs = null
+
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = CalibrationStep.READY,
+                isCalibrated = true,
+                instructionsResId = R.string.instructions_calibrated,
+                qualityHintResId = null
+            )
+        }
+    }
+
+    private fun readVec3(xKey: String, yKey: String, zKey: String): Vec3? {
+        if (!prefs.contains(xKey) || !prefs.contains(yKey) || !prefs.contains(zKey)) return null
+        return Vec3(
+            prefs.getFloat(xKey, 0f),
+            prefs.getFloat(yKey, 0f),
+            prefs.getFloat(zKey, 0f)
+        )
+    }
+
+    private fun persistSettings() {
+        val settings = _uiState.value.settings
+        prefs.edit()
+            .putBoolean(KEY_INVERT, settings.invertLeanAngle)
+            .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
+            .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
+            .putBoolean(KEY_USE_GYRO, settings.useGyroFusion)
+            .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
+            .apply()
+    }
+
+    private fun persistCalibration() {
+        val up = uprightUp ?: return
+        val forward = bikeForwardAxis ?: return
+        prefs.edit()
+            .putBoolean(KEY_CALIBRATED, true)
+            .putFloat(KEY_UPRIGHT_X, up.x)
+            .putFloat(KEY_UPRIGHT_Y, up.y)
+            .putFloat(KEY_UPRIGHT_Z, up.z)
+            .putFloat(KEY_FORWARD_X, forward.x)
+            .putFloat(KEY_FORWARD_Y, forward.y)
+            .putFloat(KEY_FORWARD_Z, forward.z)
+            .apply()
+    }
+
+    private fun clearPersistedCalibration() {
+        prefs.edit()
+            .putBoolean(KEY_CALIBRATED, false)
+            .remove(KEY_UPRIGHT_X)
+            .remove(KEY_UPRIGHT_Y)
+            .remove(KEY_UPRIGHT_Z)
+            .remove(KEY_FORWARD_X)
+            .remove(KEY_FORWARD_Y)
+            .remove(KEY_FORWARD_Z)
+            .apply()
     }
 
     private inline fun updateCalibrationState(transform: (CalibrationUiState) -> CalibrationUiState) {
@@ -206,6 +311,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 gpsActive = locationUpdatesRunning && granted
             )
         }
+        persistSettings()
     }
 
     fun setGpsTrackingEnabled(enabled: Boolean) {
@@ -237,6 +343,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         updateTrackingState {
             it.copy(gpsTrackingEnabled = enabled && _uiState.value.settings.locationPermissionGranted)
         }
+        persistSettings()
     }
 
     fun startTracking() {
@@ -309,6 +416,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestGpsTimestampNs = null
         trackLengthMeters = 0f
         stopRecorder()
+        clearPersistedCalibration()
 
         updateCalibrationState {
             it.copy(
@@ -318,7 +426,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 instructionsResId = R.string.instructions_upright,
                 leftCalibrationAmplitudeDeg = 0f,
                 rightCalibrationAmplitudeDeg = 0f,
-                currentStepAmplitudeDeg = 0f
+                currentStepAmplitudeDeg = 0f,
+                tiltRecognitionProgress = 0f,
+                uprightRecognitionProgress = 0f
             )
         }
         updateTrackingState {
@@ -343,29 +453,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun captureUpright() {
         if (_uiState.value.calibration.calibrationStep != CalibrationStep.UPRIGHT) return
         uprightUp = (filteredGravity * -1f).normalized()
-
-        updateCalibrationState {
-            it.copy(
-                calibrationStep = CalibrationStep.LEFT_READY,
-                instructionsResId = R.string.instructions_start_left_measurement,
-                qualityHintResId = R.string.hint_after_start_tilt_left
-            )
-        }
-    }
-
-    fun startLeftMeasurement() {
-        if (_uiState.value.calibration.calibrationStep != CalibrationStep.LEFT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.LEFT_MEASURING,
             instructionResId = R.string.instructions_tilt_left_then_return
-        )
-    }
-
-    fun startRightMeasurement() {
-        if (_uiState.value.calibration.calibrationStep != CalibrationStep.RIGHT_READY) return
-        prepareMeasurementStep(
-            nextStep = CalibrationStep.RIGHT_MEASURING,
-            instructionResId = R.string.instructions_tilt_right_then_return
         )
     }
 
@@ -378,8 +468,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 calibrationStep = nextStep,
                 instructionsResId = instructionResId,
                 currentStepAmplitudeDeg = 0f,
+                tiltRecognitionProgress = 0f,
+                uprightRecognitionProgress = 0f,
                 qualityHintResId = null
             )
+        }
+    }
+
+    fun continueCalibrationFallback() {
+        when (_uiState.value.calibration.calibrationStep) {
+            CalibrationStep.LEFT_MEASURING -> {
+                val currentUp = (filteredGravity * -1f).normalized()
+                leftUp = peakTiltVectorInStep ?: currentUp
+                val leftAmplitude = peakTiltDegInStep
+                updateCalibrationState { it.copy(leftCalibrationAmplitudeDeg = leftAmplitude) }
+                prepareMeasurementStep(
+                    nextStep = CalibrationStep.RIGHT_MEASURING,
+                    instructionResId = R.string.instructions_tilt_right_then_return
+                )
+            }
+
+            CalibrationStep.RIGHT_MEASURING -> {
+                val currentUp = (filteredGravity * -1f).normalized()
+                rightUp = peakTiltVectorInStep ?: currentUp
+                finalizeCalibration(peakTiltDegInStep)
+            }
+
+            else -> Unit
         }
     }
 
@@ -402,6 +517,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 leanHistoryDeg = transformedHistory
             )
         )
+        persistSettings()
     }
 
     fun setHistoryWindowSeconds(seconds: Int) {
@@ -414,6 +530,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             settings = previous.settings.copy(historyWindowSeconds = clamped),
             tracking = previous.tracking.copy(leanHistoryDeg = leanHistory.map { it.valueDeg })
         )
+        persistSettings()
     }
 
     fun setRecorderIntervalMs(intervalMs: Int) {
@@ -423,12 +540,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (previous.settings.recorderIntervalMs == clamped) return
 
         _uiState.value = previous.copy(settings = previous.settings.copy(recorderIntervalMs = clamped))
+        persistSettings()
     }
 
     fun setUseGyroFusion(enabled: Boolean) {
         val shouldUse = enabled && gyroscopeSensor != null
         val current = _uiState.value
         _uiState.value = current.copy(settings = current.settings.copy(useGyroFusion = shouldUse))
+        persistSettings()
     }
 
     fun resetExtrema() {
@@ -471,7 +590,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             peakTiltVectorInStep = currentUp
         }
 
-        updateCalibrationState { it.copy(currentStepAmplitudeDeg = peakTiltDegInStep) }
+        val tiltProgress = (peakTiltDegInStep / 8f).coerceIn(0f, 1f)
+        val uprightProgress = if (tiltProgress >= 1f) (uprightStableCounter / 15f).coerceIn(0f, 1f) else 0f
+        updateCalibrationState {
+            it.copy(
+                currentStepAmplitudeDeg = peakTiltDegInStep,
+                tiltRecognitionProgress = tiltProgress,
+                uprightRecognitionProgress = uprightProgress
+            )
+        }
 
         if (angleDeg < 4f) {
             uprightStableCounter++
@@ -486,15 +613,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         when (_uiState.value.calibration.calibrationStep) {
             CalibrationStep.LEFT_MEASURING -> {
                 leftUp = peakTiltVectorInStep ?: return
-                updateCalibrationState {
-                    it.copy(
-                        calibrationStep = CalibrationStep.RIGHT_READY,
-                        instructionsResId = R.string.instructions_start_right_measurement,
-                        qualityHintResId = R.string.hint_after_start_tilt_right,
-                        leftCalibrationAmplitudeDeg = peakTiltDegInStep,
-                        currentStepAmplitudeDeg = 0f
-                    )
-                }
+                updateCalibrationState { it.copy(leftCalibrationAmplitudeDeg = peakTiltDegInStep) }
+                prepareMeasurementStep(
+                    nextStep = CalibrationStep.RIGHT_MEASURING,
+                    instructionResId = R.string.instructions_tilt_right_then_return
+                )
             }
 
             CalibrationStep.RIGHT_MEASURING -> {
@@ -513,12 +636,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         var forward = left.cross(right).normalized()
         if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
+            peakTiltDegInStep = 0f
+            peakTiltVectorInStep = null
+            uprightStableCounter = 0
             updateCalibrationState {
                 it.copy(
                     qualityHintResId = R.string.hint_calibration_uncertain,
-                    calibrationStep = CalibrationStep.LEFT_READY,
-                    instructionsResId = R.string.instructions_start_left_measurement,
-                    currentStepAmplitudeDeg = 0f
+                    calibrationStep = CalibrationStep.LEFT_MEASURING,
+                    instructionsResId = R.string.instructions_tilt_left_then_return,
+                    currentStepAmplitudeDeg = 0f,
+                    tiltRecognitionProgress = 0f,
+                    uprightRecognitionProgress = 0f
                 )
             }
             return
@@ -536,9 +664,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 instructionsResId = R.string.instructions_calibrated,
                 qualityHintResId = null,
                 rightCalibrationAmplitudeDeg = rightAmplitudeDeg,
-                currentStepAmplitudeDeg = 0f
+                currentStepAmplitudeDeg = 0f,
+                tiltRecognitionProgress = 0f,
+                uprightRecognitionProgress = 0f
             )
         }
+        persistCalibration()
     }
 
     private fun angleBetweenDeg(a: Vec3, b: Vec3): Float {
