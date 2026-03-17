@@ -1,6 +1,7 @@
 package com.example.leanangletracker.ui.intro
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -27,18 +27,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
-import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
 
 @Composable
@@ -58,6 +57,20 @@ internal fun IntroScreen(
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label = "intro_card_scale"
     )
+
+    // Approach animation state
+    val approachProgress = remember { Animatable(0f) }
+    LaunchedEffect(stage) {
+        if (stage == IntroStage.LOADING) {
+            approachProgress.snapTo(0f)
+            approachProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 1250, easing = FastOutSlowInEasing)
+            )
+        } else if (stage != IntroStage.TRANSITION_OUT) {
+            approachProgress.snapTo(1f)
+        }
+    }
 
     if (stage == IntroStage.TRANSITION_OUT) {
         LaunchedEffect(Unit) {
@@ -89,12 +102,11 @@ internal fun IntroScreen(
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
                 Box(Modifier.size(380.dp)){
-                    BikeLeanAnimation(modifier = Modifier.fillMaxSize(), step = CalibrationStep.UPRIGHT)
-                    PhoneMountAnimation(modifier = Modifier
-                        .width(90.dp)
-                        .height(90.dp)
-                        .align(Alignment.Center)
-                        .padding(start = 35.dp, bottom = 10.dp) )
+                    BikeLeanAnimation(
+                        modifier = Modifier.fillMaxSize(), 
+                        step = CalibrationStep.UPRIGHT,
+                        approachProgress = approachProgress.value
+                    )
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {

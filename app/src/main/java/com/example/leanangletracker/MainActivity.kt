@@ -56,7 +56,8 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(routeUiState.introStage) {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
-                        delay(900)
+                        // Bike approach animation takes 1250ms, then wait 400ms = 1650ms total
+                        delay(1650)
                         routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
                     }
 
