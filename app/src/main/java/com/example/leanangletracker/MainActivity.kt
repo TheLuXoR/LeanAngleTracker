@@ -9,6 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -29,6 +32,7 @@ import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
 import com.example.leanangletracker.ui.tracking.TrackReviewScreen
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.tween
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -64,7 +68,14 @@ class MainActivity : ComponentActivity() {
                         hasCompletedRide = state.completedRide != null
                     )
 
-                    AnimatedContent(targetState = route, label = "app_route") { currentRoute ->
+                    AnimatedContent(
+                        targetState = route,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 60)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 220))
+                        },
+                        label = "app_route"
+                    ) { currentRoute ->
                         when (currentRoute) {
                             is AppRoute.Intro -> renderIntroRoute(
                                 stage = currentRoute.stage,
