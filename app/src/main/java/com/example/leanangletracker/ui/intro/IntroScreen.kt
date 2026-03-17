@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
+import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
 
 @Composable
@@ -58,16 +60,22 @@ internal fun IntroScreen(
         label = "intro_card_scale"
     )
 
-    // Approach animation state
-    val approachProgress = remember { Animatable(0f) }
+    // Approach animation state. 
+    // We remember the Animatable so it survives recompositions when the stage changes.
+    // The initial value depends on whether we are starting fresh (LOADING) or resuming.
+    val approachProgress = remember { Animatable(if (stage == IntroStage.LOADING) 0f else 1f) }
+    
     LaunchedEffect(stage) {
         if (stage == IntroStage.LOADING) {
-            approachProgress.snapTo(0f)
-            approachProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 1250, easing = FastOutSlowInEasing)
-            )
+            // Only animate if we are not already at the end
+            if (approachProgress.value < 0.1f) {
+                approachProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 1250, easing = FastOutSlowInEasing)
+                )
+            }
         } else if (stage != IntroStage.TRANSITION_OUT) {
+            // Ensure it's at the end for ATTACH_PROMPT
             approachProgress.snapTo(1f)
         }
     }
@@ -83,12 +91,12 @@ internal fun IntroScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(24.dp),
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
+                .padding(horizontal = 24.dp)
                 .fillMaxWidth()
                 .scale(cardScale)
                 .alpha(cardAlpha)
@@ -101,15 +109,31 @@ internal fun IntroScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
+                // Fixed size Box for the animation ensures it stays "pixel perfect" 
+                // in the same spot during stage transitions.
                 Box(Modifier.size(380.dp)){
                     BikeLeanAnimation(
                         modifier = Modifier.fillMaxSize(), 
-                        step = CalibrationStep.UPRIGHT,
+                        step = CalibrationStep.UPRIGHT, 
                         approachProgress = approachProgress.value
                     )
+                    if (stage == IntroStage.ATTACH_PROMPT) {
+                        PhoneMountAnimation(
+                            modifier = Modifier
+                                .width(90.dp)
+                                .height(90.dp)
+                                .align(Alignment.Center)
+                                .padding(start = 35.dp, bottom = 10.dp)
+                        )
+                    }
                 }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Title and description with fixed height or top-alignment to prevent layout shifts
+                Column(
+                    modifier = Modifier.height(140.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, 
+                    verticalArrangement = Arrangement.Top
+                ) {
                     val titleText = if (stage == IntroStage.LOADING) "Initialisiere…" else "Telefon montieren"
                     Text(
                         text = titleText,
@@ -121,6 +145,7 @@ internal fun IntroScreen(
                     
                     if (stage == IntroStage.ATTACH_PROMPT) {
                         Text(
+                            modifier = Modifier.padding(top = 12.dp),
                             text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
@@ -129,14 +154,17 @@ internal fun IntroScreen(
                     }
                 }
 
-                AnimatedVisibility(visible = stage == IntroStage.ATTACH_PROMPT) {
-                    Button(
-                        onClick = onMountedConfirm,
-                        modifier = Modifier.fillMaxWidth().height(60.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-                    ) {
-                        Text("Befestigt", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                // Placeholder for button to keep layout stable
+                Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
+                    if (stage == IntroStage.ATTACH_PROMPT) {
+                        Button(
+                            onClick = onMountedConfirm,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                        ) {
+                            Text("Befestigt", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -2,7 +2,7 @@
     <string name="app_name">Lean Angle Tracker</string>
 
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">1/3 Ist das Bike aufrecht?</string>
+    <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
     <string name="instructions_start_left_measurement">2/3 Links-Messung starten (nur aufrecht tippen)</string>
     <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_start_right_measurement">3/3 Rechts-Messung starten (nur aufrecht tippen)</string>

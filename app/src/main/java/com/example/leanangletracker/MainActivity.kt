@@ -9,6 +9,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -72,9 +74,17 @@ class MainActivity : ComponentActivity() {
                     AnimatedContent(
                         targetState = route,
                         transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 60)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 220))
+                            // Avoid any transition animation when switching within Intro stages to keep it pixel-perfect
+                            if (initialState is AppRoute.Intro && targetState is AppRoute.Intro) {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            } else {
+                                fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 60)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = 220))
+                            }
                         },
+                        // Use contentKey to keep the same Composable instance alive when only the stage changes
+                        // (e.g. from LOADING to ATTACH_PROMPT), which preserves its internal 'remember' state.
+                        contentKey = { it::class },
                         label = "app_route"
                     ) { currentRoute ->
                         when (currentRoute) {

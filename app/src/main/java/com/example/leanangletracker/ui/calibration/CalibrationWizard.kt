@@ -26,6 +26,7 @@ import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
+import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import com.example.leanangletracker.ui.theme.*
 
 @Composable

@@ -84,12 +84,20 @@ fun PhoneMountAnimation(modifier: Modifier) {
             val pH = scaled(110f)
 
             drawRoundRect(
+                color = Color.Gray.copy(0.6f),
+                topLeft = Offset(centerX - pW/2 +3, centerY - pH/2+3),
+                size = Size(pW, pH),
+                cornerRadius = CornerRadius(scaled(12f)),
+                alpha = phoneAlpha
+            )
+            drawRoundRect(
                 color = Color.Black,
                 topLeft = Offset(centerX - pW/2, centerY - pH/2),
                 size = Size(pW, pH),
                 cornerRadius = CornerRadius(scaled(12f)),
                 alpha = phoneAlpha
             )
+
 
             // Screen Glow (Primary)
             val screenAlpha = if (animProgress > 0.45f) display * phoneAlpha else 0.2f * phoneAlpha
