@@ -9,6 +9,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -19,6 +21,9 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.leanangletracker.ui.intro.IntroScreen
@@ -64,7 +69,14 @@ class MainActivity : ComponentActivity() {
                         hasCompletedRide = state.completedRide != null
                     )
 
-                    AnimatedContent(targetState = route, label = "app_route") { currentRoute ->
+                    AnimatedContent(
+                        targetState = route,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(420, easing = LinearEasing)) togetherWith
+                                fadeOut(animationSpec = tween(420, easing = LinearEasing))
+                        },
+                        label = "app_route"
+                    ) { currentRoute ->
                         when (currentRoute) {
                             is AppRoute.Intro -> renderIntroRoute(
                                 stage = currentRoute.stage,

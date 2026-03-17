@@ -1,6 +1,7 @@
 package com.example.leanangletracker.ui.intro
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -52,6 +53,12 @@ internal fun IntroScreen(
     onMountedConfirm: () -> Unit,
     onTransitionFinished: () -> Unit
 ) {
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (stage == IntroStage.TRANSITION_OUT) 0f else 1f,
+        animationSpec = tween(durationMillis = 450, easing = LinearEasing),
+        label = "intro_card_alpha"
+    )
+
     val infinite = rememberInfiniteTransition(label = "intro")
     val pulse by infinite.animateFloat(
         initialValue = 0.55f,
@@ -78,7 +85,7 @@ internal fun IntroScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .alpha(if (stage == IntroStage.TRANSITION_OUT) 0f else 1f)
+                .alpha(cardAlpha)
                 .clip(RoundedCornerShape(24.dp)),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
