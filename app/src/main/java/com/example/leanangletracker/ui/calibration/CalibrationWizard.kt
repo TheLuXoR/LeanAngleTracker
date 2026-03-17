@@ -1,11 +1,6 @@
 package com.example.leanangletracker.ui.calibration
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -23,10 +19,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,10 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.ui.animation.BikeLeanAnimation
 import com.example.leanangletracker.ui.theme.*
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
 @Composable
 internal fun CalibrationWizard(
@@ -86,20 +83,20 @@ internal fun CalibrationWizard(
                     )
                     IconButton(onClick = { showInfo = true }) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                            imageVector = Icons.Default.Info,
                             contentDescription = "Info",
                             tint = TextSecondary
                         )
                     }
                 }
 
-                BikeTiltAnimation(
+                BikeLeanAnimation(
                     step = state.calibrationStep,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
+                        .height(200.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f))
                 )
 
                 Text(
@@ -139,22 +136,25 @@ internal fun CalibrationWizard(
                     CalibrationStep.RIGHT_READY,
                     CalibrationStep.LEFT_MEASURING,
                     CalibrationStep.RIGHT_MEASURING -> {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Text(stringResource(R.string.measurement_running), style = MaterialTheme.typography.labelLarge)
-                        RecognitionProgress(
-                            tiltProgress = state.tiltRecognitionProgress,
-                            uprightProgress = state.uprightRecognitionProgress
-                        )
-                        OutlinedButton(onClick = onContinueFallback, modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = stringResource(
-                                    if (state.calibrationStep == CalibrationStep.LEFT_MEASURING) {
-                                        R.string.action_continue_to_right
-                                    } else {
-                                        R.string.action_finish_calibration
-                                    }
-                                )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            
+                            RecognitionProgress(
+                                tiltProgress = state.tiltRecognitionProgress,
+                                uprightProgress = state.uprightRecognitionProgress
                             )
+                            
+                            OutlinedButton(onClick = onContinueFallback, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = stringResource(
+                                        if (state.calibrationStep == CalibrationStep.LEFT_MEASURING) {
+                                            R.string.action_continue_to_right
+                                        } else {
+                                            R.string.action_finish_calibration
+                                        }
+                                    )
+                                )
+                            }
                         }
                     }
                     CalibrationStep.READY -> Unit
@@ -177,100 +177,55 @@ private fun CalibrationButton(text: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().height(56.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium)
+        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+
+
+@Composable
+private fun RecognitionProgress(tiltProgress: Float, uprightProgress: Float) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ProgressItem(label = stringResource(R.string.label_tilt_recognition_progress), progress = tiltProgress, color = MaterialTheme.colorScheme.primary)
+        ProgressItem(label = stringResource(R.string.label_return_upright_progress), progress = uprightProgress, color = AccentGreen)
     }
 }
 
 @Composable
-private fun BikeTiltAnimation(step: CalibrationStep, modifier: Modifier = Modifier) {
-    val infinite = rememberInfiniteTransition(label = "bike-tilt")
-    val phase by infinite.animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Reverse),
-        label = "phase"
-    )
-
-    val tilt = when (step) {
-        CalibrationStep.LEFT_READY,
-        CalibrationStep.LEFT_MEASURING -> -25f
-        CalibrationStep.RIGHT_READY,
-        CalibrationStep.RIGHT_MEASURING -> 25f
-        else -> 0f
-    }
-
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val baseY = h * 0.8f
-        
-        // Ground
-        drawLine(
-            color = Color.White.copy(alpha = 0.1f),
-            start = Offset(w * 0.1f, baseY),
-            end = Offset(w * 0.9f, baseY),
-            strokeWidth = 2.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-
-        val dynamicTilt = tilt * (0.6f + 0.4f * abs(phase))
-        val radians = Math.toRadians(dynamicTilt.toDouble())
-        val cx = w * 0.5f
-        val cy = h * 0.55f
-        val len = 100f
-        val dx = (len * sin(radians)).toFloat()
-        val dy = (len * cos(radians)).toFloat()
-
-        // Bike representation
-        drawLine(
-            color = if (tilt != 0f) primaryColor else Color.White.copy(alpha = 0.6f),
-            start = Offset(cx - dx * 0.5f, cy + dy * 0.5f),
-            end = Offset(cx + dx, cy - dy),
-            strokeWidth = 8.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        
-        drawCircle(
-            color = secondaryColor.copy(alpha = 0.8f),
-            radius = 12.dp.toPx(),
-            center = Offset(cx - dx * 0.7f, cy + dy * 0.4f),
-            style = Stroke(4.dp.toPx())
+private fun ProgressItem(label: String, progress: Float, color: Color) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+            color = color,
+            trackColor = MaterialTheme.colorScheme.background
         )
     }
 }
 
 @Composable
 private fun CalibrationAmplitudeBars(leftAmp: Float, rightAmp: Float, currentAmp: Float) {
-    val maxAmp = maxOf(30f, leftAmp, rightAmp, currentAmp)
+    val maxAmp = maxOf(40f, leftAmp, rightAmp, currentAmp)
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        AmpRow(label = stringResource(R.string.label_left_short), value = leftAmp, fraction = leftAmp / maxAmp, color = SecondaryBlue)
-        AmpRow(label = stringResource(R.string.label_right_short), value = rightAmp, fraction = rightAmp / maxAmp, color = SecondaryBlue)
-        AmpRow(label = stringResource(R.string.label_now_short), value = currentAmp, fraction = currentAmp / maxAmp, color = PrimaryOrange)
-    }
-}
-
-@Composable
-private fun RecognitionProgress(tiltProgress: Float, uprightProgress: Float) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.label_tilt_recognition_progress), style = MaterialTheme.typography.labelMedium)
-        LinearProgressIndicator(progress = { tiltProgress }, modifier = Modifier.fillMaxWidth())
-        Text(stringResource(R.string.label_return_upright_progress), style = MaterialTheme.typography.labelMedium)
-        LinearProgressIndicator(progress = { uprightProgress }, modifier = Modifier.fillMaxWidth())
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+        AmpRow(label = "LEFT", value = leftAmp, fraction = leftAmp / maxAmp, color = SecondaryBlue)
+        AmpRow(label = "RIGHT", value = rightAmp, fraction = rightAmp / maxAmp, color = SecondaryBlue)
+        AmpRow(label = "LIVE", value = currentAmp, fraction = currentAmp / maxAmp, color = PrimaryOrange)
     }
 }
 
 @Composable
 private fun AmpRow(label: String, value: Float, fraction: Float, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(label, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text(label, modifier = Modifier.width(48.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = TextSecondary)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(12.dp)
+                .height(14.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.background)
         ) {
@@ -283,10 +238,11 @@ private fun AmpRow(label: String, value: Float, fraction: Float, color: Color) {
             )
         }
         Text(
-            stringResource(R.string.value_degrees_one_decimal, value),
-            modifier = Modifier.width(50.dp).padding(start = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.End
+            text = "${value.toInt()}°",
+            modifier = Modifier.width(44.dp).padding(start = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.End,
+            fontWeight = FontWeight.Bold
         )
     }
 }
