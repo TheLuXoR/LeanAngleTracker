@@ -60,8 +60,8 @@ fun BikeLeanAnimation(step: CalibrationStep, modifier: Modifier = Modifier) {
 
         // 1. Draw Road
         val roadPath = Path().apply {
-            moveTo(centerX - 40.dp.toPx(), groundY)
-            lineTo(centerX + 40.dp.toPx(), groundY)
+            moveTo(centerX - 15.dp.toPx(), groundY - 60.dp.toPx())
+            lineTo(centerX + 15.dp.toPx(), groundY - 60.dp.toPx())
             lineTo(centerX + 120.dp.toPx(), h)
             lineTo(centerX - 120.dp.toPx(), h)
             close()
