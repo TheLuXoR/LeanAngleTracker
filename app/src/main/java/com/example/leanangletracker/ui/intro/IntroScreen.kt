@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -31,11 +32,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
+import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
 
 @Composable
@@ -85,7 +88,14 @@ internal fun IntroScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
-                BikeLeanAnimation(modifier = Modifier.size(380.dp), step = CalibrationStep.UPRIGHT)
+                Box(Modifier.size(380.dp)){
+                    BikeLeanAnimation(modifier = Modifier.fillMaxSize(), step = CalibrationStep.UPRIGHT)
+                    PhoneMountAnimation(modifier = Modifier
+                        .width(90.dp)
+                        .height(90.dp)
+                        .align(Alignment.Center)
+                        .padding(start = 35.dp, bottom = 10.dp) )
+                }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val titleText = if (stage == IntroStage.LOADING) "Initialisiere…" else "Telefon montieren"

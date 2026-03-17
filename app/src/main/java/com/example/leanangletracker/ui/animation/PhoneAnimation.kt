@@ -43,10 +43,16 @@ fun PhoneMountAnimation(modifier: Modifier) {
         val centerX = w / 2f
         val centerY = h / 2f
 
+        val baseWidth = 240.dp.toPx()
+        val baseHeight = 240.dp.toPx()
+        val scale = minOf(w / baseWidth, h / baseHeight).coerceAtLeast(0.1f)
+
+        fun scaled(dpValue: Float) = dpValue.dp.toPx() * scale
+
         // Pre-calculate DP to PX values here while we are in DrawScope
-        val startX = centerX + 120.dp.toPx() // Added .toPx() here
-        val startY = h + 100.dp.toPx()
-        val bounceOffset = 12.dp.toPx()
+        val startX = centerX + scaled(120f)
+        val startY = h + scaled(100f)
+        val bounceOffset = scaled(12f)
 
         // ... (rest of your existing drawing code for Yoke and Handlebars) ...
 
@@ -74,14 +80,14 @@ fun PhoneMountAnimation(modifier: Modifier) {
             }
         }) {
             // ... (rest of your phone drawing code) ...
-            val pW = 64.dp.toPx()
-            val pH = 110.dp.toPx()
+            val pW = scaled(64f)
+            val pH = scaled(110f)
 
             drawRoundRect(
                 color = Color.Black,
                 topLeft = Offset(centerX - pW/2, centerY - pH/2),
                 size = Size(pW, pH),
-                cornerRadius = CornerRadius(12.dp.toPx()),
+                cornerRadius = CornerRadius(scaled(12f)),
                 alpha = phoneAlpha
             )
 
@@ -91,9 +97,9 @@ fun PhoneMountAnimation(modifier: Modifier) {
 
             drawRoundRect(
                 color = screenColor,
-                topLeft = Offset(centerX - pW/2 + 3.dp.toPx(), centerY - pH/2 + 3.dp.toPx()),
-                size = Size(pW - 6.dp.toPx(), pH - 6.dp.toPx()),
-                cornerRadius = CornerRadius(10.dp.toPx()),
+                topLeft = Offset(centerX - pW/2 + scaled(3f), centerY - pH/2 + scaled(3f)),
+                size = Size(pW - scaled(6f), pH - scaled(6f)),
+                cornerRadius = CornerRadius(scaled(10f)),
                 alpha = screenAlpha
             )
 
@@ -102,15 +108,15 @@ fun PhoneMountAnimation(modifier: Modifier) {
                 val uiAlpha = display * phoneAlpha
                 drawCircle(
                     color = Color.White.copy(alpha = 0.4f * uiAlpha),
-                    radius = 20.dp.toPx(),
-                    center = Offset(centerX, centerY - 15.dp.toPx()),
-                    style = Stroke(2.5.dp.toPx())
+                    radius = scaled(20f),
+                    center = Offset(centerX, centerY - scaled(15f)),
+                    style = Stroke(scaled(2.5f))
                 )
                 drawLine(
                     color = secondary.copy(alpha = 0.8f * uiAlpha),
-                    start = Offset(centerX, centerY - 15.dp.toPx()),
-                    end = Offset(centerX + 12.dp.toPx(), centerY - 22.dp.toPx()),
-                    strokeWidth = 3.dp.toPx(),
+                    start = Offset(centerX, centerY - scaled(15f)),
+                    end = Offset(centerX + scaled(12f), centerY - scaled(22f)),
+                    strokeWidth = scaled(3f),
                     cap = StrokeCap.Round
                 )
             }
@@ -121,9 +127,9 @@ fun PhoneMountAnimation(modifier: Modifier) {
             val impact = (animProgress - 0.45f) / 0.25f
             drawCircle(
                 color = primary.copy(alpha = 0.6f * (1f - impact)),
-                radius = 90.dp.toPx() * impact,
+                radius = scaled(90f) * impact,
                 center = Offset(centerX, centerY),
-                style = Stroke(width = 3.dp.toPx())
+                style = Stroke(width = scaled(3f))
             )
         }
     }
