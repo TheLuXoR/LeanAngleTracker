@@ -43,8 +43,6 @@ import kotlin.math.sin
 internal fun CalibrationWizard(
     state: CalibrationUiState,
     onCaptureUpright: () -> Unit,
-    onStartLeftMeasurement: () -> Unit,
-    onStartRightMeasurement: () -> Unit,
     onContinueFallback: () -> Unit
 ) {
     var showInfo by rememberSaveable { mutableStateOf(false) }
@@ -137,8 +135,8 @@ internal fun CalibrationWizard(
 
                 when (state.calibrationStep) {
                     CalibrationStep.UPRIGHT -> CalibrationButton(stringResource(R.string.action_confirm_bike_upright), onCaptureUpright)
-                    CalibrationStep.LEFT_READY -> CalibrationButton(stringResource(R.string.action_start_left_measurement), onStartLeftMeasurement)
-                    CalibrationStep.RIGHT_READY -> CalibrationButton(stringResource(R.string.action_start_right_measurement), onStartRightMeasurement)
+                    CalibrationStep.LEFT_READY,
+                    CalibrationStep.RIGHT_READY,
                     CalibrationStep.LEFT_MEASURING,
                     CalibrationStep.RIGHT_MEASURING -> {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)

@@ -453,29 +453,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun captureUpright() {
         if (_uiState.value.calibration.calibrationStep != CalibrationStep.UPRIGHT) return
         uprightUp = (filteredGravity * -1f).normalized()
-
-        updateCalibrationState {
-            it.copy(
-                calibrationStep = CalibrationStep.LEFT_READY,
-                instructionsResId = R.string.instructions_start_left_measurement,
-                qualityHintResId = R.string.hint_after_start_tilt_left
-            )
-        }
-    }
-
-    fun startLeftMeasurement() {
-        if (_uiState.value.calibration.calibrationStep != CalibrationStep.LEFT_READY) return
         prepareMeasurementStep(
             nextStep = CalibrationStep.LEFT_MEASURING,
             instructionResId = R.string.instructions_tilt_left_then_return
-        )
-    }
-
-    fun startRightMeasurement() {
-        if (_uiState.value.calibration.calibrationStep != CalibrationStep.RIGHT_READY) return
-        prepareMeasurementStep(
-            nextStep = CalibrationStep.RIGHT_MEASURING,
-            instructionResId = R.string.instructions_tilt_right_then_return
         )
     }
 
@@ -501,17 +481,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 val currentUp = (filteredGravity * -1f).normalized()
                 leftUp = peakTiltVectorInStep ?: currentUp
                 val leftAmplitude = peakTiltDegInStep
-                updateCalibrationState {
-                    it.copy(
-                        calibrationStep = CalibrationStep.RIGHT_READY,
-                        instructionsResId = R.string.instructions_start_right_measurement,
-                        qualityHintResId = R.string.hint_after_start_tilt_right,
-                        leftCalibrationAmplitudeDeg = leftAmplitude,
-                        currentStepAmplitudeDeg = 0f,
-                        tiltRecognitionProgress = 0f,
-                        uprightRecognitionProgress = 0f
-                    )
-                }
+                updateCalibrationState { it.copy(leftCalibrationAmplitudeDeg = leftAmplitude) }
+                prepareMeasurementStep(
+                    nextStep = CalibrationStep.RIGHT_MEASURING,
+                    instructionResId = R.string.instructions_tilt_right_then_return
+                )
             }
 
             CalibrationStep.RIGHT_MEASURING -> {
@@ -639,17 +613,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         when (_uiState.value.calibration.calibrationStep) {
             CalibrationStep.LEFT_MEASURING -> {
                 leftUp = peakTiltVectorInStep ?: return
-                updateCalibrationState {
-                    it.copy(
-                        calibrationStep = CalibrationStep.RIGHT_READY,
-                        instructionsResId = R.string.instructions_start_right_measurement,
-                        qualityHintResId = R.string.hint_after_start_tilt_right,
-                        leftCalibrationAmplitudeDeg = peakTiltDegInStep,
-                        currentStepAmplitudeDeg = 0f,
-                        tiltRecognitionProgress = 0f,
-                        uprightRecognitionProgress = 0f
-                    )
-                }
+                updateCalibrationState { it.copy(leftCalibrationAmplitudeDeg = peakTiltDegInStep) }
+                prepareMeasurementStep(
+                    nextStep = CalibrationStep.RIGHT_MEASURING,
+                    instructionResId = R.string.instructions_tilt_right_then_return
+                )
             }
 
             CalibrationStep.RIGHT_MEASURING -> {
@@ -668,11 +636,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         var forward = left.cross(right).normalized()
         if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
+            peakTiltDegInStep = 0f
+            peakTiltVectorInStep = null
+            uprightStableCounter = 0
             updateCalibrationState {
                 it.copy(
                     qualityHintResId = R.string.hint_calibration_uncertain,
-                    calibrationStep = CalibrationStep.LEFT_READY,
-                    instructionsResId = R.string.instructions_start_left_measurement,
+                    calibrationStep = CalibrationStep.LEFT_MEASURING,
+                    instructionsResId = R.string.instructions_tilt_left_then_return,
                     currentStepAmplitudeDeg = 0f,
                     tiltRecognitionProgress = 0f,
                     uprightRecognitionProgress = 0f
