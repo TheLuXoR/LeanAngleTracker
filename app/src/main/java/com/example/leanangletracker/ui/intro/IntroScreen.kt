@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,9 +27,21 @@ internal fun IntroScreen(
     onMountedConfirm: () -> Unit,
     onTransitionFinished: () -> Unit
 ) {
+    val isTransitionOut = stage == IntroStage.TRANSITION_OUT
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (isTransitionOut) 0f else 1f,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "intro_card_alpha"
+    )
+    val cardScale by animateFloatAsState(
+        targetValue = if (isTransitionOut) 0.97f else 1f,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "intro_card_scale"
+    )
+
     if (stage == IntroStage.TRANSITION_OUT) {
         LaunchedEffect(Unit) {
-            delay(550)
+            delay(450)
             onTransitionFinished()
         }
     }
@@ -44,7 +57,8 @@ internal fun IntroScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .alpha(if (stage == IntroStage.TRANSITION_OUT) 0f else 1f)
+                .scale(cardScale)
+                .alpha(cardAlpha)
                 .clip(RoundedCornerShape(28.dp)),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
