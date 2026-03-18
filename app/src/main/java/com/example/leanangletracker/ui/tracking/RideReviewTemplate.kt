@@ -14,6 +14,7 @@ import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.pow
 
 @Composable
 internal fun RideReviewTemplate(
@@ -24,6 +25,8 @@ internal fun RideReviewTemplate(
         mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) 
     }
     
+    var currentZoom by remember { mutableDoubleStateOf(16.0) }
+    
     if (rideSession.points.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
             Text("Keine GPS-Daten verfügbar", style = MaterialTheme.typography.bodyMedium)
@@ -32,6 +35,17 @@ internal fun RideReviewTemplate(
     }
 
     val selectedPoint = rideSession.points[selectedIndex]
+    val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
+
+    // Map zoom to a number of visible points in the graph.
+    // At zoom 16 (default), maybe show 100 points. 
+    // Zooming in (higher zoom) shows fewer points (more detail).
+    // Zooming out (lower zoom) shows more points.
+    val visiblePoints = remember(currentZoom, rideSession.points.size) {
+        val basePoints = 100.0
+        val zoomFactor = 2.0.pow(16.0 - currentZoom)
+        (basePoints * zoomFactor).toInt().coerceIn(20, rideSession.points.size)
+    }
 
     Column(
         modifier = modifier
@@ -49,6 +63,7 @@ internal fun RideReviewTemplate(
                 rideSession = rideSession,
                 selectedIndex = selectedIndex,
                 onMapPointSelected = { selectedIndex = it },
+                onZoomChanged = { currentZoom = it },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -63,6 +78,17 @@ internal fun RideReviewTemplate(
             StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
         }
 
+        // The graph now shows a subset centered on selectedIndex, 
+        // with the window size controlled by map zoom.
+        LeanHistoryGraph(
+            values = allLeanValues,
+            selectedIndex = selectedIndex,
+            visibleRangePoints = if (currentZoom > 10) visiblePoints else null, // Show all if zoomed out very far
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+        )
+
         JogWheel(
             value = selectedIndex,
             onValueChange = { selectedIndex = it },
@@ -70,7 +96,7 @@ internal fun RideReviewTemplate(
         )
         
         Text(
-            text = "Use the jog wheel to review specific parts. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+            text = "Use the jog wheel to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
             style = MaterialTheme.typography.labelSmall,
             color = TextSecondary
         )

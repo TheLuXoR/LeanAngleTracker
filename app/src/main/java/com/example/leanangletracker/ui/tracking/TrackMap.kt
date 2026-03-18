@@ -6,6 +6,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.leanangletracker.RideSession
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -18,6 +21,7 @@ internal fun OSMTrackMap(
     rideSession: RideSession,
     selectedIndex: Int,
     onMapPointSelected: (Int) -> Unit,
+    onZoomChanged: (Double) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val points = remember(rideSession.points) { rideSession.points.map { GeoPoint(it.latitude, it.longitude) } }
@@ -31,6 +35,14 @@ internal fun OSMTrackMap(
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(16.0)
+            
+            addMapListener(object : MapListener {
+                override fun onScroll(event: ScrollEvent?): Boolean = false
+                override fun onZoom(event: ZoomEvent?): Boolean {
+                    event?.let { onZoomChanged(it.zoomLevel) }
+                    return false
+                }
+            })
         }
     }
 
@@ -82,6 +94,7 @@ internal fun OSMTrackMap(
                 if (isFirstPositioning) {
                     map.controller.setCenter(selectedGeoPoint)
                     isFirstPositioning = false
+                    onZoomChanged(16.0)
                 } else {
                     map.controller.animateTo(selectedGeoPoint)
                 }
