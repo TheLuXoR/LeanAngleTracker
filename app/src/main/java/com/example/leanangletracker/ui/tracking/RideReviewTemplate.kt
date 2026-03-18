@@ -63,19 +63,14 @@ internal fun RideReviewTemplate(
             StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
         }
 
-        Slider(
-            value = selectedIndex.toFloat(),
-            onValueChange = { selectedIndex = it.toInt().coerceIn(0, rideSession.points.lastIndex) },
-            valueRange = 0f..rideSession.points.lastIndex.toFloat().coerceAtLeast(1f),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-            )
+        JogWheel(
+            value = selectedIndex,
+            onValueChange = { selectedIndex = it },
+            range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
         )
         
         Text(
-            text = "Review specific parts by sliding. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+            text = "Use the jog wheel to review specific parts. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
             style = MaterialTheme.typography.labelSmall,
             color = TextSecondary
         )
