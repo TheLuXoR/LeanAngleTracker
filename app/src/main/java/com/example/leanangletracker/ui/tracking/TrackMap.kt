@@ -1,8 +1,6 @@
 package com.example.leanangletracker.ui.tracking
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -24,6 +22,10 @@ internal fun OSMTrackMap(
 ) {
     val points = remember(rideSession.points) { rideSession.points.map { GeoPoint(it.latitude, it.longitude) } }
     val context = LocalContext.current
+    
+    // Track if this is the first time the map is positioned for this session
+    var isFirstPositioning by remember(rideSession.startedAtMs) { mutableStateOf(true) }
+
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
@@ -77,7 +79,12 @@ internal fun OSMTrackMap(
                 })
                 map.overlays.add(tapOverlay)
 
-                map.controller.animateTo(selectedGeoPoint)
+                if (isFirstPositioning) {
+                    map.controller.setCenter(selectedGeoPoint)
+                    isFirstPositioning = false
+                } else {
+                    map.controller.animateTo(selectedGeoPoint)
+                }
             }
 
             map.invalidate()
