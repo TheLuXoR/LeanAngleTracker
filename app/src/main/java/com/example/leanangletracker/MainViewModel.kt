@@ -18,6 +18,7 @@ import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.leanangletracker.data.RideRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -152,6 +153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val locationManager = application.getSystemService(LocationManager::class.java)
+    private val rideRepository = RideRepository(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -220,6 +222,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         updateTrackingState {
             it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
         }
+
+        // Load rides from permanent storage
+        _uiState.value = _uiState.value.copy(rideHistory = rideRepository.loadRides())
 
         if (!prefs.getBoolean(KEY_CALIBRATED, false)) return
 
@@ -366,13 +371,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 endedAtMs = System.currentTimeMillis(),
                 points = pointsSnapshot
             )
+            // Persist to disk
+            rideRepository.saveRide(newSession)
+            
             _uiState.value = _uiState.value.copy(
                 rideHistory = listOf(newSession) + _uiState.value.rideHistory
             )
         }
         stopLocationUpdates()
         stopRecorder()
-        // Keep GPS enabled in settings, just stop the active tracking
         ridePoints.clear()
         activeRideStartedMs = null
         latestGpsLocation = null
@@ -396,6 +403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun deleteRide(session: RideSession) {
+        rideRepository.deleteRide(session)
         _uiState.value = _uiState.value.copy(
             rideHistory = _uiState.value.rideHistory.filter { it != session }
         )

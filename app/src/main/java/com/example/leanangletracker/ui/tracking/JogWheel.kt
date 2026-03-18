@@ -30,7 +30,6 @@ internal fun JogWheel(
 ) {
     val scope = rememberCoroutineScope()
     val scrollOffset = remember { Animatable(value.toFloat()) }
-    val velocityTracker = remember { VelocityTracker() }
 
     // Sync external value changes to internal offset (e.g. when session changes)
     LaunchedEffect(value) {
@@ -62,7 +61,6 @@ internal fun JogWheel(
                     val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
                     scope.launch {
                         scrollOffset.animateDecay(-velocity * 0.05f, decay) {
-                            val clamped = value.coerceIn(range.first, range.last)
                             if (scrollOffset.value !in range.first.toFloat()..range.last.toFloat()) {
                                 // bounce back logic if needed, but coerceIn is simpler
                             }
