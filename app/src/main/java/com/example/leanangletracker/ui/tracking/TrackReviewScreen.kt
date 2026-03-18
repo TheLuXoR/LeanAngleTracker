@@ -59,9 +59,8 @@ internal fun TrackReviewScreen(
         return
     }
 
-    var selectedIndex by rememberSaveable(rideSession.startedAtMs) { mutableIntStateOf(rideSession.points.lastIndex) }
+    var selectedIndex by rememberSaveable(rideSession.startedAtMs) { mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) }
     val selectedPoint = rideSession.points[selectedIndex]
-
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         if (uri != null) exportGpx(context, uri, rideSession)
     }
@@ -156,74 +155,7 @@ private fun StatItem(label: String, value: String) {
     }
 }
 
-@Composable
-private fun OSMTrackMap(
-    rideSession: RideSession,
-    selectedIndex: Int,
-    onMapPointSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val points = remember(rideSession.points) { rideSession.points.map { GeoPoint(it.latitude, it.longitude) } }
-    val context = LocalContext.current
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            controller.setZoom(16.0)
-            // Dark mode for map (filter) - if desired, but default is fine for now
-        }
-    }
 
-    DisposableEffect(mapView) {
-        mapView.onResume()
-        onDispose { mapView.onPause() }
-    }
-
-    AndroidView(
-        factory = { mapView },
-        modifier = modifier,
-        update = { map ->
-            map.overlays.clear()
-
-            val routeOverlay = Polyline().apply {
-                setPoints(points)
-                outlinePaint.apply {
-                    color = android.graphics.Color.parseColor("#00B4FF")
-                    strokeWidth = 12f
-                    strokeCap = android.graphics.Paint.Cap.ROUND
-                }
-            }
-            map.overlays.add(routeOverlay)
-
-            val selectedGeoPoint = points[selectedIndex]
-            val marker = Marker(map).apply {
-                position = selectedGeoPoint
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                icon = context.getDrawable(android.R.drawable.presence_online) // Simple dot
-            }
-            map.overlays.add(marker)
-
-            val tapOverlay = MapEventsOverlay(object : MapEventsReceiver {
-                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                    val closest = points.withIndex().minByOrNull { (_, point) ->
-                        val dx = point.latitude - p.latitude
-                        val dy = point.longitude - p.longitude
-                        dx * dx + dy * dy
-                    }?.index ?: selectedIndex
-                    onMapPointSelected(closest)
-                    return true
-                }
-
-                override fun longPressHelper(p: GeoPoint?): Boolean = false
-            })
-            map.overlays.add(tapOverlay)
-
-            map.controller.animateTo(selectedGeoPoint)
-
-            map.invalidate()
-        }
-    )
-}
 
 private fun exportGpx(context: Context, uri: Uri, rideSession: RideSession) {
     val gpx = buildString {

@@ -123,7 +123,7 @@ data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),
     val tracking: TrackingUiState = TrackingUiState(),
     val settings: SettingsUiState = SettingsUiState(),
-    val completedRide: RideSession? = null
+    val rideHistory: List<RideSession> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
@@ -361,17 +361,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val pointsSnapshot = ridePoints.toList()
         val started = activeRideStartedMs ?: System.currentTimeMillis()
         if (pointsSnapshot.isNotEmpty()) {
+            val newSession = RideSession(
+                startedAtMs = started,
+                endedAtMs = System.currentTimeMillis(),
+                points = pointsSnapshot
+            )
             _uiState.value = _uiState.value.copy(
-                completedRide = RideSession(
-                    startedAtMs = started,
-                    endedAtMs = System.currentTimeMillis(),
-                    points = pointsSnapshot
-                )
+                rideHistory = listOf(newSession) + _uiState.value.rideHistory
             )
         }
         stopLocationUpdates()
         stopRecorder()
-        updateSettingsState { it.copy(gpsTrackingEnabled = false) }
+        // Keep GPS enabled in settings, just stop the active tracking
         ridePoints.clear()
         activeRideStartedMs = null
         latestGpsLocation = null
@@ -383,7 +384,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 hasTrackData = false,
                 speedKmh = 0f,
                 gpsActive = false,
-                gpsTrackingEnabled = false,
                 trackingStarted = false,
                 currentLatitude = null,
                 currentLongitude = null,
@@ -395,8 +395,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    fun clearCompletedRide() {
-        _uiState.value = _uiState.value.copy(completedRide = null)
+    fun deleteRide(session: RideSession) {
+        _uiState.value = _uiState.value.copy(
+            rideHistory = _uiState.value.rideHistory.filter { it != session }
+        )
     }
 
     fun startCalibration() {

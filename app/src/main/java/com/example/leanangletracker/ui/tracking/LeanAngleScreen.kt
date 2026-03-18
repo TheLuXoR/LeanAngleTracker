@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -40,16 +41,11 @@ import kotlin.math.sin
 import java.util.Locale
 
 @Composable
-@Preview
-private fun Gauge() {
-    TachoGauge(10f, 10f, 10f)
-}
-
-@Composable
 internal fun LeanAngleScreen(
     trackingState: TrackingUiState,
     calibrationState: CalibrationUiState,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
     modifier: Modifier = Modifier,
@@ -120,6 +116,20 @@ internal fun LeanAngleScreen(
                                 Icons.Default.Close,
                                 contentDescription = "Finish",
                                 tint = ErrorRed
+                            )
+                        }
+                    } else {
+                        // History Button
+                        IconButton(
+                            onClick = onOpenHistory,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                        ) {
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = "History",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }

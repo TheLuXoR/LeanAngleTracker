@@ -32,7 +32,7 @@ import com.example.leanangletracker.ui.navigation.AppRoute
 import com.example.leanangletracker.ui.settings.SettingsScreen
 import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
-import com.example.leanangletracker.ui.tracking.TrackReviewScreen
+import com.example.leanangletracker.ui.tracking.RideHistoryScreen
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.tween
 
@@ -58,7 +58,6 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(routeUiState.introStage) {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
-                        // Bike approach animation takes 1250ms, then wait 400ms = 1650ms total
                         delay(1650)
                         routeUiState = routeUiState.copy(introStage = IntroStage.LEGAL)
                     }
@@ -66,9 +65,8 @@ class MainActivity : ComponentActivity() {
                     val route = resolveRoute(
                         introStage = routeUiState.introStage,
                         showSettings = routeUiState.showSettings,
-                        showTrackReview = routeUiState.showTrackReview,
-                        isCalibrated = state.calibration.isCalibrated,
-                        hasCompletedRide = state.completedRide != null
+                        showHistory = routeUiState.showHistory,
+                        isCalibrated = state.calibration.isCalibrated
                     )
 
                     AnimatedContent(
@@ -77,8 +75,7 @@ class MainActivity : ComponentActivity() {
                             if (initialState is AppRoute.Intro && targetState is AppRoute.Intro) {
                                 EnterTransition.None togetherWith ExitTransition.None
                             } else {
-                                fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 60)) togetherWith
-                                        fadeOut(animationSpec = tween(durationMillis = 220))
+                                fadeIn(animationSpec = tween(300, 60)) togetherWith fadeOut(tween(220))
                             }
                         },
                         contentKey = { it::class },
@@ -103,45 +100,45 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
 
-                            AppRoute.Tracking -> renderTrackingRoute(
+                            AppRoute.Tracking -> LeanAngleScreen(
                                 trackingState = state.tracking,
                                 calibrationState = state.calibration,
-                                onOpenSettings = {
-                                    routeUiState = routeUiState.copy(showSettings = true)
-                                },
+                                onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
+                                onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                 onStartTracking = viewModel::startTracking,
                                 onFinishRide = {
                                     viewModel.finishRide()
-                                    routeUiState = routeUiState.copy(showTrackReview = true)
-                                }
+                                    routeUiState = routeUiState.copy(showHistory = true)
+                                },
+                                onCaptureUpright = viewModel::captureUpright,
+                                onContinueCalibrationFallback = viewModel::continueCalibrationFallback
                             )
 
-                            AppRoute.Settings -> renderSettingsRoute(
+                            AppRoute.Settings -> SettingsScreen(
                                 state = state.settings,
-                                onBack = {
-                                    routeUiState = routeUiState.copy(showSettings = false)
+                                onBack = { routeUiState = routeUiState.copy(showSettings = false) },
+                                onToggleInvertLean = viewModel::setInvertLeanAngle,
+                                onToggleGyroFusion = viewModel::setUseGyroFusion,
+                                onToggleGpsTracking = { enabled ->
+                                    if (enabled && !state.settings.locationPermissionGranted) {
+                                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    }
+                                    viewModel.setGpsTrackingEnabled(enabled)
                                 },
-                                onRequestLocationPermission = {
-                                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                                },
+                                onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
+                                onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
+                                onResetExtrema = viewModel::resetExtrema,
                                 onStartCalibration = {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
                                 }
                             )
 
-                            AppRoute.TrackReview -> {
-                                val completedRide = state.completedRide
-                                if (completedRide != null) {
-                                    TrackReviewScreen(
-                                        rideSession = completedRide,
-                                        onBack = {
-                                            viewModel.clearCompletedRide()
-                                            routeUiState = routeUiState.copy(showTrackReview = false)
-                                        }
-                                    )
-                                }
-                            }
+                            AppRoute.TrackReview -> RideHistoryScreen(
+                                rideHistory = state.rideHistory,
+                                onBack = { routeUiState = routeUiState.copy(showHistory = false) },
+                                onDeleteRide = viewModel::deleteRide
+                            )
                         }
                     }
                 }
@@ -152,13 +149,11 @@ class MainActivity : ComponentActivity() {
     private fun resolveRoute(
         introStage: IntroStage,
         showSettings: Boolean,
-        showTrackReview: Boolean,
-        isCalibrated: Boolean,
-        hasCompletedRide: Boolean
+        showHistory: Boolean,
+        isCalibrated: Boolean
     ): AppRoute {
         if (introStage != IntroStage.DONE) return AppRoute.Intro(introStage)
-        if (showTrackReview && hasCompletedRide) return AppRoute.TrackReview
-
+        if (showHistory) return AppRoute.TrackReview
         return if (showSettings && isCalibrated) AppRoute.Settings else AppRoute.Tracking
     }
 
@@ -170,65 +165,21 @@ class MainActivity : ComponentActivity() {
     ) {
         IntroScreen(stage = stage, onAction = onAction, onTransitionFinished = onTransitionFinished)
     }
-
-    @Composable
-    private fun renderTrackingRoute(
-        trackingState: TrackingUiState,
-        calibrationState: CalibrationUiState,
-        onOpenSettings: () -> Unit,
-        onStartTracking: () -> Unit,
-        onFinishRide: () -> Unit
-    ) {
-        LeanAngleScreen(
-            trackingState = trackingState,
-            calibrationState = calibrationState,
-            onOpenSettings = onOpenSettings,
-            onStartTracking = onStartTracking,
-            onFinishRide = onFinishRide,
-            onCaptureUpright = viewModel::captureUpright,
-            onContinueCalibrationFallback = viewModel::continueCalibrationFallback
-        )
-    }
-
-    @Composable
-    private fun renderSettingsRoute(
-        state: SettingsUiState,
-        onBack: () -> Unit,
-        onRequestLocationPermission: () -> Unit,
-        onStartCalibration: () -> Unit
-    ) {
-        SettingsScreen(
-            state = state,
-            onBack = onBack,
-            onToggleInvertLean = viewModel::setInvertLeanAngle,
-            onToggleGyroFusion = viewModel::setUseGyroFusion,
-            onToggleGpsTracking = { enabled ->
-                if (enabled && !state.locationPermissionGranted) {
-                    onRequestLocationPermission()
-                }
-                viewModel.setGpsTrackingEnabled(enabled)
-            },
-            onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
-            onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
-            onResetExtrema = viewModel::resetExtrema,
-            onStartCalibration = onStartCalibration
-        )
-    }
 }
 
 private data class RouteUiState(
     val introStage: IntroStage = IntroStage.LOADING,
     val showSettings: Boolean = false,
-    val showTrackReview: Boolean = false
+    val showHistory: Boolean = false
 ) {
     companion object {
         val Saver: Saver<RouteUiState, Any> = listSaver(
-            save = { listOf(it.introStage.name, it.showSettings, it.showTrackReview) },
+            save = { listOf(it.introStage.name, it.showSettings, it.showHistory) },
             restore = {
                 RouteUiState(
                     introStage = IntroStage.valueOf(it[0] as String),
                     showSettings = it[1] as Boolean,
-                    showTrackReview = it[2] as Boolean
+                    showHistory = it[2] as Boolean
                 )
             }
         )
