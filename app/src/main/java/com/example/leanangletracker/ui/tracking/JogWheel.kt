@@ -2,6 +2,7 @@ package com.example.leanangletracker.ui.tracking
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -15,7 +16,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -30,10 +30,14 @@ internal fun JogWheel(
 ) {
     val scope = rememberCoroutineScope()
     val scrollOffset = remember { Animatable(value.toFloat()) }
+    
+    val minBound = range.first.toFloat()
+    val maxBound = range.last.toFloat()
+    val overscrollLimit = 2.5f // How many "points" we can scroll past the edge
 
     // Sync external value changes to internal offset (e.g. when session changes)
     LaunchedEffect(value) {
-        if (abs(scrollOffset.value - value) > 0.5f) {
+        if (abs(scrollOffset.value - value) > 0.5f && !scrollOffset.isRunning) {
             scrollOffset.snapTo(value.toFloat())
         }
     }
@@ -48,9 +52,21 @@ internal fun JogWheel(
             .draggable(
                 orientation = Orientation.Horizontal,
                 state = rememberDraggableState { delta ->
-                    val sensitivity = 0.2f // Adjust for feel
-                    val newOffset = (scrollOffset.value - delta * sensitivity)
-                        .coerceIn(range.first.toFloat() - 0.5f, range.last.toFloat() + 0.5f)
+                    val sensitivity = 0.2f
+                    var effectiveDelta = -delta * sensitivity
+                    
+                    // Apply resistance if overscrolled
+                    val current = scrollOffset.value
+                    if (current < minBound && effectiveDelta < 0) {
+                        val resistance = (1f - (abs(minBound - current) / overscrollLimit)).coerceIn(0.1f, 1f)
+                        effectiveDelta *= resistance
+                    } else if (current > maxBound && effectiveDelta > 0) {
+                        val resistance = (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
+                        effectiveDelta *= resistance
+                    }
+
+                    val newOffset = (current + effectiveDelta)
+                        .coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
                     
                     scope.launch {
                         scrollOffset.snapTo(newOffset)
@@ -58,13 +74,28 @@ internal fun JogWheel(
                     }
                 },
                 onDragStopped = { velocity ->
-                    val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
                     scope.launch {
-                        scrollOffset.animateDecay(-velocity * 0.05f, decay) {
-                            if (scrollOffset.value !in range.first.toFloat()..range.last.toFloat()) {
-                                // bounce back logic if needed, but coerceIn is simpler
+                        if (scrollOffset.value < minBound || scrollOffset.value > maxBound) {
+                            // Rubber band snap back
+                            scrollOffset.animateTo(
+                                targetValue = if (scrollOffset.value < minBound) minBound else maxBound,
+                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                            )
+                        } else {
+                            // Normal decay
+                            val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
+                            scrollOffset.animateDecay(-velocity * 0.05f, decay) {
+                                // If decay pushes us out of bounds, stop it and snap back
+                                if (value.toFloat() !in minBound..maxBound) {
+                                    scope.launch {
+                                        scrollOffset.animateTo(
+                                            targetValue = if (value < minBound) minBound else maxBound,
+                                            animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                        )
+                                    }
+                                }
+                                onValueChange(scrollOffset.value.roundToInt().coerceIn(range))
                             }
-                            onValueChange(scrollOffset.value.roundToInt().coerceIn(range))
                         }
                     }
                 }
