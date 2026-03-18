@@ -6,25 +6,11 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +23,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
@@ -45,7 +32,7 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun IntroScreen(
     stage: IntroStage,
-    onMountedConfirm: () -> Unit,
+    onAction: () -> Unit,
     onTransitionFinished: () -> Unit
 ) {
     val isTransitionOut = stage == IntroStage.TRANSITION_OUT
@@ -60,14 +47,10 @@ internal fun IntroScreen(
         label = "intro_card_scale"
     )
 
-    // Approach animation state. 
-    // We remember the Animatable so it survives recompositions when the stage changes.
-    // The initial value depends on whether we are starting fresh (LOADING) or resuming.
     val approachProgress = remember { Animatable(if (stage == IntroStage.LOADING) 0f else 1f) }
     
     LaunchedEffect(stage) {
         if (stage == IntroStage.LOADING) {
-            // Only animate if we are not already at the end
             if (approachProgress.value < 0.1f) {
                 approachProgress.animateTo(
                     targetValue = 1f,
@@ -75,7 +58,6 @@ internal fun IntroScreen(
                 )
             }
         } else if (stage != IntroStage.TRANSITION_OUT) {
-            // Ensure it's at the end for ATTACH_PROMPT
             approachProgress.snapTo(1f)
         }
     }
@@ -109,8 +91,6 @@ internal fun IntroScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
-                // Fixed size Box for the animation ensures it stays "pixel perfect" 
-                // in the same spot during stage transitions.
                 Box(Modifier.size(380.dp)){
                     BikeLeanAnimation(
                         modifier = Modifier.fillMaxSize(), 
@@ -128,13 +108,17 @@ internal fun IntroScreen(
                     }
                 }
 
-                // Title and description with fixed height or top-alignment to prevent layout shifts
                 Column(
-                    modifier = Modifier.height(140.dp),
+                    modifier = Modifier.height(180.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, 
                     verticalArrangement = Arrangement.Top
                 ) {
-                    val titleText = if (stage == IntroStage.LOADING) "Initialisiere…" else "Telefon montieren"
+                    val titleText = when(stage) {
+                        IntroStage.LOADING -> ""
+                        IntroStage.LEGAL -> "Wichtiger Hinweis"
+                        else -> "Telefon montieren"
+                    }
+                    
                     Text(
                         text = titleText,
                         style = MaterialTheme.typography.headlineSmall,
@@ -143,27 +127,50 @@ internal fun IntroScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     
-                    if (stage == IntroStage.ATTACH_PROMPT) {
-                        Text(
-                            modifier = Modifier.padding(top = 12.dp),
-                            text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    when (stage) {
+                        IntroStage.LEGAL -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr." +
+                                            "Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund." +
+                                            "Die App darf während der Fahrt nicht bedient werden." +
+                                            "Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    lineHeight = 16.sp,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        IntroStage.ATTACH_PROMPT -> {
+                            Text(
+                                text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        else -> {}
                     }
                 }
 
-                // Placeholder for button to keep layout stable
                 Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
-                    if (stage == IntroStage.ATTACH_PROMPT) {
+                    if (stage == IntroStage.LEGAL || stage == IntroStage.ATTACH_PROMPT) {
                         Button(
-                            onClick = onMountedConfirm,
+                            onClick = onAction,
                             modifier = Modifier.fillMaxSize(),
                             shape = RoundedCornerShape(16.dp),
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                         ) {
-                            Text("Befestigt", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            val buttonText = if (stage == IntroStage.LEGAL) "Verstanden" else "Befestigt"
+                            Text(buttonText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

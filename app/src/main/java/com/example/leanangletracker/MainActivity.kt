@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
                         // Bike approach animation takes 1250ms, then wait 400ms = 1650ms total
                         delay(1650)
-                        routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
+                        routeUiState = routeUiState.copy(introStage = IntroStage.LEGAL)
                     }
 
                     val route = resolveRoute(
@@ -74,7 +74,6 @@ class MainActivity : ComponentActivity() {
                     AnimatedContent(
                         targetState = route,
                         transitionSpec = {
-                            // Avoid any transition animation when switching within Intro stages to keep it pixel-perfect
                             if (initialState is AppRoute.Intro && targetState is AppRoute.Intro) {
                                 EnterTransition.None togetherWith ExitTransition.None
                             } else {
@@ -82,16 +81,22 @@ class MainActivity : ComponentActivity() {
                                         fadeOut(animationSpec = tween(durationMillis = 220))
                             }
                         },
-                        // Use contentKey to keep the same Composable instance alive when only the stage changes
-                        // (e.g. from LOADING to ATTACH_PROMPT), which preserves its internal 'remember' state.
                         contentKey = { it::class },
                         label = "app_route"
                     ) { currentRoute ->
                         when (currentRoute) {
                             is AppRoute.Intro -> renderIntroRoute(
                                 stage = currentRoute.stage,
-                                onMountedConfirm = {
-                                    routeUiState = routeUiState.copy(introStage = IntroStage.TRANSITION_OUT)
+                                onAction = {
+                                    when (currentRoute.stage) {
+                                        IntroStage.LEGAL -> {
+                                            routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
+                                        }
+                                        IntroStage.ATTACH_PROMPT -> {
+                                            routeUiState = routeUiState.copy(introStage = IntroStage.TRANSITION_OUT)
+                                        }
+                                        else -> {}
+                                    }
                                 },
                                 onTransitionFinished = {
                                     routeUiState = routeUiState.copy(introStage = IntroStage.DONE)
@@ -160,10 +165,10 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun renderIntroRoute(
         stage: IntroStage,
-        onMountedConfirm: () -> Unit,
+        onAction: () -> Unit,
         onTransitionFinished: () -> Unit
     ) {
-        IntroScreen(stage = stage, onMountedConfirm = onMountedConfirm, onTransitionFinished = onTransitionFinished)
+        IntroScreen(stage = stage, onAction = onAction, onTransitionFinished = onTransitionFinished)
     }
 
     @Composable
