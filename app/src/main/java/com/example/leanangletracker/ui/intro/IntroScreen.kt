@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -48,7 +49,7 @@ internal fun IntroScreen(
     )
 
     val approachProgress = remember { Animatable(if (stage == IntroStage.LOADING) 0f else 1f) }
-    
+
     LaunchedEffect(stage) {
         if (stage == IntroStage.LOADING) {
             if (approachProgress.value < 0.1f) {
@@ -86,15 +87,17 @@ internal fun IntroScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
             Column(
                 modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
-                Box(Modifier.size(380.dp)){
+                Box(Modifier.size(380.dp)) {
                     BikeLeanAnimation(
-                        modifier = Modifier.fillMaxSize(), 
-                        step = CalibrationStep.UPRIGHT, 
+                        modifier = Modifier.fillMaxSize(),
+                        step = CalibrationStep.UPRIGHT,
                         approachProgress = approachProgress.value
                     )
                     if (stage == IntroStage.ATTACH_PROMPT) {
@@ -108,69 +111,86 @@ internal fun IntroScreen(
                     }
                 }
 
-                Column(
-                    modifier = Modifier.height(180.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, 
-                    verticalArrangement = Arrangement.Top
+                AnimatedVisibility(
+                    visible = stage == IntroStage.LEGAL || stage == IntroStage.ATTACH_PROMPT,
+                    enter = expandVertically()
                 ) {
-                    val titleText = when(stage) {
-                        IntroStage.LOADING -> ""
-                        IntroStage.LEGAL -> "Wichtiger Hinweis"
-                        else -> "Telefon montieren"
-                    }
-                    
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.headlineSmall,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier.height(180.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Top
+                    ) {
+                        val titleText = when (stage) {
+                            IntroStage.LOADING -> ""
+                            IntroStage.LEGAL -> "Wichtiger Hinweis"
+                            else -> "Telefon montieren"
+                        }
 
-                    when (stage) {
-                        IntroStage.LEGAL -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 4.dp)
-                            ) {
+                        Text(
+                            text = titleText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        when (stage) {
+                            IntroStage.LEGAL -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr." +
+                                                "Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund." +
+                                                "Die App darf während der Fahrt nicht bedient werden." +
+                                                "Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        lineHeight = 16.sp,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+
+                            IntroStage.ATTACH_PROMPT -> {
                                 Text(
-                                    text = "Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr." +
-                                            "Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund." +
-                                            "Die App darf während der Fahrt nicht bedient werden." +
-                                            "Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    lineHeight = 16.sp,
+                                    text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
+                                    style = MaterialTheme.typography.bodyMedium,
                                     textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
                             }
+
+                            else -> {}
                         }
-                        IntroStage.ATTACH_PROMPT -> {
-                            Text(
-                                text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        else -> {}
                     }
                 }
 
-                Box(modifier = Modifier.height(60.dp).fillMaxWidth()) {
-                    if (stage == IntroStage.LEGAL || stage == IntroStage.ATTACH_PROMPT) {
-                        Button(
-                            onClick = onAction,
-                            modifier = Modifier.fillMaxSize(),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-                        ) {
-                            val buttonText = if (stage == IntroStage.LEGAL) "Verstanden" else "Befestigt"
-                            Text(buttonText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                AnimatedVisibility(
+                    visible = stage == IntroStage.LEGAL || stage == IntroStage.ATTACH_PROMPT,
+                    enter = expandVertically()
+                ) {
+                    Box(modifier = Modifier
+                        .height(60.dp)
+                        .fillMaxWidth()) {
+                        if (stage == IntroStage.LEGAL || stage == IntroStage.ATTACH_PROMPT) {
+                            Button(
+                                onClick = onAction,
+                                modifier = Modifier.fillMaxSize(),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                val buttonText =
+                                    if (stage == IntroStage.LEGAL) "Verstanden" else "Befestigt"
+                                Text(
+                                    buttonText,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

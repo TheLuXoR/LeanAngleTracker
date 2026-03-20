@@ -24,8 +24,6 @@ import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.theme.*
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 @Composable
 internal fun LeanHistoryGraph(
@@ -46,14 +44,14 @@ internal fun LeanHistoryGraph(
                     values
                 } else {
                     val halfRange = visibleRangePoints / 2
-                    val start = (selectedIndex - halfRange).coerceIn(0, values.size - visibleRangePoints)
-                    val end = start + visibleRangePoints
+                    val start = (selectedIndex - halfRange).coerceIn(0, (values.size - visibleRangePoints).coerceAtLeast(0))
+                    val end = (start + visibleRangePoints).coerceAtMost(values.size)
                     values.subList(start, end)
                 }
             }
 
-            val lowerBound = remember(displayValues) { displayValues.maxOrNull()?.coerceAtLeast(10f) ?: 10f }
-            val upperBound = remember(displayValues) { displayValues.minOrNull()?.coerceAtMost(-10f) ?: -10f }
+            val lowerBound = displayValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+            val upperBound = displayValues.minOrNull()?.coerceAtMost(-0f) ?: -0f
             val amplitude = maxOf(20f, abs(upperBound), abs(lowerBound))
 
             Row {
@@ -73,7 +71,9 @@ internal fun LeanHistoryGraph(
                 )
             }
 
-            Canvas(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Canvas(modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)) {
                 val width = size.width
                 val height = size.height
                 val centerY = height / 2f
@@ -98,11 +98,11 @@ internal fun LeanHistoryGraph(
                         brush = Brush.verticalGradient(listOf(PrimaryOrange, SecondaryBlue)),
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
-                    
+
                     // The selected index relative to the displayed subset
                     val relativeSelectedIndex = if (visibleRangePoints != null && selectedIndex != null) {
                         val halfRange = visibleRangePoints / 2
-                        val start = (selectedIndex - halfRange).coerceIn(0, values.size - visibleRangePoints)
+                        val start = (selectedIndex - halfRange).coerceIn(0, (values.size - visibleRangePoints).coerceAtLeast(0))
                         selectedIndex - start
                     } else {
                         selectedIndex
@@ -111,7 +111,7 @@ internal fun LeanHistoryGraph(
                     if (relativeSelectedIndex != null && relativeSelectedIndex in displayValues.indices) {
                         val selX = relativeSelectedIndex * stepX
                         val selY = yFor(displayValues[relativeSelectedIndex])
-                        
+
                         drawLine(color = Color.White.copy(alpha = 0.4f), start = Offset(selX, 0f), end = Offset(selX, height), strokeWidth = 1.dp.toPx())
                         drawCircle(color = Color.White, radius = 4.dp.toPx(), center = Offset(selX, selY))
                     }
