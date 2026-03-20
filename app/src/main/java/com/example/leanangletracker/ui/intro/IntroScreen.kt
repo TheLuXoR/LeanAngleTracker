@@ -25,8 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
+import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
 
@@ -43,7 +43,7 @@ internal fun IntroScreen(
         label = "intro_card_alpha"
     )
     val cardScale by animateFloatAsState(
-        targetValue = if (isTransitionOut) 0.97f else 1f,
+        targetValue = if (isTransitionOut) 0.5f else 1f,
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
         label = "intro_card_scale"
     )
@@ -97,7 +97,7 @@ internal fun IntroScreen(
                 Box(Modifier.size(380.dp)) {
                     BikeLeanAnimation(
                         modifier = Modifier.fillMaxSize(),
-                        step = CalibrationStep.UPRIGHT,
+                        step = BikeLean.UPRIGHT,
                         approachProgress = approachProgress.value
                     )
                     if (stage == IntroStage.ATTACH_PROMPT) {

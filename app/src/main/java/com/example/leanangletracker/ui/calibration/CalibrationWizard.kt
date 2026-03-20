@@ -22,9 +22,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.leanangletracker.CalibrationStep
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.BikeLeanAnimation
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import com.example.leanangletracker.ui.theme.*
@@ -124,11 +124,11 @@ internal fun CalibrationWizard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 when (state.calibrationStep) {
-                    CalibrationStep.UPRIGHT -> CalibrationButton(stringResource(R.string.action_confirm_bike_upright), onCaptureUpright)
-                    CalibrationStep.LEFT_READY,
-                    CalibrationStep.RIGHT_READY,
-                    CalibrationStep.LEFT_MEASURING,
-                    CalibrationStep.RIGHT_MEASURING -> {
+                    BikeLean.UPRIGHT -> CalibrationButton(stringResource(R.string.action_confirm_bike_upright), onCaptureUpright)
+                    BikeLean.LEFT_READY,
+                    BikeLean.RIGHT_READY,
+                    BikeLean.LEFT_MEASURING,
+                    BikeLean.RIGHT_MEASURING -> {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             
@@ -140,7 +140,7 @@ internal fun CalibrationWizard(
                             OutlinedButton(onClick = onContinueFallback, modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = stringResource(
-                                        if (state.calibrationStep == CalibrationStep.LEFT_MEASURING) {
+                                        if (state.calibrationStep == BikeLean.LEFT_MEASURING) {
                                             R.string.action_continue_to_right
                                         } else {
                                             R.string.action_finish_calibration
@@ -150,7 +150,7 @@ internal fun CalibrationWizard(
                             }
                         }
                     }
-                    CalibrationStep.READY -> Unit
+                    BikeLean.READY -> Unit
                 }
                 
                 Text(
