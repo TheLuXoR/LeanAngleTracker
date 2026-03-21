@@ -1,10 +1,6 @@
 package com.example.leanangletracker.ui.calibration
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -19,7 +15,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.BikeLean
@@ -60,15 +55,21 @@ internal fun CalibrationWizard(
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
+                // Determine if we should show the "return to upright" animation
+                // This happens when we've reached the required tilt but haven't finished the step
                 val isReturningUpright = state.tiltRecognitionProgress >= 1f
                 
                 CalibrationBikeLeanAnimation(
                     modifier = Modifier.fillMaxSize(0.8f),
-                    bikeAnimationFrom = if (isReturningUpright) BikeLean.LEFT else BikeLean.UPRIGHT,
+                    bikeAnimationFrom = if (isReturningUpright) {
+                        if (state.calibrationStep == BikeLean.LEFT) BikeLean.LEFT else BikeLean.RIGHT
+                    } else {
+                        BikeLean.UPRIGHT
+                    },
                     bikeAnimationTo = if (isReturningUpright) BikeLean.UPRIGHT else state.calibrationStep
                 )
                 
-                // Progress Overlay
+                // Progress Overlay at the bottom of the animation area
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -76,8 +77,10 @@ internal fun CalibrationWizard(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     CalibrationProgressIndicator(
-                        tiltProgress = state.tiltRecognitionProgress,
-                        uprightProgress = state.uprightRecognitionProgress
+                        leftProgress = state.leftProgress,
+                        leftMax = state.leftMax,
+                        rightProgress = state.rightProgress,
+                        rightMax = state.rightMax
                     )
                 }
             }
@@ -127,7 +130,6 @@ internal fun CalibrationWizard(
                         )
                     }
                 } else if (state.calibrationStep != BikeLean.DONE) {
-                    // During active measurement, show a fallback/skip button if it takes too long
                     TextButton(onClick = onContinueFallback) {
                         Text(
                             text = "Schritt überspringen",
@@ -143,49 +145,70 @@ internal fun CalibrationWizard(
 
 @Composable
 private fun CalibrationProgressIndicator(
-    tiltProgress: Float,
-    uprightProgress: Float
+    leftProgress: Float,
+    leftMax: Float,
+    rightProgress: Float,
+    rightMax: Float
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(12.dp)
+            .height(14.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.1f)),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        val targetColor = if (tiltProgress >= 1f) AccentGreen else MaterialTheme.colorScheme.primary
-        val animatedColor by animateColorAsState(targetColor, label = "progress_color")
-        
-        // Tilt Phase
+        // Left Half (Progress grows from center to left)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(animatedColor.copy(alpha = if (tiltProgress >= 1f) 1f else 0.4f))
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterEnd
         ) {
+            // Left Max Shadow (Alpha 0.3)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(tiltProgress)
+                    .fillMaxWidth(leftMax)
                     .fillMaxHeight()
-                    .background(animatedColor)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            )
+            // Left Current Progress
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(leftProgress)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
-        
-        // Upright Phase
+
+        // Center Divider
+        Box(
+            modifier = Modifier
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(Color.White.copy(alpha = 0.3f))
+        )
+
+        // Right Half (Progress grows from center to right)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.2f))
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterStart
         ) {
+            // Right Max Shadow (Alpha 0.3)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(uprightProgress)
+                    .fillMaxWidth(rightMax)
                     .fillMaxHeight()
-                    .background(AccentGreen)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            )
+            // Right Current Progress
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(rightProgress)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }
