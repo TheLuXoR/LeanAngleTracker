@@ -129,9 +129,6 @@ private fun Bike(
         val groundY = size.height * 0.85f + offset.y * size.height
         val centerX = size.width /2 + offset.x * size.width
 
-
-
-
         // Shadow
         drawOval(
                 color = Color.Black.copy(.3f),

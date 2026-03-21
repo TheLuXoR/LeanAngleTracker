@@ -1,30 +1,27 @@
 package com.example.leanangletracker.ui.calibration
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.leanangletracker.R
+import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
 import com.example.leanangletracker.ui.theme.*
@@ -35,257 +32,161 @@ internal fun CalibrationWizard(
     onCaptureUpright: () -> Unit,
     onContinueFallback: () -> Unit
 ) {
-    var showInfo by rememberSaveable { mutableStateOf(false) }
-
-    if (showInfo) {
-        AlertDialog(
-            onDismissRequest = { showInfo = false },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
-            title = { Text(stringResource(R.string.calibration_title)) },
-            text = { Text(stringResource(R.string.calibration_info_text)) }
-        )
-    }
-
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp)
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Header
+            Text(
+                text = "Kalibrierung",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            // Animation Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                val isReturningUpright = state.tiltRecognitionProgress >= 1f
+                
+                CalibrationBikeLeanAnimation(
+                    modifier = Modifier.fillMaxSize(0.8f),
+                    bikeAnimationFrom = if (isReturningUpright) BikeLean.LEFT else BikeLean.UPRIGHT,
+                    bikeAnimationTo = if (isReturningUpright) BikeLean.UPRIGHT else state.calibrationStep
+                )
+                
+                // Progress Overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.BottomCenter
                 ) {
-                    Text(
-                        stringResource(R.string.calibration_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary
+                    CalibrationProgressIndicator(
+                        tiltProgress = state.tiltRecognitionProgress,
+                        uprightProgress = state.uprightRecognitionProgress
                     )
-                    IconButton(onClick = { showInfo = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Info",
-                            tint = TextSecondary
-                        )
-                    }
+                }
+            }
+
+            // Instructions
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val instructionText = if (state.tiltRecognitionProgress >= 1f) {
+                    "Sehr gut! Jetzt richte das Motorrad wieder auf."
+                } else {
+                    stringResource(state.instructionsResId)
                 }
 
-                CalibrationBikeLeanAnimation(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f)),
-                    bikeAnimationFrom = BikeLean.UPRIGHT,
-                    bikeAnimationTo = state.calibrationStep
-                )
-
                 Text(
-                    text = stringResource(state.instructionsResId),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = instructionText,
+                    style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
-
                 
-                AmpRow(
-                    fractionLeft = state.leftCalibrationAmplitudeDeg,
-                    fractionLeftMax = state.leftCalibrationAmplitudeMaxDeg,
-                    fractionRight = state.rightCalibrationAmplitudeDeg,
-                    fractionRightMax = state.rightCalibrationAmplitudeMaxDeg
+                Text(
+                    text = "Halte das Smartphone stabil in der Halterung.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
                 )
+            }
 
-
-                if (state.qualityHintResId != null) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+            // Action Button
+            Box(modifier = Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                if (state.calibrationStep == BikeLean.UPRIGHT && !state.isCalibrated) {
+                    Button(
+                        onClick = onCaptureUpright,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
                         Text(
-                            text = stringResource(state.qualityHintResId),
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Center
+                            text = stringResource(R.string.action_confirm_bike_upright),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else if (state.calibrationStep != BikeLean.DONE) {
+                    // During active measurement, show a fallback/skip button if it takes too long
+                    TextButton(onClick = onContinueFallback) {
+                        Text(
+                            text = "Schritt überspringen",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelLarge
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                when (state.calibrationStep) {
-                    BikeLean.UPRIGHT -> CalibrationButton(
-                        stringResource(R.string.action_confirm_bike_upright),
-                        onCaptureUpright
-                    )
-
-                    BikeLean.LEFT,
-                    BikeLean.RIGHT -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-
-                            RecognitionProgress(
-                                tiltProgress = state.tiltRecognitionProgress,
-                                uprightProgress = state.uprightRecognitionProgress
-                            )
-
-                            OutlinedButton(
-                                onClick = onContinueFallback,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        if (state.calibrationStep == BikeLean.LEFT) {
-                                            R.string.action_continue_to_right
-                                        } else {
-                                            R.string.action_finish_calibration
-                                        }
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    BikeLean.DONE -> Unit
-                }
-
-                Text(
-                    text = stringResource(R.string.warning_only_zero_position),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ErrorRed.copy(alpha = 0.8f)
-                )
             }
         }
     }
 }
 
 @Composable
-private fun CalibrationButton(text: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
+private fun CalibrationProgressIndicator(
+    tiltProgress: Float,
+    uprightProgress: Float
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp)
+            .height(12.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.1f)),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    }
-}
-
-
-@Composable
-private fun RecognitionProgress(tiltProgress: Float, uprightProgress: Float) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ProgressItem(
-            label = stringResource(R.string.label_tilt_recognition_progress),
-            progress = tiltProgress,
-            color = MaterialTheme.colorScheme.primary
-        )
-        ProgressItem(
-            label = stringResource(R.string.label_return_upright_progress),
-            progress = uprightProgress,
-            color = AccentGreen
-        )
-    }
-}
-
-@Composable
-private fun ProgressItem(label: String, progress: Float, color: Color) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-            Text(
-                "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape),
-            color = color,
-            trackColor = MaterialTheme.colorScheme.background
-        )
-    }
-}
-
-@Composable
-private fun AmpRow(
-    fractionLeft: Float,
-    fractionLeftMax: Float,
-    fractionRight: Float,
-    fractionRightMax: Float,
-    color: Color = Color.Blue
-) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-
+        val targetColor = if (tiltProgress >= 1f) AccentGreen else MaterialTheme.colorScheme.primary
+        val animatedColor by animateColorAsState(targetColor, label = "progress_color")
+        
+        // Tilt Phase
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(14.dp)
+                .fillMaxHeight()
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.background)
-
+                .background(animatedColor.copy(alpha = if (tiltProgress >= 1f) 1f else 0.4f))
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fractionLeftMax.coerceIn(0.01f, 1f))
+                    .fillMaxWidth(tiltProgress)
                     .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.3f))
-                    .align(Alignment.CenterEnd)
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fractionLeft.coerceIn(0.01f, 1f))
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(color)
-                    .align(Alignment.CenterEnd)
+                    .background(animatedColor)
             )
         }
+        
+        // Upright Phase
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(14.dp)
+                .fillMaxHeight()
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.background)
+                .background(AccentGreen.copy(alpha = 0.2f))
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fractionRightMax.coerceIn(0.01f, 1f))
+                    .fillMaxWidth(uprightProgress)
                     .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.3f))
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fractionRight.coerceIn(0.01f, 1f))
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(color)
+                    .background(AccentGreen)
             )
         }
-
     }
 }
