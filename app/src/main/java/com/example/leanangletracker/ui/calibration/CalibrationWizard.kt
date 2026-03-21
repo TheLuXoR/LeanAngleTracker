@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.CalibrationUiState
@@ -85,7 +86,7 @@ internal fun CalibrationWizard(
                 CalibrationBikeLeanAnimation(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .aspectRatio(1f)
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f)),
                     bikeAnimationFrom = BikeLean.UPRIGHT,
@@ -99,11 +100,14 @@ internal fun CalibrationWizard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                CalibrationAmplitudeBars(
-                    leftAmp = state.leftCalibrationAmplitudeDeg,
-                    rightAmp = state.rightCalibrationAmplitudeDeg,
-                    currentAmp = state.currentStepAmplitudeDeg
+                
+                AmpRow(
+                    fractionLeft = state.leftCalibrationAmplitudeDeg,
+                    fractionLeftMax = state.leftCalibrationAmplitudeMaxDeg,
+                    fractionRight = state.rightCalibrationAmplitudeDeg,
+                    fractionRightMax = state.rightCalibrationAmplitudeMaxDeg
                 )
+
 
                 if (state.qualityHintResId != null) {
                     Surface(
@@ -124,18 +128,28 @@ internal fun CalibrationWizard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 when (state.calibrationStep) {
-                    BikeLean.UPRIGHT -> CalibrationButton(stringResource(R.string.action_confirm_bike_upright), onCaptureUpright)
+                    BikeLean.UPRIGHT -> CalibrationButton(
+                        stringResource(R.string.action_confirm_bike_upright),
+                        onCaptureUpright
+                    )
+
                     BikeLean.LEFT,
                     BikeLean.RIGHT -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            
+
                             RecognitionProgress(
                                 tiltProgress = state.tiltRecognitionProgress,
                                 uprightProgress = state.uprightRecognitionProgress
                             )
-                            
-                            OutlinedButton(onClick = onContinueFallback, modifier = Modifier.fillMaxWidth()) {
+
+                            OutlinedButton(
+                                onClick = onContinueFallback,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
                                     text = stringResource(
                                         if (state.calibrationStep == BikeLean.LEFT) {
@@ -148,9 +162,10 @@ internal fun CalibrationWizard(
                             }
                         }
                     }
+
                     BikeLean.DONE -> Unit
                 }
-                
+
                 Text(
                     text = stringResource(R.string.warning_only_zero_position),
                     style = MaterialTheme.typography.labelSmall,
@@ -165,7 +180,9 @@ internal fun CalibrationWizard(
 private fun CalibrationButton(text: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
         Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -173,12 +190,19 @@ private fun CalibrationButton(text: String, onClick: () -> Unit) {
 }
 
 
-
 @Composable
 private fun RecognitionProgress(tiltProgress: Float, uprightProgress: Float) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ProgressItem(label = stringResource(R.string.label_tilt_recognition_progress), progress = tiltProgress, color = MaterialTheme.colorScheme.primary)
-        ProgressItem(label = stringResource(R.string.label_return_upright_progress), progress = uprightProgress, color = AccentGreen)
+        ProgressItem(
+            label = stringResource(R.string.label_tilt_recognition_progress),
+            progress = tiltProgress,
+            color = MaterialTheme.colorScheme.primary
+        )
+        ProgressItem(
+            label = stringResource(R.string.label_return_upright_progress),
+            progress = uprightProgress,
+            color = AccentGreen
+        )
     }
 }
 
@@ -187,11 +211,18 @@ private fun ProgressItem(label: String, progress: Float, color: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-            Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
         }
         LinearProgressIndicator(
             progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape),
             color = color,
             trackColor = MaterialTheme.colorScheme.background
         )
@@ -199,20 +230,40 @@ private fun ProgressItem(label: String, progress: Float, color: Color) {
 }
 
 @Composable
-private fun CalibrationAmplitudeBars(leftAmp: Float, rightAmp: Float, currentAmp: Float) {
-    val maxAmp = maxOf(40f, leftAmp, rightAmp, currentAmp)
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        AmpRow(label = "LEFT", value = leftAmp, fraction = leftAmp / maxAmp, color = SecondaryBlue)
-        AmpRow(label = "RIGHT", value = rightAmp, fraction = rightAmp / maxAmp, color = SecondaryBlue)
-        AmpRow(label = "LIVE", value = currentAmp, fraction = currentAmp / maxAmp, color = PrimaryOrange)
-    }
-}
-
-@Composable
-private fun AmpRow(label: String, value: Float, fraction: Float, color: Color) {
+private fun AmpRow(
+    fractionLeft: Float,
+    fractionLeftMax: Float,
+    fractionRight: Float,
+    fractionRightMax: Float,
+    color: Color = Color.Blue
+) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(label, modifier = Modifier.width(48.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = TextSecondary)
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(14.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.background)
+
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fractionLeftMax.coerceIn(0.01f, 1f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.3f))
+                    .align(Alignment.CenterEnd)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fractionLeft.coerceIn(0.01f, 1f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(color)
+                    .align(Alignment.CenterEnd)
+            )
+        }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -222,18 +273,19 @@ private fun AmpRow(label: String, value: Float, fraction: Float, color: Color) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction.coerceIn(0.01f, 1f))
+                    .fillMaxWidth(fractionRightMax.coerceIn(0.01f, 1f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.3f))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fractionRight.coerceIn(0.01f, 1f))
                     .fillMaxHeight()
                     .clip(CircleShape)
                     .background(color)
             )
         }
-        Text(
-            text = "${value.toInt()}°",
-            modifier = Modifier.width(44.dp).padding(start = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            textAlign = TextAlign.End,
-            fontWeight = FontWeight.Bold
-        )
+
     }
 }

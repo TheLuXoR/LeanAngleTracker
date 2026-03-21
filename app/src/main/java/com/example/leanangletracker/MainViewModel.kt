@@ -61,6 +61,8 @@ data class CalibrationUiState(
     @StringRes val qualityHintResId: Int? = R.string.hint_operate_only_zero_position,
     val leftCalibrationAmplitudeDeg: Float = 0f,
     val rightCalibrationAmplitudeDeg: Float = 0f,
+    val leftCalibrationAmplitudeMaxDeg: Float = 0f,
+    val rightCalibrationAmplitudeMaxDeg: Float = 0f,
     val currentStepAmplitudeDeg: Float = 0f,
     val tiltRecognitionProgress: Float = 0f,
     val uprightRecognitionProgress: Float = 0f
