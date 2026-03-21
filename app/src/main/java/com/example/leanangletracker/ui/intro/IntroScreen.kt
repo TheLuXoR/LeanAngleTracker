@@ -25,8 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.leanangletracker.ui.animation.BikeLeanAnimation
-import com.example.leanangletracker.ui.animation.BikeLean
+import com.example.leanangletracker.ui.animation.IntroBikeLeanAnimation
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
 
@@ -95,10 +94,8 @@ internal fun IntroScreen(
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
                 Box(Modifier.size(380.dp)) {
-                    BikeLeanAnimation(
+                    IntroBikeLeanAnimation(
                         modifier = Modifier.fillMaxSize(),
-                        step = BikeLean.UPRIGHT,
-                        approachProgress = approachProgress.value
                     )
                     if (stage == IntroStage.ATTACH_PROMPT) {
                         PhoneMountAnimation(
