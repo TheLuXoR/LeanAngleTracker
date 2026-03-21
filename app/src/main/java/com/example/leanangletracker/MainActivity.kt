@@ -35,6 +35,8 @@ import com.example.leanangletracker.ui.tracking.LeanAngleScreen
 import com.example.leanangletracker.ui.tracking.RideHistoryScreen
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -58,7 +60,7 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(routeUiState.introStage) {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
-                        delay(1650)
+                        delay(800)
                         routeUiState = routeUiState.copy(introStage = IntroStage.LEGAL)
                     }
 
@@ -72,11 +74,15 @@ class MainActivity : ComponentActivity() {
                     AnimatedContent(
                         targetState = route,
                         transitionSpec = {
-                            if (initialState is AppRoute.Intro && targetState is AppRoute.Intro) {
-                                EnterTransition.None togetherWith ExitTransition.None
-                            } else {
-                                fadeIn(animationSpec = tween(300, 60)) togetherWith fadeOut(tween(220))
-                            }
+                            val forward = targetState.index() > initialState.index()
+
+                            slideInVertically(
+                                    animationSpec = tween(300),
+                                    initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight } // slide from bottom
+                                ) togetherWith slideOutVertically(
+                                    animationSpec = tween(300),
+                                    targetOffsetY = { fullHeight -> if (forward) fullHeight else -fullHeight } // slide to top
+                                )
                         },
                         contentKey = { it::class },
                         label = "app_route"
@@ -146,15 +152,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun resolveRoute(
-        introStage: IntroStage,
-        showSettings: Boolean,
-        showHistory: Boolean,
-        isCalibrated: Boolean
-    ): AppRoute {
-        if (introStage != IntroStage.DONE) return AppRoute.Intro(introStage)
-        if (showHistory) return AppRoute.TrackReview
-        return if (showSettings && isCalibrated) AppRoute.Settings else AppRoute.Tracking
+    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showHistory: Boolean, isCalibrated: Boolean): AppRoute {
+        if (introStage != IntroStage.DONE) {
+            return AppRoute.Intro(introStage)
+        }
+        if (showHistory) {
+            return AppRoute.TrackReview
+        }
+        if (showSettings && isCalibrated) {
+            return AppRoute.Settings
+        } else {
+            return AppRoute.Tracking
+        }
     }
 
     @Composable

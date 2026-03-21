@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,7 +42,7 @@ private val SineEaseInOut = Easing { fraction ->
 
 @Composable
 fun IntroBikeLeanAnimation(
-modifier: Modifier = Modifier,
+modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1f),
 duration: Float = 600f
 ) {
 
