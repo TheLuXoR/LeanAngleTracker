@@ -104,7 +104,7 @@ data class TrackingUiState(
 )
 
 data class SettingsUiState(
-    val invertLeanAngle: Boolean = true,
+    val invertLeanAngle: Boolean = false,
     val historyWindowSeconds: Int = 20,
     val recorderIntervalMs: Int = 200,
     val useGyroFusion: Boolean = false,
@@ -140,6 +140,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val KEY_FORWARD_X = "forward_x"
         const val KEY_FORWARD_Y = "forward_y"
         const val KEY_FORWARD_Z = "forward_z"
+        const val TILT_THRESHOLD_DEG = 8f
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
@@ -158,6 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var leftUp: Vec3? = null
     private var rightUp: Vec3? = null
     private var bikeForwardAxis: Vec3? = null
+    private var calibrationSideAxis: Vec3? = null
 
     private var peakTiltDegInStep = 0f
     private var peakTiltVectorInStep: Vec3? = null
@@ -405,8 +407,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         leftUp = null
         rightUp = null
         bikeForwardAxis = null
-        peakTiltDegInStep = 0f
-        peakTiltVectorInStep = null
+        calibrationSideAxis = null
         uprightStableCounter = 0
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
@@ -438,13 +439,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun captureUpright() {
         if (_uiState.value.calibration.calibrationStep != BikeLean.UPRIGHT) return
         uprightUp = (filteredGravity * -1f).normalized()
-        prepareMeasurementStep(
-            nextStep = BikeLean.LEFT,
-            instructionResId = R.string.instructions_tilt_left_then_return
-        )
+        calibrationSideAxis = null
+        uprightStableCounter = 0
+        updateCalibrationState {
+            it.copy(
+                calibrationStep = BikeLean.LEFT,
+                instructionsResId = R.string.instructions_tilt_left_then_return,
+                tiltRecognitionProgress = 0f,
+                uprightRecognitionProgress = 0f,
+                qualityHintResId = null
+            )
+        }
     }
 
-    private fun prepareMeasurementStep(nextStep: BikeLean, @StringRes instructionResId: Int) {
+    private fun prepareNextMeasurementStep(nextStep: BikeLean, @StringRes instructionResId: Int) {
         peakTiltDegInStep = 0f
         peakTiltVectorInStep = null
         uprightStableCounter = 0
@@ -453,8 +461,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 calibrationStep = nextStep,
                 instructionsResId = instructionResId,
                 tiltRecognitionProgress = 0f,
-                uprightRecognitionProgress = 0f,
-                qualityHintResId = null
+                uprightRecognitionProgress = 0f
             )
         }
     }
@@ -462,27 +469,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun continueCalibrationFallback() {
         when (_uiState.value.calibration.calibrationStep) {
             BikeLean.LEFT -> {
+                // Take current as left peak if possible
                 val currentUp = (filteredGravity * -1f).normalized()
                 leftUp = peakTiltVectorInStep ?: currentUp
-                val leftAmplitude = peakTiltDegInStep
-                updateCalibrationState {
-                    it.copy(
-                        leftMax = (leftAmplitude / 8f).coerceIn(0f, 1f),
-                        leftProgress = 0f
-                    )
-                }
-                prepareMeasurementStep(
-                    nextStep = BikeLean.RIGHT,
-                    instructionResId = R.string.instructions_tilt_right_then_return
-                )
+                prepareNextMeasurementStep(BikeLean.RIGHT, R.string.instructions_tilt_right_then_return)
             }
-
             BikeLean.RIGHT -> {
                 val currentUp = (filteredGravity * -1f).normalized()
                 rightUp = peakTiltVectorInStep ?: currentUp
-                finalizeCalibration(peakTiltDegInStep)
+                finalizeCalibrationSequential()
             }
-
             else -> Unit
         }
     }
@@ -549,6 +545,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
@@ -557,29 +555,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
 
                 when (_uiState.value.calibration.calibrationStep) {
-                    BikeLean.LEFT,
-                    BikeLean.RIGHT -> handleMeasurementStep()
-                    BikeLean.UPRIGHT,
-                    BikeLean.DONE -> updateLeanAngle(event.timestamp)
+                    BikeLean.LEFT, BikeLean.RIGHT -> handleSequentialMeasurement()
+                    BikeLean.UPRIGHT, BikeLean.DONE -> updateLeanAngle(event.timestamp)
                 }
             }
-
             Sensor.TYPE_GYROSCOPE -> updateGyroLean(event)
         }
     }
 
-    private fun handleMeasurementStep() {
+    private fun handleSequentialMeasurement() {
         val up = uprightUp ?: return
         val currentUp = (filteredGravity * -1f).normalized()
         val angleDeg = angleBetweenDeg(up, currentUp)
+        
+        val step = _uiState.value.calibration.calibrationStep
 
-        if (angleDeg > peakTiltDegInStep) {
-            peakTiltDegInStep = angleDeg
-            peakTiltVectorInStep = currentUp
+        // Initialize side axis on first significant lean during LEFT step
+        if (calibrationSideAxis == null && step == BikeLean.LEFT && angleDeg > 2f) {
+            calibrationSideAxis = (currentUp - up * currentUp.dot(up)).normalized()
         }
 
-        val currentProgress = (angleDeg / 8f).coerceIn(0f, 1f)
-        val peakProgress = (peakTiltDegInStep / 8f).coerceIn(0f, 1f)
+        val sideComponent = if (calibrationSideAxis != null) currentUp.dot(calibrationSideAxis!!) else 0f
+        val isLeftSide = if (calibrationSideAxis != null) sideComponent > 0.1f else (step == BikeLean.LEFT)
+        val isRightSide = if (calibrationSideAxis != null) sideComponent < -0.1f else (step == BikeLean.RIGHT)
+
+        // Only track peak if we are leaning in the intended direction for the current step
+        if ((step == BikeLean.LEFT && isLeftSide) || (step == BikeLean.RIGHT && isRightSide)) {
+            if (angleDeg > peakTiltDegInStep) {
+                peakTiltDegInStep = angleDeg
+                peakTiltVectorInStep = currentUp
+            }
+        }
+
+        val currentProgress = (angleDeg / TILT_THRESHOLD_DEG).coerceIn(0f, 1f)
+        val peakProgress = (peakTiltDegInStep / TILT_THRESHOLD_DEG).coerceIn(0f, 1f)
 
         if (angleDeg < 4f) {
             uprightStableCounter++
@@ -587,67 +596,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             uprightStableCounter = 0
         }
 
-        updateCalibrationState {
-            val step = it.calibrationStep
-            it.copy(
-                leftProgress = if (step == BikeLean.LEFT) currentProgress else it.leftProgress,
-                leftMax = if (step == BikeLean.LEFT) peakProgress else it.leftMax,
-                rightProgress = if (step == BikeLean.RIGHT) currentProgress else it.rightProgress,
-                rightMax = if (step == BikeLean.RIGHT) peakProgress else it.rightMax,
+        updateCalibrationState { state ->
+            state.copy(
+                leftProgress = if (isLeftSide) currentProgress else 0f,
+                leftMax = if (step == BikeLean.LEFT) maxOf(state.leftMax, currentProgress) else state.leftMax,
+                rightProgress = if (isRightSide) currentProgress else 0f,
+                rightMax = if (step == BikeLean.RIGHT) maxOf(state.rightMax, currentProgress) else state.rightMax,
                 tiltRecognitionProgress = peakProgress,
                 uprightRecognitionProgress = (uprightStableCounter / 15f).coerceIn(0f, 1f)
             )
         }
 
-        val enoughMotion = peakTiltDegInStep > 8f
+        val reachedThreshold = peakTiltDegInStep >= TILT_THRESHOLD_DEG
         val returnedUpright = uprightStableCounter > 14
-        if (!enoughMotion || !returnedUpright) return
 
-        when (_uiState.value.calibration.calibrationStep) {
-            BikeLean.LEFT -> {
-                leftUp = peakTiltVectorInStep ?: return
-                prepareMeasurementStep(
-                    nextStep = BikeLean.RIGHT,
-                    instructionResId = R.string.instructions_tilt_right_then_return
-                )
+        if (reachedThreshold && returnedUpright) {
+            if (step == BikeLean.LEFT) {
+                leftUp = peakTiltVectorInStep
+                prepareNextMeasurementStep(BikeLean.RIGHT, R.string.instructions_tilt_right_then_return)
+            } else if (step == BikeLean.RIGHT) {
+                rightUp = peakTiltVectorInStep
+                finalizeCalibrationSequential()
             }
-
-            BikeLean.RIGHT -> {
-                rightUp = peakTiltVectorInStep ?: return
-                finalizeCalibration(peakTiltDegInStep)
-            }
-
-            else -> Unit
         }
     }
 
-    private fun finalizeCalibration(rightAmplitudeDeg: Float) {
+    private fun finalizeCalibrationSequential() {
         val up = uprightUp ?: return
-        val left = leftUp ?: return
-        val right = rightUp ?: return
-
+        val left = leftUp ?: up
+        val right = rightUp ?: up
+        
+        // Try to derive forward axis from left/right or side axis
         var forward = left.cross(right).normalized()
-        if (forward.norm() < 0.2f || abs(forward.dot(up)) > 0.85f) {
-            peakTiltDegInStep = 0f
-            peakTiltVectorInStep = null
-            uprightStableCounter = 0
-            updateCalibrationState {
-                it.copy(
-                    qualityHintResId = R.string.hint_calibration_uncertain,
-                    calibrationStep = BikeLean.LEFT,
-                    instructionsResId = R.string.instructions_tilt_left_then_return,
-                    tiltRecognitionProgress = 0f,
-                    uprightRecognitionProgress = 0f,
-                    leftProgress = 0f,
-                    leftMax = 0f,
-                    rightProgress = 0f,
-                    rightMax = 0f
-                )
-            }
-            return
+        if (forward.norm() < 0.1f) {
+            val side = calibrationSideAxis ?: Vec3(1f, 0f, 0f)
+            forward = side.cross(up).normalized()
         }
-
-        forward = (forward - up * forward.dot(up)).normalized()
+        
         bikeForwardAxis = forward
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
@@ -816,8 +801,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private fun startRecorder() {
         if (recorderJob?.isActive == true) return

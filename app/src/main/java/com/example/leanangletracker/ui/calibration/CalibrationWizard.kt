@@ -56,20 +56,20 @@ internal fun CalibrationWizard(
                 contentAlignment = Alignment.Center
             ) {
                 // Determine if we should show the "return to upright" animation
-                // This happens when we've reached the required tilt but haven't finished the step
-                val isReturningUpright = state.tiltRecognitionProgress >= 1f
+                val isReturningUpright = state.uprightRecognitionProgress > 0f || state.tiltRecognitionProgress >= 1f
                 
-                CalibrationBikeLeanAnimation(
-                    modifier = Modifier.fillMaxSize(0.8f),
-                    bikeAnimationFrom = if (isReturningUpright) {
-                        if (state.calibrationStep == BikeLean.LEFT) BikeLean.LEFT else BikeLean.RIGHT
-                    } else {
-                        BikeLean.UPRIGHT
-                    },
-                    bikeAnimationTo = if (isReturningUpright) BikeLean.UPRIGHT else state.calibrationStep
-                )
+                // Use key to restart the animation when phase changes
+                key(isReturningUpright, state.calibrationStep) {
+                    CalibrationBikeLeanAnimation(
+                        modifier = Modifier.fillMaxSize(0.8f),
+                        // Note: CalibrationBikeLeanAnimation animates from bikeAnimationTo -> bikeAnimationFrom 
+                        // based on its internal 'start' state logic.
+                        bikeAnimationFrom = if (isReturningUpright) BikeLean.UPRIGHT else state.calibrationStep,
+                        bikeAnimationTo = if (isReturningUpright) (if (state.calibrationStep == BikeLean.LEFT) BikeLean.LEFT else BikeLean.RIGHT) else BikeLean.UPRIGHT
+                    )
+                }
                 
-                // Progress Overlay at the bottom of the animation area
+                // Progress Overlay
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -105,7 +105,10 @@ internal fun CalibrationWizard(
                 )
                 
                 Text(
-                    text = "Halte das Smartphone stabil in der Halterung.",
+                    text = if (state.calibrationStep == BikeLean.UPRIGHT) 
+                        "Halte das Smartphone stabil in der Halterung." 
+                    else 
+                        "Erst nach links, dann nach rechts neigen.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
@@ -158,30 +161,27 @@ private fun CalibrationProgressIndicator(
             .background(Color.White.copy(alpha = 0.1f)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left Half (Progress grows from center to left)
+        // Left Half
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             contentAlignment = Alignment.CenterEnd
         ) {
-            // Left Max Shadow (Alpha 0.3)
             Box(
                 modifier = Modifier
                     .fillMaxWidth(leftMax)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
             )
-            // Left Current Progress
             Box(
                 modifier = Modifier
                     .fillMaxWidth(leftProgress)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(if (leftMax >= 1f) AccentGreen else MaterialTheme.colorScheme.primary)
             )
         }
 
-        // Center Divider
         Box(
             modifier = Modifier
                 .width(2.dp)
@@ -189,26 +189,24 @@ private fun CalibrationProgressIndicator(
                 .background(Color.White.copy(alpha = 0.3f))
         )
 
-        // Right Half (Progress grows from center to right)
+        // Right Half
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             contentAlignment = Alignment.CenterStart
         ) {
-            // Right Max Shadow (Alpha 0.3)
             Box(
                 modifier = Modifier
                     .fillMaxWidth(rightMax)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
             )
-            // Right Current Progress
             Box(
                 modifier = Modifier
                     .fillMaxWidth(rightProgress)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(if (rightMax >= 1f) AccentGreen else MaterialTheme.colorScheme.primary)
             )
         }
     }
