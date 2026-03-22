@@ -1,31 +1,41 @@
 package com.example.leanangletracker.ui.calibration
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
-import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
-import com.example.leanangletracker.ui.theme.*
+import com.example.leanangletracker.ui.theme.TextSecondary
 
 @Composable
 internal fun CalibrationWizard(
     state: CalibrationUiState,
     onCaptureUpright: () -> Unit,
-    onContinueFallback: () -> Unit
+    onContinueFallback: () -> Unit // Ignored in manual mode
 ) {
     Box(
         modifier = Modifier
@@ -55,21 +65,19 @@ internal fun CalibrationWizard(
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
-                // Determine if we should show the "return to upright" animation
-                val isReturningUpright = state.uprightRecognitionProgress > 0f || state.tiltRecognitionProgress >= 1f
-                
-                // Use key to restart the animation when phase changes
-                key(isReturningUpright, state.calibrationStep) {
-                    CalibrationBikeLeanAnimation(
-                        modifier = Modifier.fillMaxSize(0.8f),
-                        // Note: CalibrationBikeLeanAnimation animates from bikeAnimationTo -> bikeAnimationFrom 
-                        // based on its internal 'start' state logic.
-                        bikeAnimationFrom = if (isReturningUpright) BikeLean.UPRIGHT else state.calibrationStep,
-                        bikeAnimationTo = if (isReturningUpright) (if (state.calibrationStep == BikeLean.LEFT) BikeLean.LEFT else BikeLean.RIGHT) else BikeLean.UPRIGHT
-                    )
+                val animTarget = when(state.calibrationStep) {
+                    BikeLean.LEFT -> BikeLean.LEFT
+                    BikeLean.RIGHT -> BikeLean.RIGHT
+                    else -> BikeLean.UPRIGHT
                 }
+
+                CalibrationBikeLeanAnimation(
+                    modifier = Modifier.fillMaxSize(0.8f),
+                    bikeAnimationFrom = animTarget,
+                    bikeAnimationTo = BikeLean.UPRIGHT
+                )
                 
-                // Progress Overlay
+                // Progress Overlay (Shows the max reached amplitude in current direction)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -77,10 +85,7 @@ internal fun CalibrationWizard(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     CalibrationProgressIndicator(
-                        leftProgress = state.leftProgress,
-                        leftMax = state.leftMax,
-                        rightProgress = state.rightProgress,
-                        rightMax = state.rightMax
+                        state
                     )
                 }
             }
@@ -90,10 +95,11 @@ internal fun CalibrationWizard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val instructionText = if (state.tiltRecognitionProgress >= 1f) {
-                    "Sehr gut! Jetzt richte das Motorrad wieder auf."
-                } else {
-                    stringResource(state.instructionsResId)
+                val instructionText = when(state.calibrationStep) {
+                    BikeLean.UPRIGHT -> "Stelle dein Motorrad möglichst aufrecht."
+                    BikeLean.LEFT -> "Neige dein Motorrad nach Links und wieder zurück."
+                    BikeLean.RIGHT -> "Neige dein Motorrad nach Rechts und wieder zurück."
+                    else -> "Kalibrierung abgeschlossen."
                 }
 
                 Text(
@@ -105,19 +111,16 @@ internal fun CalibrationWizard(
                 )
                 
                 Text(
-                    text = if (state.calibrationStep == BikeLean.UPRIGHT) 
-                        "Halte das Smartphone stabil in der Halterung." 
-                    else 
-                        "Erst nach links, dann nach rechts neigen.",
+                    text = "Bestätige jeden Schritt mit dem Button unten.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
                 )
             }
 
-            // Action Button
+            // Action Button (Manual step progression)
             Box(modifier = Modifier.height(80.dp), contentAlignment = Alignment.Center) {
-                if (state.calibrationStep == BikeLean.UPRIGHT && !state.isCalibrated) {
+                if (state.calibrationStep != BikeLean.DONE) {
                     Button(
                         onClick = onCaptureUpright,
                         modifier = Modifier
@@ -126,18 +129,16 @@ internal fun CalibrationWizard(
                         shape = RoundedCornerShape(16.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
+                        val buttonText = when(state.calibrationStep) {
+                            BikeLean.UPRIGHT -> "Position bestätigen"
+                            BikeLean.LEFT -> "Links bestätigt"
+                            BikeLean.RIGHT -> "Rechts bestätigt & Fertig"
+                            else -> ""
+                        }
                         Text(
-                            text = stringResource(R.string.action_confirm_bike_upright),
+                            text = buttonText,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else if (state.calibrationStep != BikeLean.DONE) {
-                    TextButton(onClick = onContinueFallback) {
-                        Text(
-                            text = "Schritt überspringen",
-                            color = TextSecondary,
-                            style = MaterialTheme.typography.labelLarge
                         )
                     }
                 }
@@ -148,10 +149,7 @@ internal fun CalibrationWizard(
 
 @Composable
 private fun CalibrationProgressIndicator(
-    leftProgress: Float,
-    leftMax: Float,
-    rightProgress: Float,
-    rightMax: Float
+    state: CalibrationUiState
 ) {
     Row(
         modifier = Modifier
@@ -161,7 +159,7 @@ private fun CalibrationProgressIndicator(
             .background(Color.White.copy(alpha = 0.1f)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left Half
+        // Left Half (Current step's detected peak)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -170,16 +168,18 @@ private fun CalibrationProgressIndicator(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(leftMax)
+                    .fillMaxWidth(state.leftMax)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    .background(Color.Green.copy(alpha = .3f))
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(leftProgress)
-                    .fillMaxHeight()
-                    .background(if (leftMax >= 1f) AccentGreen else MaterialTheme.colorScheme.primary)
-            )
+            if (state.calibrationStep == BikeLean.LEFT) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(state.currentProgress)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
         }
 
         Box(
@@ -198,16 +198,18 @@ private fun CalibrationProgressIndicator(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(rightMax)
+                    .fillMaxWidth(state.rightMax)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    .background(Color.Green.copy(.3f))
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(rightProgress)
-                    .fillMaxHeight()
-                    .background(if (rightMax >= 1f) AccentGreen else MaterialTheme.colorScheme.primary)
-            )
+            if (state.calibrationStep == BikeLean.RIGHT) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(state.currentProgress)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
         }
     }
 }
