@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -109,15 +109,32 @@ internal fun LeanAngleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (trackingState.gpsTrackingEnabled && !trackingState.trackingStarted) {
-                        FilledTonalIconButton(onClick = onStartTracking) {
+                        // RECORD START BUTTON
+                        FilledTonalIconButton(
+                            onClick = onStartTracking,
+                        ) {
                             Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = "Start Tracking"
+                                Icons.Default.FiberManualRecord,
+                                contentDescription = "Start Recording",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
                     if (trackingState.trackingStarted) {
+                        // ACTIVE RECORDING BUTTON (STOP)
                         Box(contentAlignment = Alignment.Center) {
+                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                            val alpha by infiniteTransition.animateFloat(
+                                initialValue = 0.4f,
+                                targetValue = 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "alpha"
+                            )
+
                             CircularProgressIndicator(
                                 modifier = Modifier.size(42.dp),
                                 color = MaterialTheme.colorScheme.primary,
@@ -127,17 +144,18 @@ internal fun LeanAngleScreen(
                                 onClick = onFinishRide,
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(ErrorRed.copy(alpha = 0.1f))
+                                    .background(ErrorRed.copy(alpha = 0.15f * alpha))
                             ) {
                                 Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Finish",
-                                    tint = ErrorRed
+                                    Icons.Default.Stop,
+                                    contentDescription = "Stop Recording",
+                                    tint = ErrorRed.copy(alpha = alpha),
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
                     } else {
-                        // History Button
+                        // HISTORY BUTTON
                         IconButton(
                             onClick = onOpenHistory,
                             modifier = Modifier
@@ -145,7 +163,7 @@ internal fun LeanAngleScreen(
                                 .background(MaterialTheme.colorScheme.surface)
                         ) {
                             Icon(
-                                Icons.Default.Menu,
+                                Icons.AutoMirrored.Filled.List,
                                 contentDescription = "History",
                                 tint = MaterialTheme.colorScheme.primary
                             )
