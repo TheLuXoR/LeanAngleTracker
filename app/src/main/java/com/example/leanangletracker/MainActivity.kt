@@ -123,8 +123,12 @@ class MainActivity : ComponentActivity() {
                                 onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                 onStartTracking = viewModel::startTracking,
                                 onFinishRide = {
+                                    val hadData = state.tracking.hasTrackData
                                     viewModel.finishRide()
-                                    routeUiState = routeUiState.copy(showHistory = true)
+                                    // Only navigate to history if tracking actually recorded points
+                                    if (hadData) {
+                                        routeUiState = routeUiState.copy(showHistory = true)
+                                    }
                                 },
                                 onCaptureUpright = viewModel::captureUpright,
                                 onContinueCalibrationFallback = viewModel::continueCalibrationFallback

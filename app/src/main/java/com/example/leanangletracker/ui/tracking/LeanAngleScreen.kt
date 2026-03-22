@@ -2,6 +2,7 @@ package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
@@ -17,14 +18,15 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
@@ -91,7 +93,9 @@ internal fun LeanAngleScreen(
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    if (trackingState.gpsActive) {
+                    if (trackingState.trackingStarted && trackingState.currentLatitude == null) {
+                        RainbowSearchGpsText()
+                    } else if (trackingState.gpsActive) {
                         Text(
                             text = "GPS ACTIVE",
                             style = MaterialTheme.typography.labelMedium,
@@ -113,17 +117,24 @@ internal fun LeanAngleScreen(
                         }
                     }
                     if (trackingState.trackingStarted) {
-                        IconButton(
-                            onClick = onFinishRide,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(ErrorRed.copy(alpha = 0.2f))
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Finish",
-                                tint = ErrorRed
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(42.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp
                             )
+                            IconButton(
+                                onClick = onFinishRide,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(ErrorRed.copy(alpha = 0.1f))
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Finish",
+                                    tint = ErrorRed
+                                )
+                            }
                         }
                     } else {
                         // History Button
@@ -217,6 +228,32 @@ internal fun LeanAngleScreen(
     }
 }
 
+@Composable
+private fun RainbowSearchGpsText() {
+    val text = "SEARCHING GPS..."
+    val infiniteTransition = rememberInfiniteTransition(label = "rainbow")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        text.forEachIndexed { index, char ->
+            val color = Color.hsv((phase + index * 15f) % 360f, 0.7f, 0.9f)
+            Text(
+                text = char.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
+    }
+}
 
 @Composable
 private fun TrackingStatsCard(
