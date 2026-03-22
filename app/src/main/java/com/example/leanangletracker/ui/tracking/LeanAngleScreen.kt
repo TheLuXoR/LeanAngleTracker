@@ -34,7 +34,8 @@ import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
-import com.example.leanangletracker.ui.calibration.CalibrationWizard
+import com.example.leanangletracker.ui.calibration.CalibrationWizardLandscape
+import com.example.leanangletracker.ui.calibration.CalibrationWizardPortrait
 import com.example.leanangletracker.ui.theme.*
 import java.util.Locale
 
@@ -73,12 +74,23 @@ internal fun LeanAngleScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         if (!calibrationState.isCalibrated) {
-            CalibrationWizard(
-                state = calibrationState,
-                onCaptureUpright = onCaptureUpright,
-                onContinueFallback = onContinueCalibrationFallback
-            )
-            return@Box
+            if(isLandscape){
+                CalibrationWizardLandscape(
+                    state = calibrationState,
+                    onCaptureUpright = onCaptureUpright,
+                    onContinueFallback = onContinueCalibrationFallback
+                )
+                return@Box
+            }
+            else {
+                CalibrationWizardPortrait(
+                    state = calibrationState,
+                    onCaptureUpright = onCaptureUpright,
+                    onContinueFallback = onContinueCalibrationFallback
+                )
+                return@Box
+            }
+
         }
 
         Column(

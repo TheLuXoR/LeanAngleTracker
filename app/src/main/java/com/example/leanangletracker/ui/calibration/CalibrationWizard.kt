@@ -32,7 +32,115 @@ import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
 import com.example.leanangletracker.ui.theme.TextSecondary
 
 @Composable
-internal fun CalibrationWizard(
+fun CalibrationWizardLandscape(
+    state: CalibrationUiState,
+    onCaptureUpright: () -> Unit,
+    onContinueFallback: () -> Unit // Ignored in manual mode
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically)
+        ) {
+            // Header
+            Text(
+                text = "Kalibrierung",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Row {
+                // Animation Area
+                val animTarget = when (state.calibrationStep) {
+                    BikeLean.LEFT -> BikeLean.LEFT
+                    BikeLean.RIGHT -> BikeLean.RIGHT
+                    else -> BikeLean.UPRIGHT
+                }
+
+                CalibrationBikeLeanAnimation(
+                    modifier = Modifier.fillMaxHeight().aspectRatio(1f),
+                    bikeAnimationFrom = animTarget,
+                    bikeAnimationTo = BikeLean.UPRIGHT
+                )
+
+                // Instructions
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val instructionText = when (state.calibrationStep) {
+                        BikeLean.UPRIGHT -> "Stelle dein Motorrad möglichst aufrecht."
+                        BikeLean.LEFT -> "Neige dein Motorrad nach Links und wieder zurück."
+                        BikeLean.RIGHT -> "Neige dein Motorrad nach Rechts und wieder zurück."
+                        else -> "Kalibrierung abgeschlossen."
+                    }
+
+                    Text(
+                        text = instructionText,
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+
+                    Text(
+                        text = "Bestätige jeden Schritt mit dem Button unten.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    // Progress Overlay (Shows the max reached amplitude in current direction)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        CalibrationProgressIndicator(
+                            state
+                        )
+                    }
+                    // Action Button (Manual step progression)
+                    Box(modifier = Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                        if (state.calibrationStep != BikeLean.DONE) {
+                            Button(
+                                onClick = onCaptureUpright,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                val buttonText = when (state.calibrationStep) {
+                                    BikeLean.UPRIGHT -> "Position bestätigen"
+                                    BikeLean.LEFT -> "Links bestätigt"
+                                    BikeLean.RIGHT -> "Rechts bestätigt & Fertig"
+                                    else -> ""
+                                }
+                                Text(
+                                    text = buttonText,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+}
+
+@Composable
+fun CalibrationWizardPortrait(
     state: CalibrationUiState,
     onCaptureUpright: () -> Unit,
     onContinueFallback: () -> Unit // Ignored in manual mode
@@ -65,7 +173,7 @@ internal fun CalibrationWizard(
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
-                val animTarget = when(state.calibrationStep) {
+                val animTarget = when (state.calibrationStep) {
                     BikeLean.LEFT -> BikeLean.LEFT
                     BikeLean.RIGHT -> BikeLean.RIGHT
                     else -> BikeLean.UPRIGHT
@@ -76,7 +184,7 @@ internal fun CalibrationWizard(
                     bikeAnimationFrom = animTarget,
                     bikeAnimationTo = BikeLean.UPRIGHT
                 )
-                
+
                 // Progress Overlay (Shows the max reached amplitude in current direction)
                 Box(
                     modifier = Modifier
@@ -95,7 +203,7 @@ internal fun CalibrationWizard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val instructionText = when(state.calibrationStep) {
+                val instructionText = when (state.calibrationStep) {
                     BikeLean.UPRIGHT -> "Stelle dein Motorrad möglichst aufrecht."
                     BikeLean.LEFT -> "Neige dein Motorrad nach Links und wieder zurück."
                     BikeLean.RIGHT -> "Neige dein Motorrad nach Rechts und wieder zurück."
@@ -109,7 +217,7 @@ internal fun CalibrationWizard(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                
+
                 Text(
                     text = "Bestätige jeden Schritt mit dem Button unten.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -129,7 +237,7 @@ internal fun CalibrationWizard(
                         shape = RoundedCornerShape(16.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
-                        val buttonText = when(state.calibrationStep) {
+                        val buttonText = when (state.calibrationStep) {
                             BikeLean.UPRIGHT -> "Position bestätigen"
                             BikeLean.LEFT -> "Links bestätigt"
                             BikeLean.RIGHT -> "Rechts bestätigt & Fertig"
