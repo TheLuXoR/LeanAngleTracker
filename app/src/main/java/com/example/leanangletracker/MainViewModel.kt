@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.abs
+import java.util.Calendar
 import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -78,7 +78,8 @@ data class TrackPoint(
 data class RideSession(
     val startedAtMs: Long,
     val endedAtMs: Long,
-    val points: List<TrackPoint>
+    val points: List<TrackPoint>,
+    val name: String? = null
 )
 
 data class TrackingUiState(
@@ -91,6 +92,7 @@ data class TrackingUiState(
     val hasTrackData: Boolean = false,
     val gpsTrackingEnabled: Boolean = false,
     val trackingStarted: Boolean = false,
+    val isPaused: Boolean = false,
     val currentLatitude: Double? = null,
     val currentLongitude: Double? = null,
     val elapsedTimeMs: Long = 0L,
@@ -113,7 +115,9 @@ data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),
     val tracking: TrackingUiState = TrackingUiState(),
     val settings: SettingsUiState = SettingsUiState(),
-    val rideHistory: List<RideSession> = emptyList()
+    val rideHistory: List<RideSession> = emptyList(),
+    val lastSavedRideId: Long? = null,
+    val offerExtendSession: RideSession? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
@@ -137,6 +141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val KEY_FORWARD_Y = "forward_y"
         const val KEY_FORWARD_Z = "forward_z"
         const val CALIBRATION_TILT_MAX_RANGE = 35f
+        const val EXTEND_PROXIMITY_METERS = 500f
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
@@ -161,6 +166,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var lastGyroTimestampNs: Long? = null
     private var speedKmh = 0f
     private var activeRideStartedMs: Long? = null
+    private var accumulatedTimeMs: Long = 0L
+    private var lastResumeMs: Long = 0L
     private var locationUpdatesRunning = false
     private var latestLeanDeg = 0f
     private var latestLeanTimestampNs: Long? = null
@@ -168,6 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var latestGpsTimestampNs: Long? = null
     private var recorderJob: Job? = null
     private var trackLengthMeters = 0f
+    private var isCheckingForExtension = false
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
@@ -311,10 +319,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             stopLocationUpdates()
             ridePoints.clear()
             activeRideStartedMs = null
+            accumulatedTimeMs = 0L
             latestGpsLocation = null
             latestGpsTimestampNs = null
             speedKmh = 0f
             trackLengthMeters = 0f
+            isCheckingForExtension = false
             stopRecorder()
             updateTrackingState {
                 it.copy(
@@ -322,6 +332,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     gpsActive = false,
                     hasTrackData = false,
                     trackingStarted = false,
+                    isPaused = false,
                     currentLatitude = null,
                     currentLongitude = null,
                     elapsedTimeMs = 0L,
@@ -340,15 +351,107 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun startTracking() {
         val state = _uiState.value
         if (!state.settings.gpsTrackingEnabled || !state.settings.locationPermissionGranted) return
+
+        if (!locationUpdatesRunning) {
+            startLocationUpdates()
+        }
+
+        // Check if there's a ride from the same day
+        val lastRide = state.rideHistory.firstOrNull()
+        val isSameDayRideAvailable = lastRide != null && isSameDay(lastRide.endedAtMs, System.currentTimeMillis())
+
+        if (isSameDayRideAvailable) {
+            val currentLoc = latestGpsLocation
+            if (currentLoc != null) {
+                // We have a location, check proximity now
+                val lastPoint = lastRide!!.points.lastOrNull()
+                if (lastPoint != null) {
+                    val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, currentLoc.latitude, currentLoc.longitude)
+                    if (dist < EXTEND_PROXIMITY_METERS) {
+                        _uiState.value = state.copy(offerExtendSession = lastRide)
+                        return
+                    }
+                }
+                performStartNewRide()
+            } else {
+                // No location yet, start tracking UI but wait for first GPS update before deciding extend/new
+                isCheckingForExtension = true
+                updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
+            }
+        } else {
+            performStartNewRide()
+        }
+    }
+
+    fun confirmExtendRide(extend: Boolean) {
+        val offer = _uiState.value.offerExtendSession
+        _uiState.value = _uiState.value.copy(offerExtendSession = null)
+        if (extend && offer != null) {
+            performExtendRide(offer)
+        } else {
+            performStartNewRide()
+        }
+    }
+
+    private fun performStartNewRide() {
         if (!locationUpdatesRunning) {
             startLocationUpdates()
         }
         activeRideStartedMs = System.currentTimeMillis()
+        accumulatedTimeMs = 0L
+        lastResumeMs = activeRideStartedMs!!
+        trackLengthMeters = 0f
+        ridePoints.clear()
         startRecorder()
-        updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
+        updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = false) }
+    }
+
+    private fun performExtendRide(session: RideSession) {
+        if (!locationUpdatesRunning) {
+            startLocationUpdates()
+        }
+        activeRideStartedMs = session.startedAtMs
+        // Calculate previous track length
+        trackLengthMeters = 0f
+        for (i in 0 until session.points.size - 1) {
+            trackLengthMeters += distanceMeters(
+                session.points[i].latitude, session.points[i].longitude,
+                session.points[i+1].latitude, session.points[i+1].longitude
+            )
+        }
+        // Accumulated time from previous session
+        accumulatedTimeMs = session.endedAtMs - session.startedAtMs
+        lastResumeMs = System.currentTimeMillis()
+        
+        ridePoints.clear()
+        ridePoints.addAll(session.points)
+        
+        // Remove the ride from history as it will be replaced
+        rideRepository.deleteRide(session)
+        _uiState.value = _uiState.value.copy(rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != session.startedAtMs })
+
+        startRecorder()
+        updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = true) }
+    }
+
+    fun togglePauseTracking() {
+        val currentState = _uiState.value.tracking
+        if (!currentState.trackingStarted) return
+        
+        val now = System.currentTimeMillis()
+        if (currentState.isPaused) {
+            // Resuming
+            lastResumeMs = now
+            updateTrackingState { it.copy(isPaused = false) }
+        } else {
+            // Pausing
+            accumulatedTimeMs += (now - lastResumeMs)
+            updateTrackingState { it.copy(isPaused = true) }
+        }
     }
 
     fun finishRide() {
+        isCheckingForExtension = false
         val pointsSnapshot = ridePoints.toList()
         val started = activeRideStartedMs ?: System.currentTimeMillis()
         if (pointsSnapshot.isNotEmpty()) {
@@ -360,13 +463,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             rideRepository.saveRide(newSession)
             
             _uiState.value = _uiState.value.copy(
-                rideHistory = listOf(newSession) + _uiState.value.rideHistory
+                rideHistory = (listOf(newSession) + _uiState.value.rideHistory).sortedByDescending { it.startedAtMs },
+                lastSavedRideId = newSession.startedAtMs
             )
         }
         stopLocationUpdates()
         stopRecorder()
         ridePoints.clear()
         activeRideStartedMs = null
+        accumulatedTimeMs = 0L
         latestGpsLocation = null
         latestGpsTimestampNs = null
         speedKmh = 0f
@@ -377,6 +482,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 speedKmh = 0f,
                 gpsActive = false,
                 trackingStarted = false,
+                isPaused = false,
                 currentLatitude = null,
                 currentLongitude = null,
                 elapsedTimeMs = 0L,
@@ -391,6 +497,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         rideRepository.deleteRide(session)
         _uiState.value = _uiState.value.copy(
             rideHistory = _uiState.value.rideHistory.filter { it != session }
+        )
+    }
+
+    fun updateRideName(session: RideSession, newName: String) {
+        val updatedSession = session.copy(name = newName)
+        rideRepository.saveRide(updatedSession)
+        _uiState.value = _uiState.value.copy(
+            rideHistory = _uiState.value.rideHistory.map {
+                if (it.startedAtMs == session.startedAtMs) updatedSession else it
+            }
+        )
+    }
+
+    fun combineRides(sessions: List<RideSession>) {
+        if (sessions.size < 2) return
+        val sorted = sessions.sortedBy { it.startedAtMs }
+        val mergedPoints = sorted.flatMap { it.points }.sortedBy { it.timestampMs }
+        val newSession = RideSession(
+            startedAtMs = sorted.first().startedAtMs,
+            endedAtMs = sorted.last().endedAtMs,
+            points = mergedPoints,
+            name = "Combined Ride"
+        )
+        
+        // Save new
+        rideRepository.saveRide(newSession)
+        
+        // Delete old
+        sessions.forEach { rideRepository.deleteRide(it) }
+        
+        val idsToRemove = sessions.map { it.startedAtMs }.toSet()
+        _uiState.value = _uiState.value.copy(
+            rideHistory = (listOf(newSession) + _uiState.value.rideHistory.filter { it.startedAtMs !in idsToRemove })
+                .sortedByDescending { it.startedAtMs }
         )
     }
 
@@ -715,9 +855,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestGpsTimestampNs = location.elapsedRealtimeNanos
         speedKmh = (location.speed * 3.6f).coerceAtLeast(0f)
 
+        if (isCheckingForExtension) {
+            isCheckingForExtension = false
+            val lastRide = _uiState.value.rideHistory.firstOrNull()
+            if (lastRide != null) {
+                val lastPoint = lastRide.points.lastOrNull()
+                if (lastPoint != null) {
+                    val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, location.latitude, location.longitude)
+                    if (dist < EXTEND_PROXIMITY_METERS) {
+                        _uiState.value = _uiState.value.copy(offerExtendSession = lastRide)
+                        return
+                    }
+                }
+            }
+            performStartNewRide()
+        }
+
         if (_uiState.value.settings.gpsTrackingEnabled) {
-            if (_uiState.value.tracking.trackingStarted && activeRideStartedMs == null) {
+            if (_uiState.value.tracking.trackingStarted && activeRideStartedMs == null && !isCheckingForExtension) {
                 activeRideStartedMs = System.currentTimeMillis()
+                lastResumeMs = activeRideStartedMs!!
             }
             if (!_uiState.value.tracking.trackingStarted) {
                 updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning, currentLatitude = location.latitude, currentLongitude = location.longitude) }
@@ -758,7 +915,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun recordFusedSample() {
         val state = _uiState.value
-        if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted) return
+        if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted || state.tracking.isPaused || isCheckingForExtension) return
 
         val gps = latestGpsLocation ?: return
         val nowNs = SystemClock.elapsedRealtimeNanos()
@@ -792,7 +949,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             lapIndex = 0
         )
 
-        val elapsedMs = activeRideStartedMs?.let { (nowMs - it).coerceAtLeast(0L) } ?: 0L
+        val elapsedMs = accumulatedTimeMs + if (!state.tracking.isPaused) (nowMs - lastResumeMs) else 0L
         val avgSpeed = if (ridePoints.isNotEmpty()) ridePoints.map { it.speedKmh }.average().toFloat() else 0f
         val avgLean = if (ridePoints.isNotEmpty()) ridePoints.map { kotlin.math.abs(it.leanAngleDeg.toDouble()) }.average().toFloat() else 0f
 
@@ -816,6 +973,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val results = FloatArray(1)
         Location.distanceBetween(lat1, lon1, lat2, lon2, results)
         return results[0].coerceAtLeast(0f)
+    }
+
+    private fun isSameDay(ms1: Long, ms2: Long): Boolean {
+        val cal1 = Calendar.getInstance().apply { timeInMillis = ms1 }
+        val cal2 = Calendar.getInstance().apply { timeInMillis = ms2 }
+        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+               cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
     }
 
     override fun onCleared() {

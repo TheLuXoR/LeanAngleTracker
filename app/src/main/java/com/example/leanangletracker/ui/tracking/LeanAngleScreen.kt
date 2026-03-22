@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
+import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizard
 import com.example.leanangletracker.ui.theme.*
@@ -43,6 +46,9 @@ internal fun LeanAngleScreen(
     onOpenHistory: () -> Unit,
     onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
+    onTogglePause: () -> Unit = {},
+    offerExtend: RideSession? = null,
+    onConfirmExtend: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     onCaptureUpright: () -> Unit,
     onContinueCalibrationFallback: () -> Unit
@@ -97,9 +103,9 @@ internal fun LeanAngleScreen(
                         RainbowSearchGpsText()
                     } else if (trackingState.gpsActive) {
                         Text(
-                            text = "GPS ACTIVE",
+                            text = if (trackingState.isPaused) "PAUSED" else "GPS ACTIVE",
                             style = MaterialTheme.typography.labelMedium,
-                            color = AccentGreen
+                            color = if (trackingState.isPaused) Color.Yellow else AccentGreen
                         )
                     }
                 }
@@ -109,9 +115,12 @@ internal fun LeanAngleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (trackingState.gpsTrackingEnabled && !trackingState.trackingStarted) {
-                        // RECORD START BUTTON
                         FilledTonalIconButton(
                             onClick = onStartTracking,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         ) {
                             Icon(
                                 Icons.Default.FiberManualRecord,
@@ -122,40 +131,64 @@ internal fun LeanAngleScreen(
                         }
                     }
                     if (trackingState.trackingStarted) {
-                        // ACTIVE RECORDING BUTTON (STOP)
-                        Box(contentAlignment = Alignment.Center) {
-                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                            val alpha by infiniteTransition.animateFloat(
-                                initialValue = 0.4f,
-                                targetValue = 1f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(1000, easing = FastOutSlowInEasing),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "alpha"
+                        // Pause / Resume
+                        IconButton(
+                            onClick = onTogglePause,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                        ) {
+                            Icon(
+                                if (trackingState.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = if (trackingState.isPaused) "Resume" else "Pause",
+                                tint = MaterialTheme.colorScheme.primary
                             )
+                        }
 
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(42.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 3.dp
-                            )
-                            IconButton(
-                                onClick = onFinishRide,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(ErrorRed.copy(alpha = 0.15f * alpha))
-                            ) {
-                                Icon(
-                                    Icons.Default.Stop,
-                                    contentDescription = "Stop Recording",
-                                    tint = ErrorRed.copy(alpha = alpha),
-                                    modifier = Modifier.size(24.dp)
+                        // Stop
+                        Box(contentAlignment = Alignment.Center) {
+                            if (!trackingState.isPaused) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                                val alpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.4f,
+                                    targetValue = 1f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1000, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "alpha"
                                 )
+
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(42.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 3.dp
+                                )
+                                IconButton(
+                                    onClick = onFinishRide,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(ErrorRed.copy(alpha = 0.15f * alpha))
+                                ) {
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = "Stop Recording",
+                                        tint = ErrorRed.copy(alpha = alpha),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = onFinishRide,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(ErrorRed.copy(alpha = 0.1f))
+                                ) {
+                                    Icon(Icons.Default.Stop, contentDescription = "Stop Recording", tint = ErrorRed)
+                                }
                             }
                         }
                     } else {
-                        // HISTORY BUTTON
                         IconButton(
                             onClick = onOpenHistory,
                             modifier = Modifier
@@ -217,7 +250,6 @@ internal fun LeanAngleScreen(
                         )
                     }
                 }
-
             } else {
                 TachoGauge(
                     currentDeg = trackingState.leanAngleDeg,
@@ -243,6 +275,24 @@ internal fun LeanAngleScreen(
                 }
             }
         }
+    }
+
+    if (offerExtend != null) {
+        AlertDialog(
+            onDismissRequest = { onConfirmExtend(false) },
+            title = { Text("Ride fortsetzen?") },
+            text = { Text("Du befindest dich in der Nähe des Endpunkts deiner letzten Fahrt von heute. Möchtest du diese Fahrt fortsetzen oder eine neue starten?") },
+            confirmButton = {
+                Button(onClick = { onConfirmExtend(true) }) {
+                    Text("Fortsetzen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onConfirmExtend(false) }) {
+                    Text("Neu starten")
+                }
+            }
+        )
     }
 }
 
@@ -318,7 +368,6 @@ private fun formatElapsedTime(elapsedMs: Long): String {
         String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
-
 
 @Composable
 private fun TachoGauge(

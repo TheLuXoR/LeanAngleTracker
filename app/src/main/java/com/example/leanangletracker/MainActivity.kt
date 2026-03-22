@@ -125,11 +125,13 @@ class MainActivity : ComponentActivity() {
                                 onFinishRide = {
                                     val hadData = state.tracking.hasTrackData
                                     viewModel.finishRide()
-                                    // Only navigate to history if tracking actually recorded points
                                     if (hadData) {
                                         routeUiState = routeUiState.copy(showHistory = true)
                                     }
                                 },
+                                onTogglePause = viewModel::togglePauseTracking,
+                                offerExtend = state.offerExtendSession,
+                                onConfirmExtend = viewModel::confirmExtendRide,
                                 onCaptureUpright = viewModel::captureUpright,
                                 onContinueCalibrationFallback = viewModel::continueCalibrationFallback
                             )
@@ -157,7 +159,10 @@ class MainActivity : ComponentActivity() {
                             AppRoute.TrackReview -> RideHistoryScreen(
                                 rideHistory = state.rideHistory,
                                 onBack = { routeUiState = routeUiState.copy(showHistory = false) },
-                                onDeleteRide = viewModel::deleteRide
+                                onDeleteRide = viewModel::deleteRide,
+                                lastSavedRideId = state.lastSavedRideId,
+                                onUpdateName = viewModel::updateRideName,
+                                onCombineRides = viewModel::combineRides
                             )
                         }
                     }

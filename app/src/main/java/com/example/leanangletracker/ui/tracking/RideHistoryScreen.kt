@@ -2,32 +2,34 @@ package com.example.leanangletracker.ui.tracking
 
 import android.content.Context
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,18 +44,63 @@ import java.util.*
 internal fun RideHistoryScreen(
     rideHistory: List<RideSession>,
     onBack: () -> Unit,
-    onDeleteRide: (RideSession) -> Unit
+    onDeleteRide: (RideSession) -> Unit,
+    lastSavedRideId: Long? = null,
+    onUpdateName: (RideSession, String) -> Unit = { _, _ -> },
+    onCombineRides: (List<RideSession>) -> Unit = {}
 ) {
-    val context = LocalContext.current
-    var expandedIndex by rememberSaveable { mutableIntStateOf(0) }
+    val listState = rememberLazyListState()
+    var expandedIndex by rememberSaveable { mutableIntStateOf(if (lastSavedRideId != null) 0 else -1) }
+    var selectedSessionIds by remember { mutableStateOf(setOf<Long>()) }
+    val isSelectionMode = selectedSessionIds.isNotEmpty()
+
+    BackHandler(isSelectionMode) {
+        selectedSessionIds = emptySet()
+    }
+
+    LaunchedEffect(lastSavedRideId) {
+        if (lastSavedRideId != null && rideHistory.isNotEmpty()) {
+            val index = rideHistory.indexOfFirst { it.startedAtMs == lastSavedRideId }
+            if (index != -1) {
+                expandedIndex = index
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ride History", style = MaterialTheme.typography.titleLarge) },
+                title = { 
+                    if (isSelectionMode) {
+                        Text("${selectedSessionIds.size} ausgewählt")
+                    } else {
+                        Text("Ride History", style = MaterialTheme.typography.titleLarge)
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = { if (isSelectionMode) selectedSessionIds = emptySet() else onBack() }) {
+                        Icon(
+                            if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, 
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    if (isSelectionMode && selectedSessionIds.size >= 2) {
+                        Button(
+                            onClick = {
+                                val toCombine = rideHistory.filter { it.startedAtMs in selectedSessionIds }
+                                onCombineRides(toCombine)
+                                selectedSessionIds = emptySet()
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Merge, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Zusammenführen")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -62,24 +109,41 @@ internal fun RideHistoryScreen(
     ) { padding ->
         if (rideHistory.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No recordings yet.", style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
+                Text("Noch keine Aufzeichnungen.", style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                userScrollEnabled = true,
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(rideHistory) { index, session ->
+                itemsIndexed(rideHistory, key = { _, s -> s.startedAtMs }) { index, session ->
                     val isExpanded = expandedIndex == index
+                    val isSelected = session.startedAtMs in selectedSessionIds
+                    val isNewlySaved = session.startedAtMs == lastSavedRideId
+                    
                     RideHistoryItem(
                         session = session,
                         isExpanded = isExpanded,
-                        onToggle = { expandedIndex = if (isExpanded) -1 else index },
-                        onDelete = { onDeleteRide(session) }
+                        isSelected = isSelected,
+                        isNewlySaved = isNewlySaved,
+                        onToggle = { 
+                            if (isSelectionMode) {
+                                selectedSessionIds = if (isSelected) selectedSessionIds - session.startedAtMs else selectedSessionIds + session.startedAtMs
+                            } else {
+                                expandedIndex = if (isExpanded) -1 else index 
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) {
+                                selectedSessionIds = setOf(session.startedAtMs)
+                            }
+                        },
+                        onDelete = { onDeleteRide(session) },
+                        onUpdateName = { onUpdateName(session, it) }
                     )
                 }
             }
@@ -87,65 +151,127 @@ internal fun RideHistoryScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RideHistoryItem(
     session: RideSession,
     isExpanded: Boolean,
+    isSelected: Boolean,
+    isNewlySaved: Boolean,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit,
+    onUpdateName: (String) -> Unit
 ) {
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         if (uri != null) exportGpx(context, uri, session)
     }
 
+    var isEditingName by remember { mutableStateOf(false) }
+    var editedName by remember(session.name) { mutableStateOf(session.name ?: "") }
+
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            isNewlySaved -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            isExpanded -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        label = "item_color"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isExpanded) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = if (isSelected) CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)) else null
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onToggle() },
+                    .combinedClickable(
+                        onClick = onToggle,
+                        onLongClick = onLongClick
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = formatDate(session.startedAtMs),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                if (isSelected) {
+                    Icon(
+                        Icons.Default.CheckCircle, 
+                        contentDescription = "Selected", 
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 12.dp)
                     )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    if (isEditingName && isExpanded) {
+                        TextField(
+                            value = editedName,
+                            onValueChange = { editedName = it },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            placeholder = { Text("Fahrt Name") },
+                            trailingIcon = {
+                                IconButton(onClick = { 
+                                    onUpdateName(editedName)
+                                    isEditingName = false 
+                                }) {
+                                    Icon(Icons.Default.Check, contentDescription = "Speichern")
+                                }
+                            },
+                            singleLine = true
+                        )
+                    } else {
+                        val titleText = if (session.name.isNullOrBlank()) {
+                            formatDate(session.startedAtMs)
+                        } else {
+                            "${session.name}: ${formatDate(session.startedAtMs)}"
+                        }
+                        
+                        Text(
+                            text = titleText,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
-                        text = "${session.points.size} points recorded",
+                        text = "${session.points.size} Wegpunkte aufgezeichnet",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                 }
                 
                 Row {
-                    if (isExpanded) {
+                    if (isExpanded && !isSelected) {
+                        IconButton(onClick = { isEditingName = !isEditingName }) {
+                            Icon(
+                                if (isEditingName) Icons.Default.Check else Icons.Default.Edit,
+                                contentDescription = "Name bearbeiten",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(onClick = { exportLauncher.launch("ride-${session.startedAtMs}.gpx") }) {
-                            Icon(Icons.Default.Share, contentDescription = "Export", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Share, contentDescription = "Exportieren", tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Default.Delete, contentDescription = "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
                     }
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Expand",
-                        tint = TextSecondary
-                    )
+                    if (!isSelected) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Details",
+                            tint = TextSecondary
+                        )
+                    }
                 }
             }
 
             AnimatedVisibility(
-                visible = isExpanded,
+                visible = isExpanded && !isSelected,
                 enter = expandVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)),
                 exit = shrinkVertically(animationSpec = tween(300, easing = FastOutSlowInEasing))
             ) {
@@ -163,7 +289,7 @@ private fun exportGpx(context: Context, uri: Uri, rideSession: RideSession) {
         appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
         appendLine("<gpx version=\"1.1\" creator=\"LeanAngleTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">")
         appendLine("  <trk>")
-        appendLine("    <name>Ride ${rideSession.startedAtMs}</name>")
+        appendLine("    <name>${rideSession.name ?: "Ride ${rideSession.startedAtMs}"}</name>")
         appendLine("    <trkseg>")
         rideSession.points.forEach { point ->
             appendLine("      <trkpt lat=\"${point.latitude}\" lon=\"${point.longitude}\">")
