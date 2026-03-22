@@ -68,6 +68,7 @@ internal fun RideHistoryScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
+                userScrollEnabled = true,
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

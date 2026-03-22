@@ -1,5 +1,6 @@
 package com.example.leanangletracker.ui.tracking
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -7,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
@@ -14,6 +16,7 @@ import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.min
 import kotlin.math.pow
 
 @Composable
@@ -37,69 +40,132 @@ internal fun RideReviewTemplate(
     val selectedPoint = rideSession.points[selectedIndex]
     val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
 
-    // Map zoom to a number of visible points in the graph.
-    // At zoom 16 (default), maybe show 100 points. 
-    // Zooming in (higher zoom) shows fewer points (more detail).
-    // Zooming out (lower zoom) shows more points.
     val visiblePoints = remember(currentZoom, rideSession.points.size) {
         val basePoints = 100.0
         val zoomFactor = 2.0.pow(16.0 - currentZoom)
-        (basePoints * zoomFactor).toInt().coerceIn(20, rideSession.points.size)
+        (basePoints * zoomFactor).toInt().coerceIn(min(20 ,rideSession.points.size ), rideSession.points.size)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Box(
-            modifier = Modifier
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        Row(
+            modifier = modifier
                 .fillMaxWidth()
-                .height(250.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OSMTrackMap(
-                rideSession = rideSession,
+            // Left Side: Map and JogWheel
+            Column(
+                modifier = Modifier.weight(1.2f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                ) {
+                    OSMTrackMap(
+                        rideSession = rideSession,
+                        selectedIndex = selectedIndex,
+                        onMapPointSelected = { selectedIndex = it },
+                        onZoomChanged = { currentZoom = it },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                JogWheel(
+                    value = selectedIndex,
+                    onValueChange = { selectedIndex = it },
+                    range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
+                )
+            }
+
+            // Right Side: Stats and Graph
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
+                    StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
+                    StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
+                }
+
+                LeanHistoryGraph(
+                    values = allLeanValues,
+                    selectedIndex = selectedIndex,
+                    visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                )
+
+                Text(
+                    text = "Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(250.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                OSMTrackMap(
+                    rideSession = rideSession,
+                    selectedIndex = selectedIndex,
+                    onMapPointSelected = { selectedIndex = it },
+                    onZoomChanged = { currentZoom = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
+                StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
+                StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
+            }
+
+            LeanHistoryGraph(
+                values = allLeanValues,
                 selectedIndex = selectedIndex,
-                onMapPointSelected = { selectedIndex = it },
-                onZoomChanged = { currentZoom = it },
-                modifier = Modifier.fillMaxSize()
+                visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            )
+
+            JogWheel(
+                value = selectedIndex,
+                onValueChange = { selectedIndex = it },
+                range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
+            )
+            
+            Text(
+                text = "Use the jog wheel to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary
             )
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
-            StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
-            StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
-        }
-
-        // The graph now shows a subset centered on selectedIndex, 
-        // with the window size controlled by map zoom.
-        LeanHistoryGraph(
-            values = allLeanValues,
-            selectedIndex = selectedIndex,
-            visibleRangePoints = if (currentZoom > 10) visiblePoints else null, // Show all if zoomed out very far
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-        )
-
-        JogWheel(
-            value = selectedIndex,
-            onValueChange = { selectedIndex = it },
-            range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
-        )
-        
-        Text(
-            text = "Use the jog wheel to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
-            style = MaterialTheme.typography.labelSmall,
-            color = TextSecondary
-        )
     }
 }
 
