@@ -1,0 +1,97 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:name="road_group"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:fillColor="#2A2C2E"
+            android:fillAlpha="0.18"
+            android:pathData="M29,108 C26,86 28,63 40,45 C50,29 66,20 83,9 L90,14 C76,24 64,33 57,46 C48,60 46,81 50,108 Z" />
+        <path
+            android:fillColor="#111315"
+            android:fillAlpha="0.78"
+            android:pathData="M33,108 C30,87 31,67 42,50 C51,36 66,28 82,18 L86,21 C72,30 60,39 52,52 C43,66 41,86 45,108 Z" />
+        <path
+            android:strokeColor="#5D6164"
+            android:strokeAlpha="0.55"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6"
+            android:pathData="M63,58 L66,55" />
+        <path
+            android:strokeColor="#5D6164"
+            android:strokeAlpha="0.42"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.4"
+            android:pathData="M68,50 L71,47" />
+        <path
+            android:strokeColor="#5D6164"
+            android:strokeAlpha="0.32"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.2"
+            android:pathData="M73,42 L76,39" />
+    </group>
+
+    <group
+        android:name="bike_group"
+        android:pivotX="54"
+        android:pivotY="74"
+        android:rotation="35"
+        android:scaleX="0.2"
+        android:scaleY="0.2"
+        android:translateX="54"
+        android:translateY="-14">
+        <path
+            android:name="shadow"
+            android:fillColor="#000000"
+            android:fillAlpha="0.22"
+            android:pathData="M48,72 C50.5,70.8 57.5,70.8 60,72 C57.5,73.2 50.5,73.2 48,72 Z" />
+        <path
+            android:name="tire"
+            android:fillColor="#1A1C1E"
+            android:pathData="M50.2,56 H57.8 A3.8,3.8 0 0 1 61.6,59.8 V72 H46.4 V59.8 A3.8,3.8 0 0 1 50.2,56 Z" />
+        <path
+            android:name="fork_left"
+            android:strokeColor="#454749"
+            android:strokeLineCap="round"
+            android:strokeWidth="2.1"
+            android:pathData="M49.3,64 L46.7,43.5" />
+        <path
+            android:name="fork_right"
+            android:strokeColor="#454749"
+            android:strokeLineCap="round"
+            android:strokeWidth="2.1"
+            android:pathData="M58.7,64 L61.3,43.5" />
+        <path
+            android:name="handlebar"
+            android:strokeColor="#2D2F31"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.8"
+            android:pathData="M42,40.5 H66" />
+        <path
+            android:name="fairing"
+            android:fillColor="#4F86F7"
+            android:pathData="M54,36 L45,42.8 L47,56.5 H61 L63,42.8 Z" />
+        <path
+            android:name="windshield"
+            android:fillColor="#B5D4FF"
+            android:fillAlpha="0.45"
+            android:pathData="M49,40.5 H59 L57.2,33.2 H50.8 Z" />
+        <path
+            android:name="headlight"
+            android:fillColor="#F8FBFF"
+            android:pathData="M54,44.2 m-2.45,0 a2.45,2.45 0 1,0 4.9,0 a2.45,2.45 0 1,0 -4.9,0" />
+        <path
+            android:name="mirror_left"
+            android:fillColor="#2D2F31"
+            android:pathData="M39,35.8 H42.8 A1.1,1.1 0 0 1 43.9,36.9 V38.6 A1.1,1.1 0 0 1 42.8,39.7 H39 Z" />
+        <path
+            android:name="mirror_right"
+            android:fillColor="#2D2F31"
+            android:pathData="M64.1,36.9 A1.1,1.1 0 0 1 65.2,35.8 H69 V39.7 H65.2 A1.1,1.1 0 0 1 64.1,38.6 Z" />
+    </group>
+</vector>
