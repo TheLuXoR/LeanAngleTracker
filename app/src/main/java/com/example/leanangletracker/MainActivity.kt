@@ -1,6 +1,7 @@
 package com.example.leanangletracker
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -9,10 +10,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -38,6 +35,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -60,6 +58,16 @@ class MainActivity : ComponentActivity() {
                         viewModel.onLocationPermissionResult(granted)
                     }
 
+                    // Handle Foreground Service for tracking
+                    LaunchedEffect(state.tracking.trackingStarted) {
+                        val intent = Intent(this@MainActivity, TrackingService::class.java)
+                        if (state.tracking.trackingStarted) {
+                            ContextCompat.startForegroundService(this@MainActivity, intent)
+                        } else {
+                            stopService(intent)
+                        }
+                    }
+
                     LaunchedEffect(routeUiState.introStage) {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
                         delay(800)
@@ -80,10 +88,10 @@ class MainActivity : ComponentActivity() {
 
                             slideInVertically(
                                     animationSpec = tween(300),
-                                    initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight } // slide from bottom
+                                    initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
                                 ) togetherWith slideOutVertically(
                                     animationSpec = tween(300),
-                                    targetOffsetY = { fullHeight -> if (forward) fullHeight else -fullHeight } // slide to top
+                                    targetOffsetY = { fullHeight -> if (forward) fullHeight else -fullHeight }
                                 )
                         },
                         contentKey = { it::class },
