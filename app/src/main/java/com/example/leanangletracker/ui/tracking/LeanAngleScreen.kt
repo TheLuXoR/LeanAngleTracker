@@ -2,12 +2,35 @@ package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,18 +40,35 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
@@ -36,8 +76,20 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizardLandscape
 import com.example.leanangletracker.ui.calibration.CalibrationWizardPortrait
-import com.example.leanangletracker.ui.theme.*
+import com.example.leanangletracker.ui.theme.AccentGreen
+import com.example.leanangletracker.ui.theme.ErrorRed
+import com.example.leanangletracker.ui.theme.GaugeBackground
+import com.example.leanangletracker.ui.theme.GaugeNeedle
+import com.example.leanangletracker.ui.theme.GaugeScale
+import com.example.leanangletracker.ui.theme.PrimaryOrange
+import com.example.leanangletracker.ui.theme.SecondaryBlue
+import com.example.leanangletracker.ui.theme.TextSecondary
+import java.text.DecimalFormat
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sin
 
 @Composable
 internal fun LeanAngleScreen(
@@ -74,15 +126,14 @@ internal fun LeanAngleScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         if (!calibrationState.isCalibrated) {
-            if(isLandscape){
+            if (isLandscape) {
                 CalibrationWizardLandscape(
                     state = calibrationState,
                     onCaptureUpright = onCaptureUpright,
                     onContinueFallback = onContinueCalibrationFallback
                 )
                 return@Box
-            }
-            else {
+            } else {
                 CalibrationWizardPortrait(
                     state = calibrationState,
                     onCaptureUpright = onCaptureUpright,
@@ -196,7 +247,11 @@ internal fun LeanAngleScreen(
                                         .clip(CircleShape)
                                         .background(ErrorRed.copy(alpha = 0.1f))
                                 ) {
-                                    Icon(Icons.Default.Stop, contentDescription = "Stop Recording", tint = ErrorRed)
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = "Stop Recording",
+                                        tint = ErrorRed
+                                    )
                                 }
                             }
                         }
@@ -238,13 +293,14 @@ internal fun LeanAngleScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         TachoGauge(
-                            currentDeg = trackingState.leanAngleDeg,
-                            maxLeftDeg = trackingState.maxLeftDeg,
-                            maxRightDeg = trackingState.maxRightDeg,
                             modifier = Modifier
                                 .weight(1.2f)
-                                .fillMaxHeight()
+                                .fillMaxHeight(),
+                            currentDeg = trackingState.leanAngleDeg,
+                            maxLeftDeg = trackingState.maxLeftDeg,
+                            maxRightDeg = trackingState.maxRightDeg
                         )
+
                         LeanHistoryGraph(
                             values = trackingState.leanHistoryDeg,
                             modifier = Modifier
@@ -268,7 +324,7 @@ internal fun LeanAngleScreen(
                     maxLeftDeg = trackingState.maxLeftDeg,
                     maxRightDeg = trackingState.maxRightDeg,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth().aspectRatio(2f)
                 )
                 LeanHistoryGraph(
                     values = trackingState.leanHistoryDeg,
@@ -345,8 +401,11 @@ private fun TrackingStatsCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row (
-            modifier = Modifier.fillMaxWidth().padding(12.dp).basicMarquee(),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .basicMarquee(),
         ) {
             val locationText =
                 if (trackingState.currentLatitude != null && trackingState.currentLongitude != null) {
@@ -359,12 +418,32 @@ private fun TrackingStatsCard(
                 } else {
                     "n/a"
                 }
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "speed: ${"%.1f".format(Locale.US, trackingState.speedKmh)} km/h")
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "location: $locationText")
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "elapsedTime: ${formatElapsedTime(trackingState.elapsedTimeMs)}")
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "avg spd: ${"%.1f".format(Locale.US, trackingState.averageSpeedKmh)} km/h")
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "trackLenght: ${"%.2f".format(Locale.US, trackingState.trackLengthKm)} km")
-            Text(modifier = Modifier.padding(16.dp, 0.dp),text = "avg leanAngle: ${"%.1f".format(Locale.US, trackingState.averageLeanAngleDeg)}°")
+            Text(
+                modifier = Modifier.padding(16.dp, 0.dp),
+                text = "speed: ${"%.1f".format(Locale.US, trackingState.speedKmh)} km/h"
+            )
+            Text(modifier = Modifier.padding(16.dp, 0.dp), text = "location: $locationText")
+            Text(
+                modifier = Modifier.padding(16.dp, 0.dp),
+                text = "elapsedTime: ${formatElapsedTime(trackingState.elapsedTimeMs)}"
+            )
+            Text(
+                modifier = Modifier.padding(16.dp, 0.dp),
+                text = "avg spd: ${"%.1f".format(Locale.US, trackingState.averageSpeedKmh)} km/h"
+            )
+            Text(
+                modifier = Modifier.padding(16.dp, 0.dp),
+                text = "trackLenght: ${"%.2f".format(Locale.US, trackingState.trackLengthKm)} km"
+            )
+            Text(
+                modifier = Modifier.padding(16.dp, 0.dp),
+                text = "avg leanAngle: ${
+                    "%.1f".format(
+                        Locale.US,
+                        trackingState.averageLeanAngleDeg
+                    )
+                }°"
+            )
         }
     }
 }
@@ -381,6 +460,19 @@ private fun formatElapsedTime(elapsedMs: Long): String {
     }
 }
 
+
+@Preview(widthDp = 400, heightDp = 200)
+@Composable
+private fun TachoGaugePreview() {
+    TachoGauge(
+        currentDeg = 10f,
+        maxLeftDeg = 20f,
+        maxRightDeg = 21f,
+        modifier = Modifier
+    )
+}
+
+
 @Composable
 private fun TachoGauge(
     currentDeg: Float,
@@ -393,112 +485,128 @@ private fun TachoGauge(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(24.dp)
     ) {
-        Column {
-            Box(
+        Box (Modifier.fillMaxSize()
+            .padding(10.dp,20.dp)){
+            Canvas(modifier = Modifier.fillMaxSize())
+                 {
+                val center = Offset(size.width / 2f, size.height)
+                val radius = min(size.width / 2f, size.height)
+                val maxDisplay = 65f
+
+                // Gauge Background
+                drawArc(
+                    color = GaugeBackground,
+                    startAngle = 180f,
+                    sweepAngle = 180f,
+                    useCenter = true,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        center.x - radius,
+                        center.y - radius
+                    ),
+                    size = Size(radius * 2, radius * 2)
+                )
+                // Border
+                drawArc(
+                    color = Color.Blue.copy(0.3f),
+                    startAngle = 180f,
+                    sweepAngle = 180f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius, center.y - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = 4.dp.toPx())
+                )
+
+                // Scale marks
+                for (mark in -50..50 step 10) {
+                    val theta = Math.toRadians(mark.toDouble() - 90.0)
+                    val isMajor = mark % 30 == 0
+                    val outer = Offset(
+                        x = center.x + (radius * 0.95f * cos(theta)).toFloat(),
+                        y = center.y + (radius * 0.95f * sin(theta)).toFloat()
+                    )
+                    val innerFactor = if (isMajor) 0.82f else 0.88f
+                    val inner = Offset(
+                        x = center.x + (radius * innerFactor * cos(theta)).toFloat(),
+                        y = center.y + (radius * innerFactor * sin(theta)).toFloat()
+                    )
+                    drawLine(
+                        color = if (mark == 0) AccentGreen else GaugeScale.copy(alpha = 0.6f),
+                        start = inner,
+                        end = outer,
+                        strokeWidth = if (isMajor) 4.dp.toPx() else 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+
+                fun angleToTip(deg: Float, lengthFactor: Float): Offset {
+                    val clamped = deg.coerceIn(-maxDisplay, maxDisplay)
+                    val theta = Math.toRadians(clamped.toDouble() - 90.0)
+                    return Offset(
+                        x = center.x + (radius * lengthFactor * cos(theta)).toFloat(),
+                        y = center.y + (radius * lengthFactor * sin(theta)).toFloat()
+                    )
+                }
+
+                // Max indications
+                drawLine(
+                    SecondaryBlue.copy(alpha = 0.4f),
+                    center,
+                    angleToTip(maxLeftDeg, 0.9f),
+                    4.dp.toPx(),
+                    StrokeCap.Round
+                )
+                drawLine(
+                    SecondaryBlue.copy(alpha = 0.4f),
+                    center,
+                    angleToTip(maxRightDeg, 0.9f),
+                    4.dp.toPx(),
+                    StrokeCap.Round
+                )
+
+                // Current needle
+                drawLine(
+                    brush = Brush.linearGradient(listOf(GaugeNeedle, PrimaryOrange)),
+                    start = center,
+                    end = angleToTip(currentDeg, 0.88f),
+                    strokeWidth = 8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+
+                // Center hub
+                drawCircle(color = Color.White, radius = 12.dp.toPx(), center = center)
+                drawCircle(color = GaugeNeedle, radius = 6.dp.toPx(), center = center)
+            }
+
+            // Max Values
+            Row(
                 modifier = Modifier
-                    .aspectRatio(2.0f),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.TopCenter)
+                    .padding(5.dp)
             ) {
-                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize(0.85f)) {
-                    val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height)
-                    val radius = kotlin.math.min(size.width / 2f, size.height)
-                    val maxDisplay = 65f
+                MaxValItem("MAX L", abs(maxLeftDeg))
+                Spacer(Modifier.weight(1f))
+                MaxValItem("MAX R", maxRightDeg)
+            }
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter).offset(0.dp,12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = CircleShape
+            ) {
 
-                    // Gauge Background
-                    drawArc(
-                        color = GaugeBackground,
-                        startAngle = 180f,
-                        sweepAngle = 180f,
-                        useCenter = true,
-                        topLeft = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius),
-                        size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
-                    )
-                    // Border
-                    drawArc(
-                        color = Color.Blue.copy(0.3f),
-                        startAngle = 180f,
-                        sweepAngle = 180f,
-                        useCenter = false,
-                        topLeft = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius),
-                        size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx())
-                    )
-
-                    // Scale marks
-                    for (mark in -60..60 step 10) {
-                        val theta = Math.toRadians(mark.toDouble() - 90.0)
-                        val isMajor = mark % 30 == 0
-                        val outer = androidx.compose.ui.geometry.Offset(
-                            x = center.x + (radius * 0.95f * kotlin.math.cos(theta)).toFloat(),
-                            y = center.y + (radius * 0.95f * kotlin.math.sin(theta)).toFloat()
-                        )
-                        val innerFactor = if (isMajor) 0.82f else 0.88f
-                        val inner = androidx.compose.ui.geometry.Offset(
-                            x = center.x + (radius * innerFactor * kotlin.math.cos(theta)).toFloat(),
-                            y = center.y + (radius * innerFactor * kotlin.math.sin(theta)).toFloat()
-                        )
-                        drawLine(
-                            color = if (mark == 0) AccentGreen else GaugeScale.copy(alpha = 0.6f),
-                            start = inner,
-                            end = outer,
-                            strokeWidth = if (isMajor) 4.dp.toPx() else 2.dp.toPx(),
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round
-                        )
-                    }
-
-                    fun angleToTip(deg: Float, lengthFactor: Float): androidx.compose.ui.geometry.Offset {
-                        val clamped = deg.coerceIn(-maxDisplay, maxDisplay)
-                        val theta = Math.toRadians(clamped.toDouble() - 90.0)
-                        return androidx.compose.ui.geometry.Offset(
-                            x = center.x + (radius * lengthFactor * kotlin.math.cos(theta)).toFloat(),
-                            y = center.y + (radius * lengthFactor * kotlin.math.sin(theta)).toFloat()
-                        )
-                    }
-
-                    // Max indications
-                    drawLine(
-                        SecondaryBlue.copy(alpha = 0.4f),
-                        center,
-                        angleToTip(maxLeftDeg, 0.9f),
-                        4.dp.toPx(),
-                        androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                    drawLine(
-                        SecondaryBlue.copy(alpha = 0.4f),
-                        center,
-                        angleToTip(maxRightDeg, 0.9f),
-                        4.dp.toPx(),
-                        androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-
-                    // Current needle
-                    drawLine(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(GaugeNeedle, PrimaryOrange)),
-                        start = center,
-                        end = angleToTip(currentDeg, 0.88f),
-                        strokeWidth = 8.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-
-                    // Center hub
-                    drawCircle(color = Color.White, radius = 12.dp.toPx(), center = center)
-                    drawCircle(color = GaugeNeedle, radius = 6.dp.toPx(), center = center)
-                }
-
-                // Max Values
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(24.dp)
-                ) {
-                    MaxValItem("MAX L", kotlin.math.abs(maxLeftDeg))
-                    Spacer(Modifier.weight(1f))
-                    MaxValItem("MAX R", maxRightDeg)
-                }
+                val df = DecimalFormat("0.0")
+                Text(
+                    modifier = Modifier.padding(4.dp),
+                    text = df.format(currentDeg),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = SecondaryBlue
+                )
             }
         }
+
     }
 }
+
 
 @Composable
 private fun MaxValItem(label: String, value: Float) {
