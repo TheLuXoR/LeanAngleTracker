@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
@@ -92,7 +93,7 @@ internal fun RideReviewTemplate(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
+                    StatItem(label = "TIME", value = formatTimeWithTick(selectedIndex, rideSession.points))
                     StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
                     StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
                 }
@@ -140,7 +141,7 @@ internal fun RideReviewTemplate(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                StatItem(label = "TIME", value = formatTime(selectedPoint.timestampMs))
+                StatItem(label = "TIME", value = formatTimeWithTick(selectedIndex, rideSession.points))
                 StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
                 StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
             }
@@ -177,5 +178,17 @@ private fun StatItem(label: String, value: String) {
     }
 }
 
-private fun formatTime(timestampMs: Long): String =
-    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestampMs))
+public fun formatTimeWithTick(index: Int, points: List<TrackPoint>): String {
+    val point = points[index]
+    val baseTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(point.timestampMs))
+    var tick = 1
+    val currentSecond = point.timestampMs / 1000
+    for (i in index - 1 downTo 0) {
+        if (points[i].timestampMs / 1000 == currentSecond) {
+            tick++
+        } else {
+            break
+        }
+    }
+    return "$baseTime.$tick"
+}

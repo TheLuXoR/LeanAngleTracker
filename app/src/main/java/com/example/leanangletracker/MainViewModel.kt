@@ -170,6 +170,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var lastResumeMs: Long = 0L
     private var locationUpdatesRunning = false
     private var latestLeanDeg = 0f
+    private var peakLeanSinceLastTick = 0f
     private var latestLeanTimestampNs: Long? = null
     private var latestGpsLocation: Location? = null
     private var latestGpsTimestampNs: Long? = null
@@ -402,6 +403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastResumeMs = activeRideStartedMs!!
         trackLengthMeters = 0f
         ridePoints.clear()
+        peakLeanSinceLastTick = 0f
         startRecorder()
         updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = false) }
     }
@@ -430,6 +432,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         rideRepository.deleteRide(session)
         _uiState.value = _uiState.value.copy(rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != session.startedAtMs })
 
+        peakLeanSinceLastTick = 0f
         startRecorder()
         updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = true) }
     }
@@ -756,6 +759,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestLeanDeg = leanDeg
         latestLeanTimestampNs = timestampNs
 
+        // Update peak since last recorder tick
+        if (Math.abs(leanDeg) > Math.abs(peakLeanSinceLastTick)) {
+            peakLeanSinceLastTick = leanDeg
+        }
+
         leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
 
         val previous = _uiState.value
@@ -937,17 +945,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             )
         }
 
+        // Use the peak lean angle captured since the last recording tick
+        val recordedLean = if (peakLeanSinceLastTick != 0f) peakLeanSinceLastTick else latestLeanDeg
+        
         ridePoints += TrackPoint(
             timestampMs = nowMs,
             latitude = gps.latitude,
             longitude = gps.longitude,
             speedKmh = fusedSpeedKmh,
-            leanAngleDeg = latestLeanDeg,
+            leanAngleDeg = recordedLean,
             leanFreshnessMs = leanAgeMs,
             gpsFreshnessMs = gpsAgeMs,
             hasFreshGps = gpsAgeMs <= GPS_FRESHNESS_THRESHOLD_MS,
             lapIndex = 0
         )
+        
+        // Reset peak for the next interval
+        peakLeanSinceLastTick = latestLeanDeg
 
         val elapsedMs = accumulatedTimeMs + if (!state.tracking.isPaused) (nowMs - lastResumeMs) else 0L
         val avgSpeed = if (ridePoints.isNotEmpty()) ridePoints.map { it.speedKmh }.average().toFloat() else 0f

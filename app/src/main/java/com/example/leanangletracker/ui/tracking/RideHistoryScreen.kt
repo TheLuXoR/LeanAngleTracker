@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -36,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -63,7 +67,6 @@ internal fun RideHistoryScreen(
             val index = rideHistory.indexOfFirst { it.startedAtMs == lastSavedRideId }
             if (index != -1) {
                 expandedIndex = index
-                listState.animateScrollToItem(index)
             }
         }
     }
@@ -164,6 +167,8 @@ private fun RideHistoryItem(
     onUpdateName: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         if (uri != null) exportGpx(context, uri, session)
     }
@@ -181,8 +186,21 @@ private fun RideHistoryItem(
         label = "item_color"
     )
 
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            // Wait for expansion animation to start/proceed before requesting view
+            delay(150)
+            bringIntoViewRequester.bringIntoView()
+            // Second call after animation is mostly done to ensure full visibility
+            delay(200)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         border = if (isSelected) CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)) else null
