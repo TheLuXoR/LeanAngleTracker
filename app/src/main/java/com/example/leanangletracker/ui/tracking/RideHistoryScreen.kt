@@ -33,8 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -76,16 +78,16 @@ internal fun RideHistoryScreen(
             TopAppBar(
                 title = { 
                     if (isSelectionMode) {
-                        Text("${selectedSessionIds.size} ausgewählt")
+                        Text(stringResource(R.string.ride_history_selected_count, selectedSessionIds.size))
                     } else {
-                        Text("Ride History", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.ride_history_title), style = MaterialTheme.typography.titleLarge)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { if (isSelectionMode) selectedSessionIds = emptySet() else onBack() }) {
                         Icon(
                             if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, 
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.action_back)
                         )
                     }
                 },
@@ -102,7 +104,7 @@ internal fun RideHistoryScreen(
                         ) {
                             Icon(Icons.Default.Merge, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Zusammenführen")
+                            Text(stringResource(R.string.ride_history_action_combine))
                         }
                     }
                 },
@@ -112,7 +114,7 @@ internal fun RideHistoryScreen(
     ) { padding ->
         if (rideHistory.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Noch keine Aufzeichnungen.", style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
+                Text(stringResource(R.string.ride_history_empty), style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
             }
         } else {
             LazyColumn(
@@ -219,7 +221,7 @@ private fun RideHistoryItem(
                 if (isSelected) {
                     Icon(
                         Icons.Default.CheckCircle, 
-                        contentDescription = "Selected", 
+                        contentDescription = stringResource(R.string.ride_history_selected), 
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = 12.dp)
                     )
@@ -231,13 +233,13 @@ private fun RideHistoryItem(
                             value = editedName,
                             onValueChange = { editedName = it },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            placeholder = { Text("Fahrt Name") },
+                            placeholder = { Text(stringResource(R.string.ride_history_name_placeholder)) },
                             trailingIcon = {
                                 IconButton(onClick = { 
                                     onUpdateName(editedName)
                                     isEditingName = false 
                                 }) {
-                                    Icon(Icons.Default.Check, contentDescription = "Speichern")
+                                    Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_save))
                                 }
                             },
                             singleLine = true
@@ -256,7 +258,7 @@ private fun RideHistoryItem(
                         )
                     }
                     Text(
-                        text = "${session.points.size} Wegpunkte aufgezeichnet",
+                        text = stringResource(R.string.ride_history_points_recorded, session.points.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -267,21 +269,21 @@ private fun RideHistoryItem(
                         IconButton(onClick = { isEditingName = !isEditingName }) {
                             Icon(
                                 if (isEditingName) Icons.Default.Check else Icons.Default.Edit,
-                                contentDescription = "Name bearbeiten",
+                                contentDescription = stringResource(R.string.ride_history_action_edit_name),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-                        IconButton(onClick = { exportLauncher.launch("ride-${session.startedAtMs}.gpx") }) {
-                            Icon(Icons.Default.Share, contentDescription = "Exportieren", tint = MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = { exportLauncher.launch(stringResource(R.string.ride_history_export_filename, session.startedAtMs)) }) {
+                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.ride_history_action_export), tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Löschen", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.ride_history_action_delete), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                     if (!isSelected) {
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Details",
+                            contentDescription = stringResource(R.string.ride_history_action_details),
                             tint = TextSecondary
                         )
                     }
@@ -307,7 +309,7 @@ private fun exportGpx(context: Context, uri: Uri, rideSession: RideSession) {
         appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
         appendLine("<gpx version=\"1.1\" creator=\"LeanAngleTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">")
         appendLine("  <trk>")
-        appendLine("    <name>${rideSession.name ?: "Ride ${rideSession.startedAtMs}"}</name>")
+        appendLine("    <name>${rideSession.name ?: context.getString(R.string.ride_history_default_name, rideSession.startedAtMs)}</name>")
         appendLine("    <trkseg>")
         rideSession.points.forEach { point ->
             appendLine("      <trkpt lat=\"${point.latitude}\" lon=\"${point.longitude}\">")

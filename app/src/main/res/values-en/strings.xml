@@ -1,11 +1,11 @@
 <resources>
     <string name="app_name">Lean Angle Tracker</string>
 
-    <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
-    <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
-    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
-    <string name="instructions_calibrated">Kalibriert</string>
+    <string name="instructions_sensor_missing">Acceleration sensor missing</string>
+    <string name="instructions_upright">To calibrate the app your motorcycle must be </string>
+    <string name="instructions_tilt_left_then_return">Lean left → return upright (careful!)</string>
+    <string name="instructions_tilt_right_then_return">Lean right → return upright (careful!)</string>
+    <string name="instructions_calibrated">Calibrated</string>
 
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="history_title">History</string>
@@ -40,25 +40,25 @@
     <string name="settings_reset_max_values">Reset Max Values</string>
     <string name="settings_recalibrate_device">Recalibrate Device</string>
 
-    <string name="ride_history_selected_count">%1$d ausgewählt</string>
+    <string name="ride_history_selected_count">%1$d selected</string>
     <string name="ride_history_title">Ride History</string>
-    <string name="ride_history_action_combine">Zusammenführen</string>
-    <string name="ride_history_empty">Noch keine Aufzeichnungen.</string>
+    <string name="ride_history_action_combine">Combine</string>
+    <string name="ride_history_empty">No rides recorded yet.</string>
     <string name="ride_history_selected">Selected</string>
-    <string name="ride_history_name_placeholder">Fahrt Name</string>
-    <string name="action_save">Speichern</string>
-    <string name="ride_history_points_recorded">%1$d Wegpunkte aufgezeichnet</string>
-    <string name="ride_history_action_edit_name">Name bearbeiten</string>
-    <string name="ride_history_action_export">Exportieren</string>
-    <string name="ride_history_action_delete">Löschen</string>
+    <string name="ride_history_name_placeholder">Ride name</string>
+    <string name="action_save">Save</string>
+    <string name="ride_history_points_recorded">%1$d waypoints recorded</string>
+    <string name="ride_history_action_edit_name">Edit name</string>
+    <string name="ride_history_action_export">Export</string>
+    <string name="ride_history_action_delete">Delete</string>
     <string name="ride_history_action_details">Details</string>
     <string name="ride_history_default_name">Ride %1$d</string>
     <string name="ride_history_export_filename">ride-%1$d.gpx</string>
 
-    <string name="intro_legal_title">Wichtiger Hinweis</string>
-    <string name="intro_attach_title">Telefon montieren</string>
-    <string name="intro_legal_text">Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr. Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund. Die App darf während der Fahrt nicht bedient werden. Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.</string>
-    <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
-    <string name="intro_button_understood">Verstanden</string>
-    <string name="intro_button_attached">Befestigt</string>
+    <string name="intro_legal_title">Important notice</string>
+    <string name="intro_attach_title">Mount phone</string>
+    <string name="intro_legal_text">Safety first: Using this app is at your own risk. When leaning the motorcycle while stationary, ensure secure footing and stable ground. The app must not be operated while riding. The developer accepts no liability for accidents, personal injury, or property damage of any kind.</string>
+    <string name="intro_attach_text">Securely mount your smartphone in a holder on the motorcycle.</string>
+    <string name="intro_button_understood">Understood</string>
+    <string name="intro_button_attached">Mounted</string>
 </resources>
