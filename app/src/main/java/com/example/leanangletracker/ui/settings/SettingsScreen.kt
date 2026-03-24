@@ -20,9 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.SettingsUiState
 import com.example.leanangletracker.ui.theme.AccentGreen
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -46,24 +47,24 @@ internal fun SettingsScreen(
     if (showInfo) {
         AlertDialog(
             onDismissRequest = { showInfo = false },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
-            title = { Text("App Info") },
-            text = { Text("Lean Angle Tracker helps you monitor your riding dynamics. Use Gyro-Fusion for better accuracy during aggressive cornering.") }
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(stringResource(R.string.dialog_ok)) } },
+            title = { Text(stringResource(R.string.settings_dialog_info_title)) },
+            text = { Text(stringResource(R.string.settings_dialog_info_text)) }
         )
     }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Settings", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showInfo = true }) {
-                        Icon(Icons.Default.Info, contentDescription = "Info")
+                        Icon(Icons.Default.Info, contentDescription = stringResource(R.string.action_info))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -80,10 +81,10 @@ internal fun SettingsScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            SettingsGroup(title = "SENSORS & TRACKING") {
+            SettingsGroup(title = stringResource(R.string.settings_group_sensors_tracking)) {
                 SettingsSwitchItem(
-                    title = "Invert Lean Angle",
-                    subtitle = "Flip left/right if phone is mounted upside down",
+                    title = stringResource(R.string.settings_invert_lean_title),
+                    subtitle = stringResource(R.string.settings_invert_lean_subtitle),
                     checked = state.invertLeanAngle,
                     onCheckedChange = onToggleInvertLean
                 )
@@ -91,8 +92,8 @@ internal fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
                 
                 SettingsSwitchItem(
-                    title = "Gyro-Fusion",
-                    subtitle = if (state.gyroscopeAvailable) "More accurate during dynamic riding" else "Gyroscope not available",
+                    title = stringResource(R.string.settings_gyro_fusion_title),
+                    subtitle = if (state.gyroscopeAvailable) stringResource(R.string.settings_gyro_fusion_subtitle_available) else stringResource(R.string.settings_gyro_fusion_subtitle_unavailable),
                     checked = state.useGyroFusion,
                     onCheckedChange = onToggleGyroFusion,
                     enabled = state.gyroscopeAvailable
@@ -101,22 +102,22 @@ internal fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 
                 SettingsSwitchItem(
-                    title = "GPS Tracking",
-                    subtitle = if (state.locationPermissionGranted) "Speed + route recording" else "Location permission required",
+                    title = stringResource(R.string.settings_gps_tracking_title),
+                    subtitle = if (state.locationPermissionGranted) stringResource(R.string.settings_gps_tracking_subtitle_granted) else stringResource(R.string.settings_gps_tracking_subtitle_missing),
                     checked = state.gpsTrackingEnabled,
                     onCheckedChange = onToggleGpsTracking
                 )
             }
 
-            SettingsGroup(title = "VISUALS") {
+            SettingsGroup(title = stringResource(R.string.settings_group_visuals)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("History Window", style = MaterialTheme.typography.titleMedium)
-                        Text("Time shown in history graph", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text(stringResource(R.string.settings_history_window_title), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_history_window_subtitle), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
                     
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -124,11 +125,11 @@ internal fun SettingsScreen(
                             onClick = { onSetHistoryWindow(state.historyWindowSeconds - 5) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
                         }
                         
                         Text(
-                            text = "${state.historyWindowSeconds}s",
+                            text = stringResource(R.string.settings_value_seconds, state.historyWindowSeconds),
                             modifier = Modifier.padding(horizontal = 16.dp),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
@@ -138,21 +139,21 @@ internal fun SettingsScreen(
                             onClick = { onSetHistoryWindow(state.historyWindowSeconds + 5) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_increase), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
             }
 
-            SettingsGroup(title = "RECORDING") {
+            SettingsGroup(title = stringResource(R.string.settings_group_recording)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Recorder Tick", style = MaterialTheme.typography.titleMedium)
-                        Text("50ms to 1000ms in 50ms steps", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text(stringResource(R.string.settings_recorder_tick_title), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_recorder_tick_subtitle), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,11 +161,11 @@ internal fun SettingsScreen(
                             onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs - 50) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
                         }
 
                         Text(
-                            text = "${state.recorderIntervalMs}ms",
+                            text = stringResource(R.string.settings_value_milliseconds, state.recorderIntervalMs),
                             modifier = Modifier.padding(horizontal = 16.dp),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
@@ -174,7 +175,7 @@ internal fun SettingsScreen(
                             onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs + 50) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_increase), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -187,7 +188,7 @@ internal fun SettingsScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Text("Reset Max Values", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_reset_max_values), style = MaterialTheme.typography.titleMedium)
                 }
 
                 OutlinedButton(
@@ -196,7 +197,7 @@ internal fun SettingsScreen(
                     shape = RoundedCornerShape(16.dp),
                     border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp)
                 ) {
-                    Text("Recalibrate Device", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_recalibrate_device), style = MaterialTheme.typography.titleMedium)
                 }
             }
             
