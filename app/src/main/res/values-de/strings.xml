@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">Lean Angle Tracker</string>
+
+    <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
+    <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
+    <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
+    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
+    <string name="instructions_calibrated">Kalibriert</string>
+
+    <string name="screen_title_lean_angle">Schräglage</string>
+    <string name="history_title">Verlauf</string>
+    <string name="history_upper_bound">Obere Grenze (Max R): %1$.1f°</string>
+    <string name="history_lower_bound">Untere Grenze (Max L): %1$.1f°</string>
+
+    <string name="settings_dialog_info_title">App-Info</string>
+    <string name="settings_dialog_info_text">Lean Angle Tracker hilft dir, deine Fahrdynamik zu überwachen. Nutze Gyro-Fusion für bessere Genauigkeit in dynamischen Kurven.</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="action_back">Zurück</string>
+    <string name="dialog_ok">OK</string>
+    <string name="action_info">Info</string>
+    <string name="settings_group_sensors_tracking">SENSOREN &amp; TRACKING</string>
+    <string name="settings_invert_lean_title">Schräglage invertieren</string>
+    <string name="settings_invert_lean_subtitle">Links/Rechts tauschen, wenn das Handy kopfüber montiert ist</string>
+    <string name="settings_gyro_fusion_title">Gyro-Fusion</string>
+    <string name="settings_gyro_fusion_subtitle_available">Genauer bei dynamischer Fahrt</string>
+    <string name="settings_gyro_fusion_subtitle_unavailable">Gyroskop nicht verfügbar</string>
+    <string name="settings_gps_tracking_title">GPS-Tracking</string>
+    <string name="settings_gps_tracking_subtitle_granted">Geschwindigkeit + Streckenaufzeichnung</string>
+    <string name="settings_gps_tracking_subtitle_missing">Standortberechtigung erforderlich</string>
+    <string name="settings_group_visuals">ANZEIGE</string>
+    <string name="settings_history_window_title">Verlaufsfenster</string>
+    <string name="settings_history_window_subtitle">Im Verlaufsdiagramm angezeigte Zeit</string>
+    <string name="action_decrease">Verringern</string>
+    <string name="action_increase">Erhöhen</string>
+    <string name="settings_value_seconds">%1$ds</string>
+    <string name="settings_group_recording">AUFZEICHNUNG</string>
+    <string name="settings_recorder_tick_title">Recorder-Takt</string>
+    <string name="settings_recorder_tick_subtitle">50ms bis 1000ms in 50ms-Schritten</string>
+    <string name="settings_value_milliseconds">%1$dms</string>
+    <string name="settings_reset_max_values">Max-Werte zurücksetzen</string>
+    <string name="settings_recalibrate_device">Gerät neu kalibrieren</string>
+
+    <string name="ride_history_selected_count">%1$d ausgewählt</string>
+    <string name="ride_history_title">Fahrtenverlauf</string>
+    <string name="ride_history_action_combine">Zusammenführen</string>
+    <string name="ride_history_empty">Noch keine Aufzeichnungen.</string>
+    <string name="ride_history_selected">Ausgewählt</string>
+    <string name="ride_history_name_placeholder">Fahrtname</string>
+    <string name="action_save">Speichern</string>
+    <string name="ride_history_points_recorded">%1$d Wegpunkte aufgezeichnet</string>
+    <string name="ride_history_action_edit_name">Name bearbeiten</string>
+    <string name="ride_history_action_export">Exportieren</string>
+    <string name="ride_history_action_delete">Löschen</string>
+    <string name="ride_history_action_details">Details</string>
+    <string name="ride_history_default_name">Fahrt %1$d</string>
+    <string name="ride_history_export_filename">fahrt-%1$d.gpx</string>
+
+    <string name="intro_legal_title">Wichtiger Hinweis</string>
+    <string name="intro_attach_title">Telefon montieren</string>
+    <string name="intro_legal_text">Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr. Achte beim Neigen des Motorrads im Stand auf sicheren Stand und festen Untergrund. Die App darf während der Fahrt nicht bedient werden. Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.</string>
+    <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
+    <string name="intro_button_understood">Verstanden</string>
+    <string name="intro_button_attached">Befestigt</string>
+</resources>

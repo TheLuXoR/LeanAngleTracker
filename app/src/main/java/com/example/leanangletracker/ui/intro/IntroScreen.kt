@@ -24,10 +24,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.IntroBikeLeanAnimation
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
 import kotlinx.coroutines.delay
@@ -161,8 +163,8 @@ private fun IntroContent(stage: IntroStage, onAction: () -> Unit, isLandscape: B
         ) {
             val titleText = when (stage) {
                 IntroStage.LOADING -> ""
-                IntroStage.LEGAL -> "Wichtiger Hinweis"
-                else -> "Telefon montieren"
+                IntroStage.LEGAL -> stringResource(R.string.intro_legal_title)
+                else -> stringResource(R.string.intro_attach_title)
             }
 
             Text(
@@ -185,10 +187,7 @@ private fun IntroContent(stage: IntroStage, onAction: () -> Unit, isLandscape: B
                             .padding(horizontal = 4.dp)
                     ) {
                         Text(
-                            text = "Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr." +
-                                    "Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund." +
-                                    "Die App darf während der Fahrt nicht bedient werden." +
-                                    "Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.",
+                            text = stringResource(R.string.intro_legal_text),
                             style = MaterialTheme.typography.bodySmall,
                             lineHeight = 16.sp,
                             textAlign = TextAlign.Center,
@@ -199,7 +198,7 @@ private fun IntroContent(stage: IntroStage, onAction: () -> Unit, isLandscape: B
 
                 IntroStage.ATTACH_PROMPT -> {
                     Text(
-                        text = "Smartphone sicher in einer Halterung am Motorrad befestigen.",
+                        text = stringResource(R.string.intro_attach_text),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -226,7 +225,7 @@ private fun IntroContent(stage: IntroStage, onAction: () -> Unit, isLandscape: B
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                 ) {
                     val buttonText =
-                        if (stage == IntroStage.LEGAL) "Verstanden" else "Befestigt"
+                        if (stage == IntroStage.LEGAL) stringResource(R.string.intro_button_understood) else stringResource(R.string.intro_button_attached)
                     Text(
                         buttonText,
                         style = MaterialTheme.typography.titleMedium,
