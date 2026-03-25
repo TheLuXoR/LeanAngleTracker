@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -80,6 +81,14 @@ class MainActivity : ComponentActivity() {
                         showHistory = routeUiState.showHistory,
                         isCalibrated = state.calibration.isCalibrated
                     )
+
+                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview) {
+                        when (route) {
+                            AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
+                            AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
+                            else -> Unit
+                        }
+                    }
 
                     AnimatedContent(
                         targetState = route,
