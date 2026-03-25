@@ -60,7 +60,9 @@ data class CalibrationUiState(
     val isCalibrated: Boolean = false,
     val leftMax: Float = 0f,
     val rightMax: Float = 0f,
-    val currentProgress: Float = 0f
+    val currentProgress: Float = 0f,
+    val currentAngleDeg: Float = 0f,
+    val isWrongDirection: Boolean = false
 )
 
 data class TrackPoint(
@@ -554,7 +556,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 instructionsResId = R.string.instructions_upright,
                 leftMax = 0f,
                 rightMax = 0f,
-                currentProgress = 0f
+                currentProgress = 0f,
+                currentAngleDeg = 0f,
+                isWrongDirection = false
             )
         }
     }
@@ -677,16 +681,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         val step = _uiState.value.calibration.calibrationStep
 
-        // Side detection
-        if (calibrationSideAxis == null && step == BikeLean.LEFT && angleDeg > 2f) {
+        // Side detection: Only initialize once when a significant tilt (>3 deg) is detected during the LEFT step
+        if (calibrationSideAxis == null && step == BikeLean.LEFT && angleDeg > 3f) {
             calibrationSideAxis = (currentUp - up * currentUp.dot(up)).normalized()
         }
 
         val sideComponent = if (calibrationSideAxis != null) currentUp.dot(calibrationSideAxis!!) else 0f
-        val isLeftSide = sideComponent > 0.05f
-        val isRightSide = sideComponent < -0.05f
+        val isLeftSide = sideComponent > 0.1f
+        val isRightSide = sideComponent < -0.1f
 
         val progress = (angleDeg / CALIBRATION_TILT_MAX_RANGE).coerceIn(0f, 1f)
+        
+        val isWrongWay = when (step) {
+            BikeLean.LEFT -> isRightSide && angleDeg > 5f
+            BikeLean.RIGHT -> isLeftSide && angleDeg > 5f
+            else -> false
+        }
 
         updateCalibrationState { state ->
             val newLeftMax = if (step == BikeLean.LEFT && isLeftSide) maxOf(state.leftMax, progress) else state.leftMax
@@ -696,10 +706,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             if (step == BikeLean.LEFT && isLeftSide && progress >= newLeftMax) leftUpPeak = currentUp
             if (step == BikeLean.RIGHT && isRightSide && progress >= newRightMax) rightUpPeak = currentUp
 
+            // Only show progress if moving in the correct direction for the current step
+            val directionProgress = when (step) {
+                BikeLean.LEFT -> if (isLeftSide) progress else 0f
+                BikeLean.RIGHT -> if (isRightSide) progress else 0f
+                else -> progress
+            }
+
             state.copy(
                 leftMax = newLeftMax,
                 rightMax = newRightMax,
-                currentProgress = progress
+                currentProgress = directionProgress,
+                currentAngleDeg = angleDeg,
+                isWrongDirection = isWrongWay
             )
         }
     }
@@ -709,8 +728,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val left = leftUpPeak ?: up
         val right = rightUpPeak ?: up
         
+        // Improve forward axis calculation: use cross product of left and right peaks if they differ
+        // If they are too similar, fall back to side axis cross upright
         var forward = left.cross(right).normalized()
-        if (forward.norm() < 0.1f) {
+        if (forward.norm() < 0.2f) {
             val side = calibrationSideAxis ?: Vec3(1f, 0f, 0f)
             forward = side.cross(up).normalized()
         }
@@ -724,7 +745,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 calibrationStep = BikeLean.DONE,
                 isCalibrated = true,
                 instructionsResId = R.string.instructions_calibrated,
-                currentProgress = 0f
+                currentProgress = 0f,
+                currentAngleDeg = 0f
             )
         }
         persistCalibration()
