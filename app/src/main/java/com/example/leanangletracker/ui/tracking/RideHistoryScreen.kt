@@ -12,8 +12,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,18 +28,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
-import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -273,7 +267,11 @@ private fun RideHistoryItem(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-                        IconButton(onClick = { exportLauncher.launch(stringResource(R.string.ride_history_export_filename, session.startedAtMs)) }) {
+                        val exportFileName = stringResource(
+                            R.string.ride_history_export_filename,
+                            session.startedAtMs
+                        )
+                        IconButton(onClick = { exportLauncher.launch(exportFileName) }) {
                             Icon(Icons.Default.Share, contentDescription = stringResource(R.string.ride_history_action_export), tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onDelete) {
