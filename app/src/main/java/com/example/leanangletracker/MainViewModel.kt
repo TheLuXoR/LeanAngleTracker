@@ -147,13 +147,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
         const val MAX_LEAN_DEG = 75f
-        const val MAX_GYRO_DT_SEC = 0.2f
         const val MAX_ROLL_RATE_RAD_PER_SEC = 8.5f
         const val GYRO_REVERSAL_DAMPING = 0.55f
-        const val FUSION_ROTATION_FRESH_NS = 120_000_000L
         const val GYRO_BIAS_COLLECTION_DURATION_NS = 1_500_000_000L
         const val GYRO_BIAS_LINEAR_ACCEL_MAX = 0.45f
         const val GYRO_BIAS_ANGULAR_SPEED_MAX = 0.12f
+        const val RECENT_LEAN_BUFFER_SIZE = 8
+
+        private data class SensorTimingPolicy(
+            val minDtNs: Long,
+            val leanClampDtNs: Long,
+            val leanDropDtNs: Long,
+            val gyroClampDtNs: Long,
+            val gyroDropDtNs: Long,
+            val fusionRotationFreshNs: Long,
+            val maxLeanRateDegPerSec: Float,
+            val maxRollRateRadPerSec: Float,
+            val recentLeanBufferSize: Int
+        )
+
+        // Keep all timing/rate limits centralized for easier device-specific tuning.
+        private val SENSOR_TIMING_POLICY = SensorTimingPolicy(
+            minDtNs = 1_000_000L, // 1 ms
+            leanClampDtNs = 50_000_000L, // 50 ms
+            leanDropDtNs = 250_000_000L, // 250 ms
+            gyroClampDtNs = 50_000_000L, // 50 ms
+            gyroDropDtNs = 200_000_000L, // 200 ms
+            fusionRotationFreshNs = 120_000_000L,
+            maxLeanRateDegPerSec = 180f,
+            maxRollRateRadPerSec = MAX_ROLL_RATE_RAD_PER_SEC,
+            recentLeanBufferSize = RECENT_LEAN_BUFFER_SIZE
+        )
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
@@ -187,6 +211,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var lastRollRateRadPerSec = 0f
     private var latestRotationLeanDeg: Float? = null
     private var latestRotationTimestampNs: Long? = null
+    private var lastLeanComputationTimestampNs: Long? = null
     private var speedKmh = 0f
     private var activeRideStartedMs: Long? = null
     private var accumulatedTimeMs: Long = 0L
@@ -204,6 +229,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
+    private val recentLeanSamples = ArrayDeque<TimedLean>()
     private val ridePoints = mutableListOf<TrackPoint>()
 
     init {
@@ -260,6 +286,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastRollRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
+        lastLeanComputationTimestampNs = null
+        recentLeanSamples.clear()
 
         updateCalibrationState {
             it.copy(
@@ -596,6 +624,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastRollRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
+        lastLeanComputationTimestampNs = null
+        recentLeanSamples.clear()
         clearPersistedCalibration()
 
         updateCalibrationState {
@@ -647,9 +677,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         val transformedHistory = previous.tracking.leanHistoryDeg.map { -it }
         val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
+        val transformedRecentSamples = recentLeanSamples.map { it.copy(valueDeg = -it.valueDeg) }
 
         leanHistory.clear()
         leanHistory.addAll(transformedTimedHistory)
+        recentLeanSamples.clear()
+        recentLeanSamples.addAll(transformedRecentSamples)
 
         _uiState.value = previous.copy(
             settings = previous.settings.copy(invertLeanAngle = invert),
@@ -865,10 +898,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         return Math.toDegrees(acos(dot).toDouble()).toFloat()
     }
 
+    private fun registerRecentLeanSample(timestampNs: Long, leanDeg: Float) {
+        recentLeanSamples += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
+        while (recentLeanSamples.size > SENSOR_TIMING_POLICY.recentLeanBufferSize) {
+            recentLeanSamples.removeFirst()
+        }
+    }
+
+    private fun fallbackLeanFromRecentSamples(timestampNs: Long): Float? {
+        if (recentLeanSamples.isEmpty()) return null
+        val averaged = recentLeanSamples.map { it.valueDeg }.average().toFloat()
+        val clamped = averaged.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+        latestLeanDeg = clamped
+        latestLeanTimestampNs = timestampNs
+        return clamped
+    }
+
     private fun updateLeanAngle(timestampNs: Long) {
         val upRef = uprightUp ?: return
         val forward = bikeForwardAxis ?: return
         val currentUp = (filteredGravity * -1f).normalized()
+
+        val previousTimestamp = lastLeanComputationTimestampNs
+        if (previousTimestamp != null) {
+            val rawDeltaNs = timestampNs - previousTimestamp
+            if (rawDeltaNs <= 0L) return // enforce monotonic timestamps
+            if (rawDeltaNs > SENSOR_TIMING_POLICY.leanDropDtNs) {
+                lastLeanComputationTimestampNs = timestampNs
+                fallbackLeanFromRecentSamples(timestampNs)
+                return
+            }
+        }
+        lastLeanComputationTimestampNs = timestampNs
+        val clampedDeltaNs = if (previousTimestamp == null) {
+            SENSOR_TIMING_POLICY.leanClampDtNs
+        } else {
+            (timestampNs - previousTimestamp).coerceIn(SENSOR_TIMING_POLICY.minDtNs, SENSOR_TIMING_POLICY.leanClampDtNs)
+        }
+        val leanDtSec = clampedDeltaNs / 1_000_000_000f
 
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
@@ -889,12 +956,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val accelInnovation = (accelLeanDeg - gyroLeanDeg).coerceIn(-accelCorrectionLimitDeg, accelCorrectionLimitDeg)
             val accelGain = 0.015f + 0.12f * accelTrust
 
-            val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= FUSION_ROTATION_FRESH_NS } == true
+            val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= SENSOR_TIMING_POLICY.fusionRotationFreshNs } == true
             val rotationGain = if (rotationFresh) 0.03f else 0f
             val rotationInnovation = ((latestRotationLeanDeg ?: accelLeanDeg) - gyroLeanDeg).coerceIn(-4f, 4f)
 
             val fused = gyroLeanDeg + (accelInnovation * accelGain) + (rotationInnovation * rotationGain)
-            gyroLeanDeg = fused.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+            val maxFusedStepDeg = SENSOR_TIMING_POLICY.maxLeanRateDegPerSec * leanDtSec
+            val boundedFused = (fused - gyroLeanDeg).coerceIn(-maxFusedStepDeg, maxFusedStepDeg) + gyroLeanDeg
+            gyroLeanDeg = boundedFused.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
             gyroLeanDeg
         } else {
             gyroLeanDeg = accelLeanDeg
@@ -911,6 +980,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
+        registerRecentLeanSample(timestampNs, leanDeg)
 
         val previous = _uiState.value
         pruneHistory(timestampNs, previous.settings.historyWindowSeconds)
@@ -956,16 +1026,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         val forward = bikeForwardAxis ?: return
         val previousTimestamp = lastGyroTimestampNs
-        lastGyroTimestampNs = event.timestamp
-        if (previousTimestamp == null) return
+        if (previousTimestamp == null) {
+            lastGyroTimestampNs = event.timestamp
+            return
+        }
 
-        val dt = (event.timestamp - previousTimestamp) / 1_000_000_000f
-        if (dt <= 0f || dt > MAX_GYRO_DT_SEC) return
+        val rawDeltaNs = event.timestamp - previousTimestamp
+        if (rawDeltaNs <= 0L) return // enforce monotonic timestamps
+        if (rawDeltaNs > SENSOR_TIMING_POLICY.gyroDropDtNs) {
+            lastGyroTimestampNs = event.timestamp
+            lastRollRateRadPerSec = 0f
+            return
+        }
+
+        lastGyroTimestampNs = event.timestamp
+        val clampedDeltaNs = rawDeltaNs.coerceIn(SENSOR_TIMING_POLICY.minDtNs, SENSOR_TIMING_POLICY.gyroClampDtNs)
+        val dt = clampedDeltaNs / 1_000_000_000f
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
-        val rollRateRadPerSec = omega.dot(forward) - gyroBiasRadPerSec
+        val rollRateRadPerSec = (omega.dot(forward) - gyroBiasRadPerSec)
+            .coerceIn(-SENSOR_TIMING_POLICY.maxRollRateRadPerSec, SENSOR_TIMING_POLICY.maxRollRateRadPerSec)
         val deltaDeg = Math.toDegrees((rollRateRadPerSec * dt).toDouble()).toFloat()
-        gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-75f, 75f)
+        val maxStepDeg = SENSOR_TIMING_POLICY.maxLeanRateDegPerSec * dt
+        val boundedDeltaDeg = deltaDeg.coerceIn(-maxStepDeg, maxStepDeg)
+        gyroLeanDeg = (gyroLeanDeg + boundedDeltaDeg).coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
     }
 
     private fun hasLocationPermission(): Boolean {
