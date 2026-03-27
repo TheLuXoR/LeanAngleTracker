@@ -45,4 +45,46 @@
     <string name="history_title">History</string>
     <string name="history_upper_bound">Upper bound (Max R): %1$.1f°</string>
     <string name="history_lower_bound">Lower bound (Max L): %1$.1f°</string>
+
+    <string name="settings_app_info_title">App Info</string>
+    <string name="settings_app_info_text">Lean Angle Tracker helps you monitor your riding dynamics. Use Gyro-Fusion for better accuracy during aggressive cornering.</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_group_sensors_tracking">SENSORS &amp; TRACKING</string>
+    <string name="settings_invert_lean_title">Invert Lean Angle</string>
+    <string name="settings_invert_lean_subtitle">Flip left/right if phone is mounted upside down</string>
+    <string name="settings_gyro_fusion_title">Gyro-Fusion</string>
+    <string name="settings_gyro_fusion_subtitle_enabled">More accurate during dynamic riding</string>
+    <string name="settings_gyro_fusion_subtitle_disabled">Gyroscope not available</string>
+    <string name="settings_gps_tracking_title">GPS Tracking</string>
+    <string name="settings_gps_tracking_subtitle_enabled">Speed + route recording</string>
+    <string name="settings_gps_tracking_subtitle_disabled">Location permission required</string>
+    <string name="settings_group_visuals">VISUALS</string>
+    <string name="settings_history_window_title">History Window</string>
+    <string name="settings_history_window_subtitle">Time shown in history graph</string>
+    <string name="settings_history_window_value_seconds">%1$ds</string>
+    <string name="settings_group_recording">RECORDING</string>
+    <string name="settings_recorder_tick_title">Recorder Tick</string>
+    <string name="settings_recorder_tick_subtitle">50ms to 1000ms in 50ms steps</string>
+    <string name="settings_recorder_tick_value_ms">%1$dms</string>
+    <string name="settings_reset_max_values">Reset Max Values</string>
+    <string name="settings_recalibrate_device">Recalibrate Device</string>
+
+    <string name="ride_history_title">Ride History</string>
+    <string name="ride_history_empty">No recordings yet.</string>
+    <string name="ride_history_points_recorded">%1$d points recorded</string>
+
+    <string name="intro_title_legal_notice">Wichtiger Hinweis</string>
+    <string name="intro_title_attach_phone">Telefon montieren</string>
+    <string name="intro_legal_text">Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr. Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund. Die App darf während der Fahrt nicht bedient werden. Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.</string>
+    <string name="intro_attach_phone_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
+    <string name="intro_button_understood">Verstanden</string>
+    <string name="intro_button_attached">Befestigt</string>
+
+    <string name="cd_back">Back</string>
+    <string name="cd_info">Info</string>
+    <string name="cd_decrease">Decrease</string>
+    <string name="cd_increase">Increase</string>
+    <string name="cd_export">Export</string>
+    <string name="cd_delete">Delete</string>
+    <string name="cd_expand">Expand</string>
 </resources>

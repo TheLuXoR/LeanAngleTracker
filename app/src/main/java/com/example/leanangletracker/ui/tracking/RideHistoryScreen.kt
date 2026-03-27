@@ -28,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -49,10 +51,10 @@ internal fun RideHistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ride History", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.ride_history_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -61,7 +63,7 @@ internal fun RideHistoryScreen(
     ) { padding ->
         if (rideHistory.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No recordings yet.", style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
+                Text(stringResource(R.string.ride_history_empty), style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
             }
         } else {
             LazyColumn(
@@ -119,7 +121,7 @@ private fun RideHistoryItem(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${session.points.size} points recorded",
+                        text = stringResource(R.string.ride_history_points_recorded, session.points.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -128,15 +130,15 @@ private fun RideHistoryItem(
                 Row {
                     if (isExpanded) {
                         IconButton(onClick = { exportLauncher.launch("ride-${session.startedAtMs}.gpx") }) {
-                            Icon(Icons.Default.Share, contentDescription = "Export", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.cd_export), tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Expand",
+                        contentDescription = stringResource(R.string.cd_expand),
                         tint = TextSecondary
                     )
                 }
