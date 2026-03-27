@@ -1,10 +1,10 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -32,10 +32,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.ui.components.admob.loadInterstitial
+import com.example.leanangletracker.ui.components.admob.showInterstitial
 import com.example.leanangletracker.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -165,10 +169,6 @@ private fun RideHistoryItem(
     val context = LocalContext.current
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
-        if (uri != null) exportGpx(context, uri, session)
-    }
-
     var isEditingName by remember { mutableStateOf(false) }
     var editedName by remember(session.name) { mutableStateOf(session.name ?: "") }
 
@@ -267,12 +267,25 @@ private fun RideHistoryItem(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-                        val exportFileName = stringResource(
-                            R.string.ride_history_export_filename,
-                            session.startedAtMs
-                        )
-                        IconButton(onClick = { exportLauncher.launch(exportFileName) }) {
-                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.ride_history_action_export), tint = MaterialTheme.colorScheme.primary)
+                        // Open with...
+                        IconButton(onClick = {
+                            loadInterstitial(context) { interstitialAd ->
+                                showInterstitial(context, interstitialAd) {
+                                    openGpxFile(context, session)
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = "Open in...", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        // Share...
+                        IconButton(onClick = {
+                            loadInterstitial(context) { interstitialAd ->
+                                showInterstitial(context, interstitialAd) {
+                                    shareGpxFile(context, session)
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onDelete) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.ride_history_action_delete), tint = MaterialTheme.colorScheme.error)
@@ -302,8 +315,59 @@ private fun RideHistoryItem(
 private fun formatDate(timestampMs: Long): String =
     SimpleDateFormat("EEE, MMM d, HH:mm", Locale.getDefault()).format(Date(timestampMs))
 
-private fun exportGpx(context: Context, uri: Uri, rideSession: RideSession) {
-    val gpx = buildString {
+private fun openGpxFile(context: Context, session: RideSession) {
+    val gpxContent = buildGpxString(context, session)
+    val fileName = "ride_${session.startedAtMs}.gpx"
+    
+    try {
+        val cacheFile = File(context.cacheDir, fileName)
+        cacheFile.writeText(gpxContent)
+
+        val contentUri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            cacheFile
+        )
+
+        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(contentUri, "application/gpx+xml")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        context.startActivity(Intent.createChooser(viewIntent, "Open GPX with..."))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun shareGpxFile(context: Context, session: RideSession) {
+    val gpxContent = buildGpxString(context, session)
+    val fileName = "ride_${session.startedAtMs}.gpx"
+    
+    try {
+        val cacheFile = File(context.cacheDir, fileName)
+        cacheFile.writeText(gpxContent)
+
+        val contentUri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            cacheFile
+        )
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/gpx+xml"
+            putExtra(Intent.EXTRA_STREAM, contentUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        context.startActivity(Intent.createChooser(shareIntent, "Share GPX with..."))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun buildGpxString(context: Context, rideSession: RideSession): String {
+    return buildString {
         appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
         appendLine("<gpx version=\"1.1\" creator=\"LeanAngleTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">")
         appendLine("  <trk>")
@@ -322,7 +386,6 @@ private fun exportGpx(context: Context, uri: Uri, rideSession: RideSession) {
         appendLine("  </trk>")
         appendLine("</gpx>")
     }
-    context.contentResolver.openOutputStream(uri)?.use { it.write(gpx.toByteArray()) }
 }
 
 private fun iso8601(timestampMs: Long): String =

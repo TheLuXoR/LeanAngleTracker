@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
+import com.example.leanangletracker.ui.components.JogWheel
+import com.example.leanangletracker.ui.components.LeanHistoryGraph
 import com.example.leanangletracker.ui.theme.SecondaryBlue
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat

@@ -1,4 +1,4 @@
-package com.example.leanangletracker.ui.tracking
+package com.example.leanangletracker.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.exponentialDecay
@@ -16,10 +16,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+
+@Preview(heightDp = 100, widthDp = 1000)
+@Composable
+internal fun JogWheel() {
+    JogWheel(value = 500,onValueChange ={}, range = 0..500, modifier = Modifier)
+}
 
 @Composable
 internal fun JogWheel(
@@ -54,20 +62,22 @@ internal fun JogWheel(
                 state = rememberDraggableState { delta ->
                     val sensitivity = 0.2f
                     var effectiveDelta = -delta * sensitivity
-                    
+
                     // Apply resistance if overscrolled
                     val current = scrollOffset.value
                     if (current < minBound && effectiveDelta < 0) {
-                        val resistance = (1f - (abs(minBound - current) / overscrollLimit)).coerceIn(0.1f, 1f)
+                        val resistance =
+                            (1f - (abs(minBound - current) / overscrollLimit)).coerceIn(0.1f, 1f)
                         effectiveDelta *= resistance
                     } else if (current > maxBound && effectiveDelta > 0) {
-                        val resistance = (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
+                        val resistance =
+                            (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
                         effectiveDelta *= resistance
                     }
 
                     val newOffset = (current + effectiveDelta)
                         .coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
-                    
+
                     scope.launch {
                         scrollOffset.snapTo(newOffset)
                         onValueChange(newOffset.roundToInt().coerceIn(range))
@@ -90,7 +100,10 @@ internal fun JogWheel(
                                     scope.launch {
                                         scrollOffset.animateTo(
                                             targetValue = if (value < minBound) minBound else maxBound,
-                                            animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                            animationSpec = spring(
+                                                dampingRatio = 0.75f,
+                                                stiffness = 300f
+                                            )
                                         )
                                     }
                                 }

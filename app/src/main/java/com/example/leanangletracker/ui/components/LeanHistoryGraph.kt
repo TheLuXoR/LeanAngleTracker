@@ -1,4 +1,4 @@
-package com.example.leanangletracker.ui.tracking
+package com.example.leanangletracker.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -63,7 +63,7 @@ internal fun LeanHistoryGraph(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    stringResource(R.string.history_upper_bound, upperBound),
+                    stringResource(R.string.history_max_left, upperBound),
                     modifier = Modifier.padding(end = 8.dp, top = 2.dp),
                     color = Color.White,
                     fontSize = 12.sp,
@@ -80,13 +80,39 @@ internal fun LeanHistoryGraph(
 
                 fun yFor(deg: Float): Float = centerY - (deg / amplitude) * (height * 0.45f)
 
+                val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
+
                 // Grid Lines
-                drawLine(Color(0x66FFFFFF), Offset(0f, yFor(upperBound)), Offset(width, yFor(upperBound)), 4f, StrokeCap.Round)
-                drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 2f)
-                drawLine(Color(0x66FFFFFF), Offset(0f, yFor(lowerBound)), Offset(width, yFor(lowerBound)), 2f)
+                // Upper bound line: from right border back to the point of highest amplitude (min value)
+                displayValues.minOrNull()?.let { minVal ->
+                    val minIndex = displayValues.indexOf(minVal)
+                    val startX = minIndex * stepX
+                    drawLine(
+                        color = Color(0x66FFFFFF),
+                        start = Offset(startX, yFor(upperBound)),
+                        end = Offset(width, yFor(upperBound)),
+                        strokeWidth = 4f,
+                        cap = StrokeCap.Round
+                    )
+                }
+
+                drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
+                drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
+
+                // Lower bound line: from right border back to the point of highest amplitude (max value)
+                displayValues.maxOrNull()?.let { maxVal ->
+                    val maxIndex = displayValues.indexOf(maxVal)
+                    val startX = maxIndex * stepX
+                    drawLine(
+                        color = Color(0x66FFFFFF),
+                        start = Offset(startX, yFor(lowerBound)),
+                        end = Offset(width, yFor(lowerBound)),
+                        strokeWidth = 2f,
+                        cap = StrokeCap.Round
+                    )
+                }
 
                 if (displayValues.size >= 2) {
-                    val stepX = width / (displayValues.size - 1)
                     val path = Path()
                     displayValues.forEachIndexed { index, value ->
                         val x = index * stepX
@@ -95,7 +121,7 @@ internal fun LeanHistoryGraph(
                     }
                     drawPath(
                         path = path,
-                        brush = Brush.verticalGradient(listOf(PrimaryOrange, SecondaryBlue)),
+                        brush = Brush.verticalGradient(listOf(Color.Red,PrimaryOrange,AccentGreen ,PrimaryOrange,Color.Red)),
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
 
@@ -118,7 +144,7 @@ internal fun LeanHistoryGraph(
                 }
             }
             Text(
-                stringResource(R.string.history_lower_bound, lowerBound),
+                stringResource(R.string.history_max_right, lowerBound),
                 modifier = Modifier.padding(end = 8.dp).align(Alignment.End),
                 color = Color.White,
                 fontSize = 12.sp,

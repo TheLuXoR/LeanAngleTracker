@@ -9,8 +9,8 @@
 
     <string name="screen_title_lean_angle">Schräglage</string>
     <string name="history_title">Verlauf</string>
-    <string name="history_upper_bound">Obere Grenze (Max R): %1$.1f°</string>
-    <string name="history_lower_bound">Untere Grenze (Max L): %1$.1f°</string>
+    <string name="history_max_left">Maximal Links: %1$.1f°</string>
+    <string name="history_max_right">Maximal Rechts: %1$.1f°</string>
 
     <string name="settings_dialog_info_title">App-Info</string>
     <string name="settings_dialog_info_text">Lean Angle Tracker hilft dir, deine Fahrdynamik zu überwachen. Nutze Gyro-Fusion für bessere Genauigkeit in dynamischen Kurven.</string>
