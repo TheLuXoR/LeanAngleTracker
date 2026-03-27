@@ -3,6 +3,7 @@
 
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
     <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
+    <string name="instructions_hold_still_for_bias">Bitte Motorrad/Telefon ruhig halten, damit Gyro-Bias ermittelt werden kann.</string>
     <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_calibrated">Kalibriert</string>
@@ -21,9 +22,6 @@
     <string name="settings_group_sensors_tracking">SENSORS &amp; TRACKING</string>
     <string name="settings_invert_lean_title">Invert Lean Angle</string>
     <string name="settings_invert_lean_subtitle">Flip left/right if phone is mounted upside down</string>
-    <string name="settings_gyro_fusion_title">Gyro-Fusion</string>
-    <string name="settings_gyro_fusion_subtitle_available">More accurate during dynamic riding</string>
-    <string name="settings_gyro_fusion_subtitle_unavailable">Gyroscope not available</string>
     <string name="settings_gps_tracking_title">GPS Tracking</string>
     <string name="settings_gps_tracking_subtitle_granted">Speed + route recording</string>
     <string name="settings_gps_tracking_subtitle_missing">Location permission required</string>
