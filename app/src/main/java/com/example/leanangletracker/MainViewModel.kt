@@ -154,6 +154,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val GYRO_BIAS_COLLECTION_DURATION_NS = 1_500_000_000L
         const val GYRO_BIAS_LINEAR_ACCEL_MAX = 0.45f
         const val GYRO_BIAS_ANGULAR_SPEED_MAX = 0.12f
+        const val OBSERVABILITY_LINEAR_ACCEL_MAX = 3.2f
+        const val OBSERVABILITY_INNOVATION_MAX_DEG = 14f
+        const val OBSERVABILITY_ROLL_RATE_MAX_RAD_PER_SEC = 1.4f
+        const val LATERAL_ACCEL_GATING_FULL_MS2 = 4.2f
+        const val MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC = 240f
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
@@ -201,6 +206,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var trackLengthMeters = 0f
     private var isCheckingForExtension = false
     private var latestLinearAccelerationMagnitude = 0f
+    private var fusionConfidence = 1f
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
@@ -869,6 +875,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val upRef = uprightUp ?: return
         val forward = bikeForwardAxis ?: return
         val currentUp = (filteredGravity * -1f).normalized()
+        val sideAxis = upRef.cross(forward).normalized()
 
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
@@ -882,12 +889,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val gravityNorm = filteredGravity.norm()
             val gravityTrust = (1f - (abs(gravityNorm - 9.81f) / 4f)).coerceIn(0f, 1f)
             val linearAccelNorm = filteredLinearAcceleration.norm()
-            val dynamicsTrust = (1f - (linearAccelNorm / 7f)).coerceIn(0.1f, 1f)
-            val accelTrust = (gravityTrust * dynamicsTrust).coerceIn(0.05f, 1f)
+            val sideLinearAccel = abs(filteredLinearAcceleration.dot(sideAxis))
+            val lowLinearPhaseTrust = (1f - (linearAccelNorm / OBSERVABILITY_LINEAR_ACCEL_MAX)).coerceIn(0f, 1f)
+            val innovationAbs = abs(accelLeanDeg - gyroLeanDeg)
+            val innovationStabilityTrust =
+                (1f - (innovationAbs / OBSERVABILITY_INNOVATION_MAX_DEG)).coerceIn(0f, 1f)
+            val rollStabilityTrust =
+                (1f - (abs(lastRollRateRadPerSec) / OBSERVABILITY_ROLL_RATE_MAX_RAD_PER_SEC)).coerceIn(0f, 1f)
+            val stablePhaseTrust = (0.55f * innovationStabilityTrust + 0.45f * rollStabilityTrust).coerceIn(0f, 1f)
+            val observabilityTrust = maxOf(lowLinearPhaseTrust, stablePhaseTrust)
 
-            val accelCorrectionLimitDeg = 2f + 8f * accelTrust
+            val lateralInnovationGate =
+                (1f - (sideLinearAccel / LATERAL_ACCEL_GATING_FULL_MS2)).coerceIn(0.15f, 1f)
+            val rawConfidence = (gravityTrust * observabilityTrust * lateralInnovationGate).coerceIn(0f, 1f)
+            fusionConfidence = (fusionConfidence * 0.88f + rawConfidence * 0.12f).coerceIn(0f, 1f)
+
+            val accelCorrectionLimitDeg = (1f + 10f * fusionConfidence) * lateralInnovationGate
             val accelInnovation = (accelLeanDeg - gyroLeanDeg).coerceIn(-accelCorrectionLimitDeg, accelCorrectionLimitDeg)
-            val accelGain = 0.015f + 0.12f * accelTrust
+            val accelGain = 0.003f + 0.14f * fusionConfidence * fusionConfidence
 
             val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= FUSION_ROTATION_FRESH_NS } == true
             val rotationGain = if (rotationFresh) 0.03f else 0f
@@ -898,10 +917,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             gyroLeanDeg
         } else {
             gyroLeanDeg = accelLeanDeg
+            fusionConfidence = 1f
             accelLeanDeg
         }
 
-        val leanDeg = if (_uiState.value.settings.invertLeanAngle) -fusedLeanDeg else fusedLeanDeg
+        val previousTimestampNs = latestLeanTimestampNs
+        val dtSeconds = previousTimestampNs?.let { ((timestampNs - it) / 1_000_000_000f).coerceAtLeast(0f) } ?: 0f
+        val maxStep = if (dtSeconds > 0f) MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC * dtSeconds else MAX_LEAN_DEG
+        val smoothedLeanDeg = (fusedLeanDeg - latestLeanDeg).coerceIn(-maxStep, maxStep) + latestLeanDeg
+        val leanDeg = if (_uiState.value.settings.invertLeanAngle) -smoothedLeanDeg else smoothedLeanDeg
         latestLeanDeg = leanDeg
         latestLeanTimestampNs = timestampNs
 
@@ -964,6 +988,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
         val rollRateRadPerSec = omega.dot(forward) - gyroBiasRadPerSec
+        lastRollRateRadPerSec = rollRateRadPerSec
         val deltaDeg = Math.toDegrees((rollRateRadPerSec * dt).toDouble()).toFloat()
         gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-75f, 75f)
     }
