@@ -21,9 +21,6 @@
     <string name="settings_group_sensors_tracking">SENSOREN &amp; TRACKING</string>
     <string name="settings_invert_lean_title">Schräglage invertieren</string>
     <string name="settings_invert_lean_subtitle">Links/Rechts tauschen, wenn das Handy kopfüber montiert ist</string>
-    <string name="settings_gyro_fusion_title">Gyro-Fusion</string>
-    <string name="settings_gyro_fusion_subtitle_available">Genauer bei dynamischer Fahrt</string>
-    <string name="settings_gyro_fusion_subtitle_unavailable">Gyroskop nicht verfügbar</string>
     <string name="settings_gps_tracking_title">GPS-Tracking</string>
     <string name="settings_gps_tracking_subtitle_granted">Geschwindigkeit + Streckenaufzeichnung</string>
     <string name="settings_gps_tracking_subtitle_missing">Standortberechtigung erforderlich</string>

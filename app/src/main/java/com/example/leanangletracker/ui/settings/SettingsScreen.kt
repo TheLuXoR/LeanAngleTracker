@@ -34,7 +34,6 @@ internal fun SettingsScreen(
     state: SettingsUiState,
     onBack: () -> Unit,
     onToggleInvertLean: (Boolean) -> Unit,
-    onToggleGyroFusion: (Boolean) -> Unit,
     onToggleGpsTracking: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onSetRecorderIntervalMs: (Int) -> Unit,
@@ -89,16 +88,6 @@ internal fun SettingsScreen(
                     onCheckedChange = onToggleInvertLean
                 )
                 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-                
-                SettingsSwitchItem(
-                    title = stringResource(R.string.settings_gyro_fusion_title),
-                    subtitle = if (state.gyroscopeAvailable) stringResource(R.string.settings_gyro_fusion_subtitle_available) else stringResource(R.string.settings_gyro_fusion_subtitle_unavailable),
-                    checked = state.useGyroFusion,
-                    onCheckedChange = onToggleGyroFusion,
-                    enabled = state.gyroscopeAvailable
-                )
-
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 
                 SettingsSwitchItem(

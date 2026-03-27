@@ -107,7 +107,6 @@ data class SettingsUiState(
     val invertLeanAngle: Boolean = false,
     val historyWindowSeconds: Int = 20,
     val recorderIntervalMs: Int = 200,
-    val useGyroFusion: Boolean = false,
     val gyroscopeAvailable: Boolean = false,
     val gpsTrackingEnabled: Boolean = false,
     val locationPermissionGranted: Boolean = false
@@ -133,7 +132,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val KEY_INVERT = "invert_lean"
         const val KEY_HISTORY_WINDOW = "history_window_s"
         const val KEY_RECORDER_INTERVAL = "recorder_interval_ms"
-        const val KEY_USE_GYRO = "use_gyro_fusion"
         const val KEY_GPS_ENABLED = "gps_enabled"
         const val KEY_CALIBRATED = "is_calibrated"
         const val KEY_UPRIGHT_X = "upright_x"
@@ -206,7 +204,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val savedInvert = prefs.getBoolean(KEY_INVERT, false)
         val savedHistory = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120)
         val savedRecorder = prefs.getInt(KEY_RECORDER_INTERVAL, 200).coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
-        val savedUseGyro = prefs.getBoolean(KEY_USE_GYRO, false)
         val savedGps = prefs.getBoolean(KEY_GPS_ENABLED, false)
 
         updateSettingsState {
@@ -214,7 +211,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 invertLeanAngle = savedInvert,
                 historyWindowSeconds = savedHistory,
                 recorderIntervalMs = savedRecorder,
-                useGyroFusion = savedUseGyro && gyroscopeSensor != null,
                 gpsTrackingEnabled = savedGps && it.locationPermissionGranted
             )
         }
@@ -258,7 +254,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             .putBoolean(KEY_INVERT, settings.invertLeanAngle)
             .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
-            .putBoolean(KEY_USE_GYRO, settings.useGyroFusion)
             .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
             .apply()
     }
@@ -637,13 +632,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         persistSettings()
     }
 
-    fun setUseGyroFusion(enabled: Boolean) {
-        val shouldUse = enabled && gyroscopeSensor != null
-        val current = _uiState.value
-        _uiState.value = current.copy(settings = current.settings.copy(useGyroFusion = shouldUse))
-        persistSettings()
-    }
-
     fun resetExtrema() {
         val historyValues = _uiState.value.tracking.leanHistoryDeg
         updateTrackingState {
@@ -767,7 +755,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val leanRad = atan2(numerator, denominator)
         val accelLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
 
-        val useFusion = _uiState.value.settings.useGyroFusion && gyroscopeSensor != null
+        val useFusion = gyroscopeSensor != null
         val fusedLeanDeg = if (useFusion) {
             val fused = (0.96f * gyroLeanDeg) + (0.04f * accelLeanDeg)
             gyroLeanDeg = fused.coerceIn(-75f, 75f)
@@ -823,7 +811,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             return
         }
 
-        if (!_uiState.value.settings.useGyroFusion) {
+        if (gyroscopeSensor == null) {
             lastGyroTimestampNs = event.timestamp
             return
         }
