@@ -3,6 +3,7 @@
 
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
     <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
+    <string name="instructions_hold_still_for_bias">Bitte Motorrad/Telefon ruhig halten, damit Gyro-Bias ermittelt werden kann.</string>
     <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
     <string name="instructions_calibrated">Kalibriert</string>
