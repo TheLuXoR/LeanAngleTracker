@@ -29,6 +29,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.math.acos
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
@@ -144,10 +145,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val KEY_FORWARD_Z = "forward_z"
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
+        const val MAX_LEAN_DEG = 75f
+        const val MAX_GYRO_DT_SEC = 0.2f
+        const val MAX_ROLL_RATE_RAD_PER_SEC = 8.5f
+        const val GYRO_REVERSAL_DAMPING = 0.55f
+        const val FUSION_ROTATION_FRESH_NS = 120_000_000L
     }
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
-    private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+    private val linearAccelerationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val locationManager = application.getSystemService(LocationManager::class.java)
     private val rideRepository = RideRepository(application)
@@ -157,6 +165,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private var filteredGravity = Vec3(0f, 0f, 9.81f)
+    private var filteredLinearAcceleration = Vec3(0f, 0f, 0f)
 
     private var uprightUp: Vec3? = null
     private var leftUpPeak: Vec3? = null
@@ -166,6 +175,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private var gyroLeanDeg = 0f
     private var lastGyroTimestampNs: Long? = null
+    private var lastRollRateRadPerSec = 0f
+    private var latestRotationLeanDeg: Float? = null
+    private var latestRotationTimestampNs: Long? = null
     private var speedKmh = 0f
     private var activeRideStartedMs: Long? = null
     private var accumulatedTimeMs: Long = 0L
@@ -185,7 +197,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val ridePoints = mutableListOf<TrackPoint>()
 
     init {
+        accelerometerSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        linearAccelerationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         gyroscopeSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
 
         updateSettingsState {
@@ -197,7 +211,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         loadPersistedState()
 
-        if (gravitySensor == null) {
+        if (accelerometerSensor == null && gravitySensor == null) {
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
     }
@@ -233,6 +247,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         bikeForwardAxis = savedForward
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
+        lastRollRateRadPerSec = 0f
+        latestRotationLeanDeg = null
+        latestRotationTimestampNs = null
 
         updateCalibrationState {
             it.copy(
@@ -547,6 +564,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         calibrationSideAxis = null
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
+        lastRollRateRadPerSec = 0f
+        latestRotationLeanDeg = null
+        latestRotationTimestampNs = null
         clearPersistedCalibration()
 
         updateCalibrationState {
@@ -659,7 +679,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                val alpha = 0.92f
+                val alpha = if (gravitySensor == null) 0.92f else 0.985f
                 val raw = Vec3(event.values[0], event.values[1], event.values[2])
                 filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
 
@@ -669,6 +689,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 } else if (step == BikeLean.UPRIGHT || step == BikeLean.DONE) {
                     updateLeanAngle(event.timestamp)
                 }
+            }
+            Sensor.TYPE_GRAVITY -> {
+                val raw = Vec3(event.values[0], event.values[1], event.values[2])
+                filteredGravity = filteredGravity * 0.25f + raw * 0.75f
+                val step = _uiState.value.calibration.calibrationStep
+                if (step == BikeLean.LEFT || step == BikeLean.RIGHT) {
+                    handleManualCalibrationSensorUpdate()
+                } else if (step == BikeLean.UPRIGHT || step == BikeLean.DONE) {
+                    updateLeanAngle(event.timestamp)
+                }
+            }
+            Sensor.TYPE_LINEAR_ACCELERATION -> {
+                val raw = Vec3(event.values[0], event.values[1], event.values[2])
+                filteredLinearAcceleration = filteredLinearAcceleration * 0.6f + raw * 0.4f
             }
             Sensor.TYPE_GYROSCOPE -> updateGyroLean(event)
         }
@@ -739,6 +773,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         bikeForwardAxis = forward
         gyroLeanDeg = 0f
         lastGyroTimestampNs = null
+        lastRollRateRadPerSec = 0f
+        latestRotationLeanDeg = null
+        latestRotationTimestampNs = null
 
         updateCalibrationState {
             it.copy(
@@ -765,12 +802,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val numerator = forward.dot(upRef.cross(currentUp))
         val denominator = upRef.dot(currentUp)
         val leanRad = atan2(numerator, denominator)
-        val accelLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-75f, 75f)
+        val accelLeanDeg = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+        latestRotationLeanDeg = accelLeanDeg
+        latestRotationTimestampNs = timestampNs
 
         val useFusion = _uiState.value.settings.useGyroFusion && gyroscopeSensor != null
         val fusedLeanDeg = if (useFusion) {
-            val fused = (0.96f * gyroLeanDeg) + (0.04f * accelLeanDeg)
-            gyroLeanDeg = fused.coerceIn(-75f, 75f)
+            val gravityNorm = filteredGravity.norm()
+            val gravityTrust = (1f - (abs(gravityNorm - 9.81f) / 4f)).coerceIn(0f, 1f)
+            val linearAccelNorm = filteredLinearAcceleration.norm()
+            val dynamicsTrust = (1f - (linearAccelNorm / 7f)).coerceIn(0.1f, 1f)
+            val accelTrust = (gravityTrust * dynamicsTrust).coerceIn(0.05f, 1f)
+
+            val accelCorrectionLimitDeg = 2f + 8f * accelTrust
+            val accelInnovation = (accelLeanDeg - gyroLeanDeg).coerceIn(-accelCorrectionLimitDeg, accelCorrectionLimitDeg)
+            val accelGain = 0.015f + 0.12f * accelTrust
+
+            val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= FUSION_ROTATION_FRESH_NS } == true
+            val rotationGain = if (rotationFresh) 0.03f else 0f
+            val rotationInnovation = ((latestRotationLeanDeg ?: accelLeanDeg) - gyroLeanDeg).coerceIn(-4f, 4f)
+
+            val fused = gyroLeanDeg + (accelInnovation * accelGain) + (rotationInnovation * rotationGain)
+            gyroLeanDeg = fused.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
             gyroLeanDeg
         } else {
             gyroLeanDeg = accelLeanDeg
@@ -820,11 +873,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private fun updateGyroLean(event: SensorEvent) {
         if (_uiState.value.calibration.calibrationStep != BikeLean.DONE) {
             lastGyroTimestampNs = null
+            lastRollRateRadPerSec = 0f
             return
         }
 
         if (!_uiState.value.settings.useGyroFusion) {
             lastGyroTimestampNs = event.timestamp
+            lastRollRateRadPerSec = 0f
             return
         }
 
@@ -834,12 +889,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (previousTimestamp == null) return
 
         val dt = (event.timestamp - previousTimestamp) / 1_000_000_000f
-        if (dt <= 0f || dt > 0.2f) return
+        if (dt <= 0f || dt > MAX_GYRO_DT_SEC) return
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
-        val rollRateRadPerSec = omega.dot(forward)
-        val deltaDeg = Math.toDegrees((rollRateRadPerSec * dt).toDouble()).toFloat()
-        gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-75f, 75f)
+        val rawRollRateRadPerSec = omega.dot(forward).coerceIn(-MAX_ROLL_RATE_RAD_PER_SEC, MAX_ROLL_RATE_RAD_PER_SEC)
+        val filteredRollRateRadPerSec = (0.8f * lastRollRateRadPerSec) + (0.2f * rawRollRateRadPerSec)
+        val directionReversalDetected =
+            (lastRollRateRadPerSec * filteredRollRateRadPerSec < 0f) &&
+                (abs(filteredRollRateRadPerSec - lastRollRateRadPerSec) > 1.1f)
+        val effectiveRollRate = if (directionReversalDetected) {
+            filteredRollRateRadPerSec * GYRO_REVERSAL_DAMPING
+        } else {
+            filteredRollRateRadPerSec
+        }
+        lastRollRateRadPerSec = filteredRollRateRadPerSec
+
+        val deltaDeg = Math.toDegrees((effectiveRollRate * dt).toDouble()).toFloat()
+        gyroLeanDeg = (gyroLeanDeg + deltaDeg).coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
     }
 
     private fun hasLocationPermission(): Boolean {
