@@ -149,7 +149,6 @@ class MainActivity : ComponentActivity() {
                                 state = state.settings,
                                 onBack = { routeUiState = routeUiState.copy(showSettings = false) },
                                 onToggleInvertLean = viewModel::setInvertLeanAngle,
-                                onToggleGyroFusion = viewModel::setUseGyroFusion,
                                 onToggleGpsTracking = { enabled ->
                                     if (enabled && !state.settings.locationPermissionGranted) {
                                         permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
