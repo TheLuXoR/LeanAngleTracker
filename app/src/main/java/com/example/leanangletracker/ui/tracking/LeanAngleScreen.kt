@@ -1,18 +1,24 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -52,6 +58,7 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizardLandscape
 import com.example.leanangletracker.ui.calibration.CalibrationWizardPortrait
+import com.example.leanangletracker.ui.components.GpsStatsDashboard
 import com.example.leanangletracker.ui.components.buttons.HistoryButton
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
 import com.example.leanangletracker.ui.components.TachoGauge
@@ -181,35 +188,46 @@ internal fun LeanAngleScreen(
             }
 
             if (isLandscape) {
-
-                    Row(
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    TachoGauge(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        TachoGauge(
-                            modifier = Modifier
-                                .weight(1.2f)
-                                .fillMaxHeight(),
-                            currentDeg = trackingState.leanAngleDeg,
-                            maxLeftDeg = trackingState.maxLeftDeg,
-                            maxRightDeg = trackingState.maxRightDeg
-                        )
+                            .weight(1.2f)
+                            .fillMaxHeight(),
+                        currentDeg = trackingState.leanAngleDeg,
+                        maxLeftDeg = trackingState.maxLeftDeg,
+                        maxRightDeg = trackingState.maxRightDeg
+                    )
 
-                        Column (modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()){
-                            LeanHistoryGraph(
-                                modifier = Modifier.weight(1f),
-                                values = trackingState.leanHistoryDeg,
-
+                    Column (modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()){
+                        
+                        AnimatedVisibility(
+                            visible = trackingState.currentLatitude != null,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            GpsStatsDashboard(
+                                speedKmh = trackingState.speedKmh,
+                                distanceKm = trackingState.trackLengthKm,
+                                elapsedTimeMs = trackingState.elapsedTimeMs,
+                                modifier = Modifier.padding(bottom = 16.dp)
                             )
-                            // AdMob Banner at the bottom
-                            AdMobBanner(modifier = Modifier.fillMaxWidth())
                         }
-                    }
 
+                        LeanHistoryGraph(
+                            modifier = Modifier.weight(1f),
+                            values = trackingState.leanHistoryDeg,
+                        )
+                        // AdMob Banner at the bottom
+                        AdMobBanner(modifier = Modifier.fillMaxWidth())
+                    }
+                }
             } else {
                 TachoGauge(
                     currentDeg = trackingState.leanAngleDeg,
@@ -220,6 +238,18 @@ internal fun LeanAngleScreen(
                         .aspectRatio(2f)
                 )
 
+                AnimatedVisibility(
+                    visible = trackingState.currentLatitude != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    GpsStatsDashboard(
+                        speedKmh = trackingState.speedKmh,
+                        distanceKm = trackingState.trackLengthKm,
+                        elapsedTimeMs = trackingState.elapsedTimeMs
+                    )
+                }
+
                 LeanHistoryGraph(
                     values = trackingState.leanHistoryDeg,
                     modifier = Modifier
@@ -228,7 +258,6 @@ internal fun LeanAngleScreen(
                 )
                 // AdMob Banner at the bottom
                 AdMobBanner(modifier = Modifier.fillMaxWidth())
-
             }
         }
     }
@@ -274,63 +303,6 @@ private fun RainbowSearchGpsText() {
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = color
-            )
-        }
-    }
-}
-
-@Composable
-private fun TrackingStatsCard(
-    trackingState: TrackingUiState,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-                .basicMarquee(),
-        ) {
-            val locationText =
-                if (trackingState.currentLatitude != null && trackingState.currentLongitude != null) {
-                    String.format(
-                        Locale.US,
-                        "%.6f, %.6f",
-                        trackingState.currentLatitude,
-                        trackingState.currentLongitude
-                    )
-                } else {
-                    "n/a"
-                }
-            Text(
-                modifier = Modifier.padding(16.dp, 0.dp),
-                text = "speed: ${"%.1f".format(Locale.US, trackingState.speedKmh)} km/h"
-            )
-            Text(modifier = Modifier.padding(16.dp, 0.dp), text = "location: $locationText")
-            Text(
-                modifier = Modifier.padding(16.dp, 0.dp),
-                text = "elapsedTime: ${formatElapsedTime(trackingState.elapsedTimeMs)}"
-            )
-            Text(
-                modifier = Modifier.padding(16.dp, 0.dp),
-                text = "avg spd: ${"%.1f".format(Locale.US, trackingState.averageSpeedKmh)} km/h"
-            )
-            Text(
-                modifier = Modifier.padding(16.dp, 0.dp),
-                text = "trackLenght: ${"%.2f".format(Locale.US, trackingState.trackLengthKm)} km"
-            )
-            Text(
-                modifier = Modifier.padding(16.dp, 0.dp),
-                text = "avg leanAngle: ${
-                    "%.1f".format(
-                        Locale.US,
-                        trackingState.averageLeanAngleDeg
-                    )
-                }°"
             )
         }
     }
