@@ -59,15 +59,8 @@ fun RecordButton(
     // Wave control logic
     var showWave by remember { mutableStateOf(false) }
     LaunchedEffect(isRecording, isWaitingForGps) {
-        if (isRecording) {
-            if (isWaitingForGps) {
-                showWave = true
-            } else {
-                // When recording is active and GPS is fixed, pulse for 5 seconds as feedback
-                showWave = true
-                delay(5000)
-                showWave = false
-            }
+        if (isRecording && isWaitingForGps) {
+            showWave = true
         } else {
             showWave = false
         }
