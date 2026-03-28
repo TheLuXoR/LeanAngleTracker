@@ -1,16 +1,12 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
@@ -22,29 +18,19 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,11 +52,13 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.calibration.CalibrationWizardLandscape
 import com.example.leanangletracker.ui.calibration.CalibrationWizardPortrait
+import com.example.leanangletracker.ui.components.buttons.HistoryButton
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
 import com.example.leanangletracker.ui.components.TachoGauge
 import com.example.leanangletracker.ui.components.admob.AdMobBanner
+import com.example.leanangletracker.ui.components.buttons.PauseButton
+import com.example.leanangletracker.ui.components.buttons.RecordButton
 import com.example.leanangletracker.ui.theme.AccentGreen
-import com.example.leanangletracker.ui.theme.ErrorRed
 import java.util.Locale
 
 @Composable
@@ -159,98 +147,23 @@ internal fun LeanAngleScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (trackingState.gpsTrackingEnabled && !trackingState.trackingStarted) {
-                        FilledTonalIconButton(
-                            onClick = onStartTracking,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        ) {
-                            Icon(
-                                Icons.Default.FiberManualRecord,
-                                contentDescription = "Start Recording",
-                                tint = ErrorRed,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                    if (trackingState.trackingStarted) {
-                        // Pause / Resume
-                        IconButton(
-                            onClick = onTogglePause,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            Icon(
-                                if (trackingState.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                contentDescription = if (trackingState.isPaused) "Resume" else "Pause",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
 
-                        // Stop
-                        Box(contentAlignment = Alignment.Center) {
-                            if (!trackingState.isPaused) {
-                                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                                val alpha by infiniteTransition.animateFloat(
-                                    initialValue = 0.4f,
-                                    targetValue = 1f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(1000, easing = FastOutSlowInEasing),
-                                        repeatMode = RepeatMode.Reverse
-                                    ),
-                                    label = "alpha"
-                                )
+                    PauseButton(onClick = onTogglePause,
+                        isPaused = trackingState.isPaused,
+                        isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted
+                    )
 
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(42.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 3.dp
-                                )
-                                IconButton(
-                                    onClick = onFinishRide,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(ErrorRed.copy(alpha = 0.15f * alpha))
-                                ) {
-                                    Icon(
-                                        Icons.Default.Stop,
-                                        contentDescription = "Stop Recording",
-                                        tint = ErrorRed.copy(alpha = alpha),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            } else {
-                                IconButton(
-                                    onClick = onFinishRide,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(ErrorRed.copy(alpha = 0.1f))
-                                ) {
-                                    Icon(
-                                        Icons.Default.Stop,
-                                        contentDescription = "Stop Recording",
-                                        tint = ErrorRed
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        IconButton(
-                            onClick = onOpenHistory,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.List,
-                                contentDescription = "History",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                    RecordButton(
+                        onRecord =  onStartTracking,
+                        onStopRecord = onFinishRide,
+                        isPaused = trackingState.isPaused,
+                        isRecording = trackingState.trackingStarted
+                    )
+
+                    HistoryButton(
+                        onOpenHistory = onOpenHistory,
+                        enabled = !trackingState.trackingStarted
+                    )
                     IconButton(
                         onClick = onOpenSettings,
                         modifier = Modifier
