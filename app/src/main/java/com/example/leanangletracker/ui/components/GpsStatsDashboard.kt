@@ -30,7 +30,8 @@ fun GpsStatsDashboard(
     speedKmh: Float,
     distanceKm: Float,
     elapsedTimeMs: Long,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLandscape: Boolean = false
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -38,78 +39,166 @@ fun GpsStatsDashboard(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
         tonalElevation = 8.dp
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Speed Section
+        if (isLandscape) {
             Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Speed,
-                    contentDescription = null,
-                    tint = PrimaryOrange,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .padding(bottom = 8.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = String.format(Locale.US, "%.0f", speedKmh),
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontSize = 64.sp,
-                        fontWeight = FontWeight.Black
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "km/h",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Divider with gradient
-            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .height(1.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Side Info Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem(
+                // Speed Section
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = String.format(Locale.US, "%.0f", speedKmh),
+                        style = MaterialTheme.typography.displayMedium.copy(
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "km/h",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+                    )
+                }
+
+                VerticalDivider()
+
+                StatItemLandscape(
                     icon = Icons.Rounded.Route,
-                    value = String.format(Locale.US, "%.2f km", distanceKm),
-                    label = "DISTANCE",
+                    value = String.format(Locale.US, "%.1f", distanceKm),
+                    unit = "km",
                     color = SecondaryBlue
                 )
-                StatItem(
+
+                VerticalDivider()
+
+                StatItemLandscape(
                     icon = Icons.Rounded.AccessTime,
-                    value = formatElapsedTime(elapsedTimeMs),
-                    label = "DURATION",
+                    value = formatElapsedTimeShort(elapsedTimeMs),
+                    unit = "",
                     color = AccentGreen
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Speed Section
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Speed,
+                        contentDescription = null,
+                        tint = PrimaryOrange,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .padding(bottom = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = String.format(Locale.US, "%.0f", speedKmh),
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 64.sp,
+                            fontWeight = FontWeight.Black
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "km/h",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Divider with gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .height(1.dp)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Side Info Section
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatItem(
+                        icon = Icons.Rounded.Route,
+                        value = String.format(Locale.US, "%.2f km", distanceKm),
+                        label = "DISTANCE",
+                        color = SecondaryBlue
+                    )
+                    StatItem(
+                        icon = Icons.Rounded.AccessTime,
+                        value = formatElapsedTime(elapsedTimeMs),
+                        label = "DURATION",
+                        color = AccentGreen
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VerticalDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(32.dp)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+    )
+}
+
+@Composable
+private fun StatItemLandscape(
+    icon: ImageVector,
+    value: String,
+    unit: String,
+    color: Color
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (unit.isNotEmpty()) {
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }
@@ -153,6 +242,18 @@ private fun formatElapsedTime(elapsedMs: Long): String {
     val seconds = totalSeconds % 60L
     return if (hours > 0L) {
         String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
+    }
+}
+
+private fun formatElapsedTimeShort(elapsedMs: Long): String {
+    val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%dh %02dm", hours, minutes)
     } else {
         String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }

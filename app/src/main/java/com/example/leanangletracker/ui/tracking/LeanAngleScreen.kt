@@ -13,12 +13,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -28,13 +26,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +38,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,6 +90,13 @@ internal fun LeanAngleScreen(
         }
         onDispose {
             view.keepScreenOn = false
+        }
+    }
+
+    // Use movableContentOf to keep the AdMobBanner instance (and its state) alive across layout changes
+    val movableBanner = remember {
+        movableContentOf {
+            AdMobBanner(modifier = Modifier.fillMaxWidth())
         }
     }
 
@@ -194,19 +198,35 @@ internal fun LeanAngleScreen(
                         .weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    TachoGauge(
+                    // Left Column: Gauge and Ads
+                    Column(
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight(),
-                        currentDeg = trackingState.leanAngleDeg,
-                        maxLeftDeg = trackingState.maxLeftDeg,
-                        maxRightDeg = trackingState.maxRightDeg
-                    )
-
-                    Column (modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()){
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        TachoGauge(
+                            modifier = Modifier.weight(1f),
+                            currentDeg = trackingState.leanAngleDeg,
+                            maxLeftDeg = trackingState.maxLeftDeg,
+                            maxRightDeg = trackingState.maxRightDeg
+                        )
                         
+                        movableBanner()
+                    }
+
+                    // Right Column: Graph and GPS Stats
+                    Column (
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ){
+                        LeanHistoryGraph(
+                            modifier = Modifier.weight(1f),
+                            values = trackingState.leanHistoryDeg,
+                        )
+
                         AnimatedVisibility(
                             visible = trackingState.currentLatitude != null,
                             enter = fadeIn() + expandVertically(),
@@ -216,19 +236,13 @@ internal fun LeanAngleScreen(
                                 speedKmh = trackingState.speedKmh,
                                 distanceKm = trackingState.trackLengthKm,
                                 elapsedTimeMs = trackingState.elapsedTimeMs,
-                                modifier = Modifier.padding(bottom = 16.dp)
+                                isLandscape = true
                             )
                         }
-
-                        LeanHistoryGraph(
-                            modifier = Modifier.weight(1f),
-                            values = trackingState.leanHistoryDeg,
-                        )
-                        // AdMob Banner at the bottom
-                        AdMobBanner(modifier = Modifier.fillMaxWidth())
                     }
                 }
             } else {
+                // Portrait Layout
                 TachoGauge(
                     currentDeg = trackingState.leanAngleDeg,
                     maxLeftDeg = trackingState.maxLeftDeg,
@@ -246,7 +260,8 @@ internal fun LeanAngleScreen(
                     GpsStatsDashboard(
                         speedKmh = trackingState.speedKmh,
                         distanceKm = trackingState.trackLengthKm,
-                        elapsedTimeMs = trackingState.elapsedTimeMs
+                        elapsedTimeMs = trackingState.elapsedTimeMs,
+                        isLandscape = false
                     )
                 }
 
@@ -256,8 +271,8 @@ internal fun LeanAngleScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 )
-                // AdMob Banner at the bottom
-                AdMobBanner(modifier = Modifier.fillMaxWidth())
+                
+                movableBanner()
             }
         }
     }
@@ -305,17 +320,5 @@ private fun RainbowSearchGpsText() {
                 color = color
             )
         }
-    }
-}
-
-private fun formatElapsedTime(elapsedMs: Long): String {
-    val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
-    val hours = totalSeconds / 3600L
-    val minutes = (totalSeconds % 3600L) / 60L
-    val seconds = totalSeconds % 60L
-    return if (hours > 0L) {
-        String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }

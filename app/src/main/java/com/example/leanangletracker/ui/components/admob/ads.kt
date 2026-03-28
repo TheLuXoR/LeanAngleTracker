@@ -4,11 +4,23 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.leanangletracker.BuildConfig
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
@@ -24,19 +36,45 @@ fun AdMobBanner(
     modifier: Modifier = Modifier.fillMaxWidth(),
     adUnitId: String = BuildConfig.ADMOB_BANNER_ID
 ) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            AdView(context).apply {
-                setAdSize(AdSize.BANNER)
-                this.adUnitId = adUnitId
-                loadAd(AdRequest.Builder().build())
+    val context = LocalContext.current
+    var isAdLoaded by remember { mutableStateOf(false) }
+
+    // Create the AdView once and keep it in memory
+    val adView = remember {
+        AdView(context).apply {
+            setAdSize(AdSize.BANNER)
+            this.adUnitId = adUnitId
+            adListener = object : AdListener() {
+                override fun onAdLoaded() {
+                    super.onAdLoaded()
+                    isAdLoaded = true
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    super.onAdFailedToLoad(error)
+                    Log.e(TAG, "Banner failed to load: ${error.message}")
+                }
             }
-        },
-        update = { adView ->
-            adView.loadAd(AdRequest.Builder().build())
+            loadAd(AdRequest.Builder().build())
         }
-    )
+    }
+
+    // Ensure the AdView is destroyed when the Composable is removed
+    DisposableEffect(adView) {
+        onDispose {
+            adView.destroy()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = isAdLoaded,
+        enter = fadeIn() + slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Bottom)
+    ) {
+        AndroidView(
+            modifier = modifier,
+            factory = { adView },
+            update = { }
+        )
+    }
 }
 
 fun loadInterstitial(context: Context, onAdLoaded: (InterstitialAd?) -> Unit) {
