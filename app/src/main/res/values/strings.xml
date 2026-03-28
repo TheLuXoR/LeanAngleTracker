@@ -10,8 +10,8 @@
 
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="history_title">History</string>
-    <string name="history_max_left">Maximal Links: %1$.1f°</string>
-    <string name="history_max_right">Maximal Rechts: %1$.1f°</string>
+    <string name="history_max_left">Left: %1$.1f°</string>
+    <string name="history_max_right">Right: %1$.1f°</string>
 
     <string name="settings_dialog_info_title">App Info</string>
     <string name="settings_dialog_info_text">Lean Angle Tracker helps you monitor your riding dynamics. Use Gyro-Fusion for better accuracy during aggressive cornering.</string>

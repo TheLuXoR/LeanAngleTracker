@@ -31,6 +31,7 @@ import com.example.leanangletracker.ui.theme.GaugeNeedle
 import com.example.leanangletracker.ui.theme.GaugeScale
 import com.example.leanangletracker.ui.theme.PrimaryOrange
 import com.example.leanangletracker.ui.theme.SecondaryBlue
+import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.DecimalFormat
 import kotlin.math.abs
@@ -176,7 +177,7 @@ public fun TachoGauge(
                     modifier = Modifier.padding(4.dp),
                     text = df.format(currentDeg),
                     style = MaterialTheme.typography.titleLarge,
-                    color = SecondaryBlue
+                    color = TextPrimary
                 )
             }
         }
@@ -188,10 +189,11 @@ public fun TachoGauge(
 fun MaxValItem(label: String, value: Float) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+
         Text(
-            text = "${value.toInt()}°",
+            text = "%.1f°".format(value),
             style = MaterialTheme.typography.titleLarge,
-            color = SecondaryBlue
+            color = TextPrimary
         )
     }
 }

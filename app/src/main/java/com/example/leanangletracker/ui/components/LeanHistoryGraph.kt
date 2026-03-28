@@ -15,8 +15,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.motionEventSpy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,10 +65,10 @@ internal fun LeanHistoryGraph(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    stringResource(R.string.history_max_left, upperBound),
+                    stringResource(R.string.history_max_left, -upperBound),
                     modifier = Modifier.padding(end = 8.dp, top = 2.dp),
                     color = Color.White,
-                    fontSize = 12.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -78,7 +80,7 @@ internal fun LeanHistoryGraph(
                 val height = size.height
                 val centerY = height / 2f
 
-                fun yFor(deg: Float): Float = centerY - (deg / amplitude) * (height * 0.45f)
+                fun yFor(deg: Float): Float = centerY + (deg / amplitude) * (height * 0.45f)
 
                 val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
@@ -88,11 +90,12 @@ internal fun LeanHistoryGraph(
                     val minIndex = displayValues.indexOf(minVal)
                     val startX = minIndex * stepX
                     drawLine(
-                        color = Color(0x66FFFFFF),
+                        color = PrimaryOrange,
                         start = Offset(startX, yFor(upperBound)),
                         end = Offset(width, yFor(upperBound)),
-                        strokeWidth = 4f,
-                        cap = StrokeCap.Round
+                        strokeWidth = 2f,
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
                     )
                 }
 
@@ -104,11 +107,12 @@ internal fun LeanHistoryGraph(
                     val maxIndex = displayValues.indexOf(maxVal)
                     val startX = maxIndex * stepX
                     drawLine(
-                        color = Color(0x66FFFFFF),
+                        color = PrimaryOrange,
                         start = Offset(startX, yFor(lowerBound)),
                         end = Offset(width, yFor(lowerBound)),
                         strokeWidth = 2f,
-                        cap = StrokeCap.Round
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
                     )
                 }
 
@@ -147,7 +151,7 @@ internal fun LeanHistoryGraph(
                 stringResource(R.string.history_max_right, lowerBound),
                 modifier = Modifier.padding(end = 8.dp).align(Alignment.End),
                 color = Color.White,
-                fontSize = 12.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
         }

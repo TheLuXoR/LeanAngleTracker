@@ -150,14 +150,15 @@ internal fun LeanAngleScreen(
 
                     PauseButton(onClick = onTogglePause,
                         isPaused = trackingState.isPaused,
-                        isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted
+                        isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null
                     )
 
                     RecordButton(
                         onRecord =  onStartTracking,
                         onStopRecord = onFinishRide,
                         isPaused = trackingState.isPaused,
-                        isRecording = trackingState.trackingStarted
+                        isRecording = trackingState.trackingStarted,
+                        isWaitingForGps = trackingState.trackingStarted && trackingState.currentLatitude == null
                     )
 
                     HistoryButton(

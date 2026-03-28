@@ -15,7 +15,7 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.ui.components.JogWheel
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
-import com.example.leanangletracker.ui.theme.SecondaryBlue
+import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.*
@@ -176,7 +176,7 @@ internal fun RideReviewTemplate(
 private fun StatItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = SecondaryBlue, fontWeight = FontWeight.Bold)
+        Text(value, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
     }
 }
 
