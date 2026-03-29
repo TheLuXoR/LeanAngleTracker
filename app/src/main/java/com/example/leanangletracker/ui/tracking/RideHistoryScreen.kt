@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.leanangletracker.R
@@ -254,6 +255,16 @@ private fun RideHistoryItem(
                             text = titleText,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (!summary.routeDescription.isNullOrBlank()) {
+                        Text(
+                            text = summary.routeDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
                     Text(
