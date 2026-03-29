@@ -10,8 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -28,14 +28,14 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.leanangletracker.ui.intro.IntroScreen
 import com.example.leanangletracker.ui.intro.IntroStage
 import com.example.leanangletracker.ui.navigation.AppRoute
+import com.example.leanangletracker.ui.navigation.ScreenDirection
 import com.example.leanangletracker.ui.settings.SettingsScreen
 import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
 import com.example.leanangletracker.ui.tracking.RideHistoryScreen
+import com.example.leanangletracker.ui.tracking.RideDetailScreen
+import com.example.leanangletracker.ui.calibration.CalibrationScreen
 import kotlinx.coroutines.delay
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -79,13 +79,22 @@ class MainActivity : ComponentActivity() {
                         introStage = routeUiState.introStage,
                         showSettings = routeUiState.showSettings,
                         showHistory = routeUiState.showHistory,
+                        selectedRideId = routeUiState.selectedRideId,
                         isCalibrated = state.calibration.isCalibrated
                     )
 
-                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview) {
+                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration) {
                         when (route) {
                             AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
+                            is AppRoute.RideDetail -> routeUiState = routeUiState.copy(selectedRideId = null)
+                            AppRoute.Calibration -> {
+                                // Calibration is mandatory if not calibrated, otherwise we can go back
+                                if (state.calibration.isCalibrated) {
+                                    // Normally calibration is triggered from settings
+                                    // If we're here, we just want to go back to wherever we came from
+                                }
+                            }
                             else -> Unit
                         }
                     }
@@ -94,14 +103,29 @@ class MainActivity : ComponentActivity() {
                         targetState = route,
                         transitionSpec = {
                             val forward = targetState.index() > initialState.index()
-
-                            slideInVertically(
+                            val effectiveDirection = if (forward) {
+                                targetState.screen.screenEntryDirection
+                            } else {
+                                initialState.screen.screenEntryDirection
+                            }
+                            
+                            if (effectiveDirection == ScreenDirection.HORIZONTAL) {
+                                slideInHorizontally(
+                                    animationSpec = tween(300),
+                                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth }
+                                ) togetherWith slideOutHorizontally(
+                                    animationSpec = tween(300),
+                                    targetOffsetX = { fullWidth -> if (forward) -fullWidth else fullWidth }
+                                )
+                            } else {
+                                slideInVertically(
                                     animationSpec = tween(300),
                                     initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
                                 ) togetherWith slideOutVertically(
                                     animationSpec = tween(300),
                                     targetOffsetY = { fullHeight -> if (forward) fullHeight else -fullHeight }
                                 )
+                            }
                         },
                         contentKey = { it::class },
                         label = "app_route"
@@ -127,7 +151,6 @@ class MainActivity : ComponentActivity() {
 
                             AppRoute.Tracking -> LeanAngleScreen(
                                 trackingState = state.tracking,
-                                calibrationState = state.calibration,
                                 onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
                                 onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                 onStartTracking = viewModel::startTracking,
@@ -140,9 +163,13 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onTogglePause = viewModel::togglePauseTracking,
                                 offerExtend = state.offerExtendSession,
-                                onConfirmExtend = viewModel::confirmExtendRide,
+                                onConfirmExtend = viewModel::confirmExtendRide
+                            )
+
+                            AppRoute.Calibration -> CalibrationScreen(
+                                calibrationState = state.calibration,
                                 onCaptureUpright = viewModel::captureUpright,
-                                onContinueCalibrationFallback = viewModel::continueCalibrationFallback
+                                onContinueFallback = viewModel::continueCalibrationFallback
                             )
 
                             AppRoute.Settings -> SettingsScreen(
@@ -166,14 +193,30 @@ class MainActivity : ComponentActivity() {
 
                             AppRoute.TrackReview -> RideHistoryScreen(
                                 rideHistory = state.rideHistory,
-                                expandedRides = state.expandedRides,
-                                onLoadDetails = viewModel::loadFullSession,
+                                onSelectRide = { id -> 
+                                    viewModel.loadFullSession(id)
+                                    routeUiState = routeUiState.copy(selectedRideId = id) 
+                                },
                                 onBack = { routeUiState = routeUiState.copy(showHistory = false) },
                                 onDeleteRide = viewModel::deleteRide,
-                                lastSavedRideId = state.lastSavedRideId,
-                                onUpdateName = viewModel::updateRideName,
                                 onCombineRides = viewModel::combineRides
                             )
+
+                            is AppRoute.RideDetail -> {
+                                val summary = state.rideHistory.find { it.startedAtMs == currentRoute.rideId }
+                                if (summary != null) {
+                                    RideDetailScreen(
+                                        rideSummary = summary,
+                                        fullSession = state.expandedRides[currentRoute.rideId],
+                                        onBack = { routeUiState = routeUiState.copy(selectedRideId = null) },
+                                        onUpdateName = { viewModel.updateRideName(summary, it) },
+                                        onDelete = { 
+                                            viewModel.deleteRide(summary)
+                                            routeUiState = routeUiState.copy(selectedRideId = null)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -181,14 +224,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showHistory: Boolean, isCalibrated: Boolean): AppRoute {
+    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showHistory: Boolean, selectedRideId: Long?, isCalibrated: Boolean): AppRoute {
         if (introStage != IntroStage.DONE) {
             return AppRoute.Intro(introStage)
+        }
+        if (!isCalibrated) {
+            return AppRoute.Calibration
+        }
+        if (selectedRideId != null) {
+            return AppRoute.RideDetail(selectedRideId)
         }
         if (showHistory) {
             return AppRoute.TrackReview
         }
-        if (showSettings && isCalibrated) {
+        if (showSettings) {
             return AppRoute.Settings
         } else {
             return AppRoute.Tracking
@@ -208,16 +257,19 @@ class MainActivity : ComponentActivity() {
 private data class RouteUiState(
     val introStage: IntroStage = IntroStage.LOADING,
     val showSettings: Boolean = false,
-    val showHistory: Boolean = false
+    val showHistory: Boolean = false,
+    val selectedRideId: Long? = null
 ) {
     companion object {
         val Saver: Saver<RouteUiState, Any> = listSaver(
-            save = { listOf(it.introStage.name, it.showSettings, it.showHistory) },
+            save = { listOf(it.introStage.name, it.showSettings, it.showHistory, it.selectedRideId ?: -1L) },
             restore = {
+                val rideId = it[3] as Long
                 RouteUiState(
                     introStage = IntroStage.valueOf(it[0] as String),
                     showSettings = it[1] as Boolean,
-                    showHistory = it[2] as Boolean
+                    showHistory = it[2] as Boolean,
+                    selectedRideId = if (rideId == -1L) null else rideId
                 )
             }
         )

@@ -49,12 +49,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
-import com.example.leanangletracker.ui.calibration.CalibrationWizardLandscape
-import com.example.leanangletracker.ui.calibration.CalibrationWizardPortrait
 import com.example.leanangletracker.ui.components.GpsStatsDashboard
 import com.example.leanangletracker.ui.components.buttons.HistoryButton
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
@@ -63,12 +60,10 @@ import com.example.leanangletracker.ui.components.admob.AdMobBanner
 import com.example.leanangletracker.ui.components.buttons.PauseButton
 import com.example.leanangletracker.ui.components.buttons.RecordButton
 import com.example.leanangletracker.ui.theme.AccentGreen
-import java.util.Locale
 
 @Composable
 internal fun LeanAngleScreen(
     trackingState: TrackingUiState,
-    calibrationState: CalibrationUiState,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
     onStartTracking: () -> Unit,
@@ -76,9 +71,7 @@ internal fun LeanAngleScreen(
     onTogglePause: () -> Unit = {},
     offerExtend: RideSession? = null,
     onConfirmExtend: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier,
-    onCaptureUpright: () -> Unit,
-    onContinueCalibrationFallback: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val view = LocalView.current
@@ -106,25 +99,6 @@ internal fun LeanAngleScreen(
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        if (!calibrationState.isCalibrated) {
-            if (isLandscape) {
-                CalibrationWizardLandscape(
-                    state = calibrationState,
-                    onCaptureUpright = onCaptureUpright,
-                    onContinueFallback = onContinueCalibrationFallback
-                )
-                return@Box
-            } else {
-                CalibrationWizardPortrait(
-                    state = calibrationState,
-                    onCaptureUpright = onCaptureUpright,
-                    onContinueFallback = onContinueCalibrationFallback
-                )
-                return@Box
-            }
-
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
