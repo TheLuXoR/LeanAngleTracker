@@ -13,7 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
-import com.example.leanangletracker.ui.components.JogWheel
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
 import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -58,15 +57,15 @@ internal fun RideReviewTemplate(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Left Side: Map and JogWheel
+            // Left Side: Map
             Column(
-                modifier = Modifier.weight(1.2f),
+                modifier = Modifier.weight(1.2f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(220.dp)
+                        .weight(1f) // Let map take available space in left column
                         .clip(RoundedCornerShape(16.dp))
                 ) {
                     OSMTrackMap(
@@ -77,17 +76,11 @@ internal fun RideReviewTemplate(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-
-                JogWheel(
-                    value = selectedIndex,
-                    onValueChange = { selectedIndex = it },
-                    range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
-                )
             }
 
             // Right Side: Stats and Graph
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
@@ -106,7 +99,9 @@ internal fun RideReviewTemplate(
                     visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(100.dp)
+                        .weight(1f), // Graph uses remaining space
+                    isScrollable = true,
+                    onSelectedIndexChange = { selectedIndex = it }
                 )
 
                 Text(
@@ -154,17 +149,13 @@ internal fun RideReviewTemplate(
                 visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp)
-            )
-
-            JogWheel(
-                value = selectedIndex,
-                onValueChange = { selectedIndex = it },
-                range = 0..rideSession.points.lastIndex.coerceAtLeast(0)
+                    .weight(1f), // Graph uses remaining space
+                isScrollable = true,
+                onSelectedIndexChange = { selectedIndex = it }
             )
             
             Text(
-                text = "Use the jog wheel to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+                text = "Scroll graph to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextSecondary
             )

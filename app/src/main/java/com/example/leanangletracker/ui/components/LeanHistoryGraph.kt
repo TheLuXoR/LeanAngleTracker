@@ -1,14 +1,19 @@
 package com.example.leanangletracker.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -18,37 +23,63 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.motionEventSpy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.theme.*
+import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 internal fun LeanHistoryGraph(
     values: List<Float>,
     modifier: Modifier = Modifier,
     selectedIndex: Int? = null,
-    visibleRangePoints: Int? = null // If null, show full track. If set, center on selectedIndex
+    visibleRangePoints: Int? = null, // If null, show full track. If set, center on selectedIndex
+    isScrollable: Boolean = false,
+    onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
+    val scope = rememberCoroutineScope()
+    // Internal animatable to hold the scroll position, initialized to the current selection
+    val scrollOffset = remember { Animatable(selectedIndex?.toFloat() ?: 0f) }
+    
+    val minBound = 0f
+    val maxBound = values.lastIndex.toFloat().coerceAtLeast(0f)
+    val overscrollLimit = 2.5f // Matching JogWheel behavior
+
+    // Sync internal offset when external selectedIndex changes (e.g. from Map or external update)
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
+            scrollOffset.snapTo(selectedIndex.toFloat())
+        }
+    }
+
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Determine the subset of points to display
-            val displayValues = remember(values, selectedIndex, visibleRangePoints) {
-                if (visibleRangePoints == null || selectedIndex == null || values.size <= visibleRangePoints) {
-                    values
+            // Determine the window of points to show based on the animated scrollOffset
+            val currentScrollVal = scrollOffset.value
+            val displayStartIndex = remember(values.size, currentScrollVal, visibleRangePoints) {
+                if (visibleRangePoints == null || values.size <= visibleRangePoints) {
+                    0
                 } else {
                     val halfRange = visibleRangePoints / 2
-                    val start = (selectedIndex - halfRange).coerceIn(0, (values.size - visibleRangePoints).coerceAtLeast(0))
-                    val end = (start + visibleRangePoints).coerceAtMost(values.size)
-                    values.subList(start, end)
+                    (currentScrollVal.roundToInt() - halfRange).coerceIn(0, (values.size - visibleRangePoints).coerceAtLeast(0))
+                }
+            }
+
+            val displayValues = remember(values, displayStartIndex, visibleRangePoints) {
+                if (visibleRangePoints == null || values.size <= (visibleRangePoints ?: 0)) {
+                    values
+                } else {
+                    val end = (displayStartIndex + visibleRangePoints).coerceAtMost(values.size)
+                    values.subList(displayStartIndex, end)
                 }
             }
 
@@ -75,7 +106,62 @@ internal fun LeanHistoryGraph(
 
             Canvas(modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)) {
+                .weight(1f)
+                .then(
+                    if (isScrollable && onSelectedIndexChange != null && selectedIndex != null) {
+                        Modifier.draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                // Replicate JogWheel's sensitivity and resistance
+                                val sensitivity = 0.2f 
+                                var effectiveDelta = -delta * sensitivity
+
+                                val current = scrollOffset.value
+                                if (current < minBound && effectiveDelta < 0) {
+                                    val resistance = (1f - (abs(minBound - current) / overscrollLimit)).coerceIn(0.1f, 1f)
+                                    effectiveDelta *= resistance
+                                } else if (current > maxBound && effectiveDelta > 0) {
+                                    val resistance = (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
+                                    effectiveDelta *= resistance
+                                }
+
+                                val newOffset = (current + effectiveDelta)
+                                    .coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
+                                
+                                scope.launch {
+                                    scrollOffset.snapTo(newOffset)
+                                    onSelectedIndexChange(newOffset.roundToInt().coerceIn(0, values.lastIndex))
+                                }
+                            },
+                            onDragStopped = { velocity ->
+                                scope.launch {
+                                    if (scrollOffset.value < minBound || scrollOffset.value > maxBound) {
+                                        // Rubber band snap back
+                                        scrollOffset.animateTo(
+                                            targetValue = if (scrollOffset.value < minBound) minBound else maxBound,
+                                            animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                        )
+                                    } else {
+                                        // Decay fling (matching JogWheel's physics)
+                                        val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
+                                        scrollOffset.animateDecay(-velocity * 0.05f, decay) {
+                                            if (value !in minBound..maxBound) {
+                                                this@launch.launch {
+                                                    scrollOffset.animateTo(
+                                                        targetValue = if (value < minBound) minBound else maxBound,
+                                                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                                    )
+                                                }
+                                            }
+                                            onSelectedIndexChange(scrollOffset.value.roundToInt().coerceIn(0, values.lastIndex))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    } else Modifier
+                )
+            ) {
                 val width = size.width
                 val height = size.height
                 val centerY = height / 2f
@@ -85,7 +171,6 @@ internal fun LeanHistoryGraph(
                 val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
                 // Grid Lines
-                // Upper bound line: from right border back to the point of highest amplitude (min value)
                 displayValues.minOrNull()?.let { minVal ->
                     val minIndex = displayValues.indexOf(minVal)
                     val startX = minIndex * stepX
@@ -99,10 +184,18 @@ internal fun LeanHistoryGraph(
                     )
                 }
 
+                // Overscroll visual feedback (Red tint at edges like JogWheel)
+                if (scrollOffset.value < minBound) {
+                    val alpha = (abs(scrollOffset.value - minBound) / overscrollLimit).coerceIn(0f, 0.2f)
+                    drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                } else if (scrollOffset.value > maxBound) {
+                    val alpha = (abs(scrollOffset.value - maxBound) / overscrollLimit).coerceIn(0f, 0.2f)
+                    drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                }
+
                 drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
                 drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
 
-                // Lower bound line: from right border back to the point of highest amplitude (max value)
                 displayValues.maxOrNull()?.let { maxVal ->
                     val maxIndex = displayValues.indexOf(maxVal)
                     val startX = maxIndex * stepX
@@ -129,21 +222,31 @@ internal fun LeanHistoryGraph(
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
 
-                    // The selected index relative to the displayed subset
-                    val relativeSelectedIndex = if (visibleRangePoints != null && selectedIndex != null) {
-                        val halfRange = visibleRangePoints / 2
-                        val start = (selectedIndex - halfRange).coerceIn(0, (values.size - visibleRangePoints).coerceAtLeast(0))
-                        selectedIndex - start
-                    } else {
-                        selectedIndex
-                    }
+                    // Vertical cursor logic - smoothed with scrollOffset
+                    val relativeScrollOffset = scrollOffset.value - displayStartIndex
+                    
+                    if (relativeScrollOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
+                        val selX = relativeScrollOffset * stepX
+                        
+                        // Interpolate Y for smooth cursor movement
+                        val currentIdx = scrollOffset.value.toInt().coerceIn(0, values.lastIndex)
+                        val nextIdx = (currentIdx + 1).coerceIn(0, values.lastIndex)
+                        val fraction = scrollOffset.value - currentIdx
+                        val interpolatedValue = values[currentIdx] * (1 - fraction) + values[nextIdx] * fraction
+                        
+                        val selY = yFor(interpolatedValue)
 
-                    if (relativeSelectedIndex != null && relativeSelectedIndex in displayValues.indices) {
-                        val selX = relativeSelectedIndex * stepX
-                        val selY = yFor(displayValues[relativeSelectedIndex])
-
-                        drawLine(color = Color.White.copy(alpha = 0.4f), start = Offset(selX, 0f), end = Offset(selX, height), strokeWidth = 1.dp.toPx())
-                        drawCircle(color = Color.White, radius = 4.dp.toPx(), center = Offset(selX, selY))
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.4f),
+                            start = Offset(selX, 0f),
+                            end = Offset(selX, height),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = 4.dp.toPx(),
+                            center = Offset(selX, selY)
+                        )
                     }
                 }
             }

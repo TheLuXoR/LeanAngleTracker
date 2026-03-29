@@ -4,12 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,9 +58,19 @@ internal fun RideHistoryScreen(
     var expandedIndex by rememberSaveable { mutableIntStateOf(if (lastSavedRideId != null) 0 else -1) }
     var selectedSessionIds by remember { mutableStateOf(setOf<Long>()) }
     val isSelectionMode = selectedSessionIds.isNotEmpty()
+    val isAnyExpanded = expandedIndex != -1
 
-    BackHandler(isSelectionMode) {
-        selectedSessionIds = emptySet()
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+
+    val expandedSummary = if (isAnyExpanded && expandedIndex in rideHistory.indices) rideHistory[expandedIndex] else null
+
+    BackHandler(isSelectionMode || isAnyExpanded) {
+        if (isSelectionMode) {
+            selectedSessionIds = emptySet()
+        } else if (isAnyExpanded) {
+            expandedIndex = -1
+        }
     }
 
     LaunchedEffect(lastSavedRideId) {
@@ -81,14 +89,32 @@ internal fun RideHistoryScreen(
                 title = { 
                     if (isSelectionMode) {
                         Text(stringResource(R.string.ride_history_selected_count, selectedSessionIds.size))
+                    } else if (isAnyExpanded && expandedSummary != null) {
+                        Column {
+                            val titleText = if (expandedSummary.name.isNullOrBlank()) {
+                                formatDate(expandedSummary.startedAtMs)
+                            } else {
+                                expandedSummary.name
+                            }
+                            Text(titleText, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (!expandedSummary.routeDescription.isNullOrBlank()) {
+                                Text(expandedSummary.routeDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     } else {
                         Text(stringResource(R.string.ride_history_title), style = MaterialTheme.typography.titleLarge)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { if (isSelectionMode) selectedSessionIds = emptySet() else onBack() }) {
+                    IconButton(onClick = { 
+                        when {
+                            isSelectionMode -> selectedSessionIds = emptySet()
+                            isAnyExpanded -> expandedIndex = -1
+                            else -> onBack()
+                        }
+                    }) {
                         Icon(
-                            if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, 
+                            if (isSelectionMode || isAnyExpanded) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, 
                             contentDescription = stringResource(R.string.action_back)
                         )
                     }
@@ -124,37 +150,43 @@ internal fun RideHistoryScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                userScrollEnabled = !isAnyExpanded
             ) {
                 itemsIndexed(rideHistory, key = { _, s -> s.startedAtMs }) { index, summary ->
                     val isExpanded = expandedIndex == index
-                    val isSelected = summary.startedAtMs in selectedSessionIds
-                    val isNewlySaved = summary.startedAtMs == lastSavedRideId
-                    val fullSession = expandedRides[summary.startedAtMs]
                     
-                    RideHistoryItem(
-                        summary = summary,
-                        fullSession = fullSession,
-                        isExpanded = isExpanded,
-                        isSelected = isSelected,
-                        isNewlySaved = isNewlySaved,
-                        onToggle = { 
-                            if (isSelectionMode) {
-                                selectedSessionIds = if (isSelected) selectedSessionIds - summary.startedAtMs else selectedSessionIds + summary.startedAtMs
-                            } else {
-                                if (!isExpanded) onLoadDetails(summary.startedAtMs)
-                                expandedIndex = if (isExpanded) -1 else index 
-                            }
-                        },
-                        onLongClick = {
-                            if (!isSelectionMode) {
-                                selectedSessionIds = setOf(summary.startedAtMs)
-                            }
-                        },
-                        onDelete = { onDeleteRide(summary) },
-                        onUpdateName = { onUpdateName(summary, it) }
-                    )
+                    // Only show the expanded item if one is expanded, or show all if none are expanded
+                    if (!isAnyExpanded || isExpanded) {
+                        val isSelected = summary.startedAtMs in selectedSessionIds
+                        val isNewlySaved = summary.startedAtMs == lastSavedRideId
+                        val fullSession = expandedRides[summary.startedAtMs]
+                        
+                        RideHistoryItem(
+                            summary = summary,
+                            fullSession = fullSession,
+                            isExpanded = isExpanded,
+                            isSelected = isSelected,
+                            isNewlySaved = isNewlySaved,
+                            onToggle = { 
+                                if (isSelectionMode) {
+                                    selectedSessionIds = if (isSelected) selectedSessionIds - summary.startedAtMs else selectedSessionIds + summary.startedAtMs
+                                } else {
+                                    if (!isExpanded) onLoadDetails(summary.startedAtMs)
+                                    expandedIndex = if (isExpanded) -1 else index 
+                                }
+                            },
+                            onLongClick = {
+                                if (!isSelectionMode && !isAnyExpanded) {
+                                    selectedSessionIds = setOf(summary.startedAtMs)
+                                }
+                            },
+                            onDelete = { onDeleteRide(summary) },
+                            onUpdateName = { onUpdateName(summary, it) },
+                            modifier = if (isExpanded) Modifier.fillParentMaxHeight() else Modifier
+                        )
+                    }
                 }
             }
         }
@@ -172,7 +204,8 @@ private fun RideHistoryItem(
     onToggle: () -> Unit,
     onLongClick: () -> Unit,
     onDelete: () -> Unit,
-    onUpdateName: (String) -> Unit
+    onUpdateName: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -200,7 +233,7 @@ private fun RideHistoryItem(
     }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .bringIntoViewRequester(bringIntoViewRequester),
         shape = RoundedCornerShape(24.dp),
@@ -227,24 +260,8 @@ private fun RideHistoryItem(
                     )
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    if (isEditingName && isExpanded) {
-                        TextField(
-                            value = editedName,
-                            onValueChange = { editedName = it },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            placeholder = { Text(stringResource(R.string.ride_history_name_placeholder)) },
-                            trailingIcon = {
-                                IconButton(onClick = { 
-                                    onUpdateName(editedName)
-                                    isEditingName = false 
-                                }) {
-                                    Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_save))
-                                }
-                            },
-                            singleLine = true
-                        )
-                    } else {
+                if (!isExpanded) {
+                    Column(modifier = Modifier.weight(1f)) {
                         val titleText = if (summary.name.isNullOrBlank()) {
                             formatDate(summary.startedAtMs)
                         } else {
@@ -256,22 +273,25 @@ private fun RideHistoryItem(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                    if (!summary.routeDescription.isNullOrBlank()) {
+                        if (!summary.routeDescription.isNullOrBlank()) {
+                            Text(
+                                text = summary.routeDescription,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
                         Text(
-                            text = summary.routeDescription,
+                            text = stringResource(R.string.ride_history_points_recorded, summary.pointCount),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 2.dp)
+                            color = TextSecondary
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.ride_history_points_recorded, summary.pointCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+                } else {
+                    // When expanded, title is in TopAppBar
+                    Spacer(Modifier.weight(1f))
                 }
                 
                 Row {
@@ -313,27 +333,49 @@ private fun RideHistoryItem(
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.ride_history_action_delete), tint = MaterialTheme.colorScheme.error)
                         }
                     }
-                    if (!isSelected) {
+                    if (!isSelected && !isExpanded) {
                         Icon(
-                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = stringResource(R.string.ride_history_action_details),
                             tint = TextSecondary
                         )
                     }
                 }
             }
+            
+            if (isEditingName && isExpanded) {
+                TextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    placeholder = { Text(stringResource(R.string.ride_history_name_placeholder)) },
+                    trailingIcon = {
+                        IconButton(onClick = { 
+                            onUpdateName(editedName)
+                            isEditingName = false 
+                        }) {
+                            Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_save))
+                        }
+                    },
+                    singleLine = true
+                )
+            }
 
             AnimatedVisibility(
                 visible = isExpanded && !isSelected,
                 enter = expandVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)),
-                exit = shrinkVertically(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                exit = shrinkVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)),
+                modifier = Modifier.weight(1f)
             ) {
                 if (fullSession == null) {
-                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     }
                 } else {
-                    RideReviewTemplate(rideSession = fullSession)
+                    RideReviewTemplate(
+                        rideSession = fullSession,
+                        modifier = Modifier.fillMaxHeight()
+                    )
                 }
             }
         }
