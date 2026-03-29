@@ -175,7 +175,7 @@ public fun TachoGauge(
                 val df = DecimalFormat("0.0")
                 Text(
                     modifier = Modifier.padding(4.dp),
-                    text = df.format(currentDeg),
+                    text = df.format(Math.abs(currentDeg)),
                     style = MaterialTheme.typography.titleLarge,
                     color = TextPrimary
                 )

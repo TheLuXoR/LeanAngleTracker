@@ -15,8 +15,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -24,6 +22,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.PI
 import kotlin.math.cos
@@ -104,7 +104,12 @@ fun CalibrationBikeLeanAnimation(
         }
     )
 
-    Bike(modifier = modifier, angle= angle)
+    // Pivot for calibration is at the tire contact point (approx 0.85 y)
+    Bike(
+        modifier = modifier,
+        angle = angle,
+        transformOrigin = TransformOrigin(0.5f, 0.85f)
+    )
 }
 
 
@@ -115,11 +120,19 @@ private fun Bike(
     scale: Float = 1f,
     angle: Float = 0f,
     offset: Offset = Offset(0f,0f),
+    transformOrigin: TransformOrigin = TransformOrigin.Center,
     primary: Color = MaterialTheme.colorScheme.primary
 ) {
 
 
-    Canvas(modifier = modifier.scale(scale).rotate(angle)) {
+    Canvas(
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            rotationZ = angle
+            this.transformOrigin = transformOrigin
+        }
+    ) {
         var w = size.width
         var h = size.height
         val groundY = size.height * 0.85f + offset.y * size.height
