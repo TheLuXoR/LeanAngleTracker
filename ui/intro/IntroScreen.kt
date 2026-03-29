@@ -4,7 +4,6 @@ import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
@@ -16,11 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -32,13 +29,11 @@ import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.IntroBikeLeanAnimation
 import com.example.leanangletracker.ui.animation.PhoneMountAnimation
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun IntroScreen(
     stage: IntroStage,
-    onAction: () -> Unit,
-    onTransitionFinished: () -> Unit
+    onAction: () -> Unit
 ) {
     val approachProgress = remember { Animatable(if (stage == IntroStage.LOADING) 0f else 1f) }
 
@@ -50,14 +45,8 @@ internal fun IntroScreen(
                     animationSpec = tween(durationMillis = 1250, easing = FastOutSlowInEasing)
                 )
             }
-        } else if (stage != IntroStage.TRANSITION_OUT) {
+        } else {
             approachProgress.snapTo(1f)
-        }
-    }
-
-    if (stage == IntroStage.TRANSITION_OUT) {
-        LaunchedEffect(Unit) {
-            onTransitionFinished()
         }
     }
 

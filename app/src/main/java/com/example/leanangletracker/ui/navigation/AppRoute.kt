@@ -8,8 +8,8 @@ enum class ScreenDirection {
 
 enum class Screens(val screenEntryDirection: ScreenDirection) {
     INTRO(ScreenDirection.VERTICAL),
-    TRACKING(ScreenDirection.VERTICAL),
-    HISTORY(ScreenDirection.VERTICAL),
+    TRACKING(ScreenDirection.HORIZONTAL),
+    HISTORY(ScreenDirection.HORIZONTAL),
     DETAIL(ScreenDirection.HORIZONTAL),
     SETTINGS(ScreenDirection.VERTICAL),
     CALIBRATION(ScreenDirection.VERTICAL)
