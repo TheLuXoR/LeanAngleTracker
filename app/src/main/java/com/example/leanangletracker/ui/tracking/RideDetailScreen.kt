@@ -106,9 +106,7 @@ internal fun RideDetailScreen(
             }
 
             if (fullSession == null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+                RideReviewSkeleton(modifier = Modifier.fillMaxSize())
             } else {
                 RideReviewTemplate(
                     rideSession = fullSession,
