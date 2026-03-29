@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.SettingsUiState
+import com.example.leanangletracker.ui.components.Minus
 import com.example.leanangletracker.ui.theme.AccentGreen
 import com.example.leanangletracker.ui.theme.TextSecondary
 
@@ -96,6 +97,48 @@ internal fun SettingsScreen(
                     checked = state.gpsTrackingEnabled,
                     onCheckedChange = onToggleGpsTracking
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.settings_recorder_tick_title), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_recorder_tick_subtitle), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs - 50) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Minus, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
+                        }
+
+                        Text(
+                            text = stringResource(R.string.settings_value_milliseconds, state.recorderIntervalMs),
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        IconButton(
+                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs + 50) },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_increase), modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = onStartCalibration,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp)
+                ) {
+                    Text(stringResource(R.string.settings_recalibrate_device), style = MaterialTheme.typography.titleMedium)
+                }
             }
 
             SettingsGroup(title = stringResource(R.string.settings_group_visuals)) {
@@ -114,7 +157,7 @@ internal fun SettingsScreen(
                             onClick = { onSetHistoryWindow(state.historyWindowSeconds - 5) },
                             modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
+                            Icon(Minus, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
                         }
                         
                         Text(
@@ -134,42 +177,6 @@ internal fun SettingsScreen(
                 }
             }
 
-            SettingsGroup(title = stringResource(R.string.settings_group_recording)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_recorder_tick_title), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.settings_recorder_tick_subtitle), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs - 50) },
-                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_decrease), modifier = Modifier.size(18.dp))
-                        }
-
-                        Text(
-                            text = stringResource(R.string.settings_value_milliseconds, state.recorderIntervalMs),
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        IconButton(
-                            onClick = { onSetRecorderIntervalMs(state.recorderIntervalMs + 50) },
-                            modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_increase), modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
-            }
-
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
                 Button(
                     onClick = onResetExtrema,
@@ -180,14 +187,7 @@ internal fun SettingsScreen(
                     Text(stringResource(R.string.settings_reset_max_values), style = MaterialTheme.typography.titleMedium)
                 }
 
-                OutlinedButton(
-                    onClick = onStartCalibration,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp)
-                ) {
-                    Text(stringResource(R.string.settings_recalibrate_device), style = MaterialTheme.typography.titleMedium)
-                }
+
             }
             
             Spacer(modifier = Modifier.height(24.dp))

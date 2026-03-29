@@ -730,11 +730,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun resetExtrema() {
-        val historyValues = _uiState.value.tracking.leanHistoryDeg
         updateTrackingState {
             it.copy(
-                maxLeftDeg = historyValues.minOrNull()?.coerceAtMost(0f) ?: 0f,
-                maxRightDeg = historyValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+                maxLeftDeg = 0f,
+                maxRightDeg = 0f
             )
         }
     }
@@ -1043,14 +1042,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         pruneHistory(timestampNs, previous.settings.historyWindowSeconds)
 
         val visibleHistory = leanHistory.map { it.valueDeg }
-        val visibleLeft = visibleHistory.minOrNull()?.coerceAtMost(0f) ?: 0f
-        val visibleRight = visibleHistory.maxOrNull()?.coerceAtLeast(0f) ?: 0f
 
         _uiState.value = previous.copy(
             tracking = previous.tracking.copy(
                 leanAngleDeg = leanDeg,
-                maxLeftDeg = minOf(previous.tracking.maxLeftDeg, visibleLeft),
-                maxRightDeg = maxOf(previous.tracking.maxRightDeg, visibleRight),
+                maxLeftDeg = minOf(previous.tracking.maxLeftDeg, if (leanDeg < 0f) leanDeg else 0f),
+                maxRightDeg = maxOf(previous.tracking.maxRightDeg, if (leanDeg > 0f) leanDeg else 0f),
                 leanHistoryDeg = visibleHistory,
                 speedKmh = speedKmh,
                 gpsActive = locationUpdatesRunning,
