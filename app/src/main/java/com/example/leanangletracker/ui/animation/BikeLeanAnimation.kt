@@ -104,10 +104,6 @@ fun CalibrationBikeLeanAnimation(
         }
     )
 
-
-    val primary = MaterialTheme.colorScheme.primary
-    val onSurface = MaterialTheme.colorScheme.onSurface
-
     Bike(modifier = modifier, angle= angle)
 }
 
@@ -171,10 +167,10 @@ private fun Bike(
         // Main Fairing Body
         val fairingPath = Path().apply {
             moveTo(centerX, groundY - h * 0.375f)
-            lineTo(centerX - w * 0.1125f, groundY - h * 0.3f)
-            lineTo(centerX - w * 0.0875f, groundY - h * 0.175f)
-            lineTo(centerX + w * 0.0875f, groundY - h * 0.175f)
-            lineTo(centerX + w * 0.1125f, groundY - h * 0.3f)
+            lineTo(centerX - w * 0.0925f, groundY - h * 0.3f)
+            lineTo(centerX - w * 0.0775f, groundY - h * 0.175f)
+            lineTo(centerX + w * 0.0775f, groundY - h * 0.175f)
+            lineTo(centerX + w * 0.0925f, groundY - h * 0.3f)
             close()
         }
         drawPath(fairingPath, color = primary)

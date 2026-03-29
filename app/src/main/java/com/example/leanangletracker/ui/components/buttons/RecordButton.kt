@@ -3,6 +3,7 @@ package com.example.leanangletracker.ui.components.buttons
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -39,7 +40,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.leanangletracker.ui.components.AnimatedBorderBox
 import com.example.leanangletracker.ui.theme.ErrorRed
+import com.example.leanangletracker.ui.theme.TextPrimary
 
 @Composable
 fun RecordButton(
@@ -85,10 +89,14 @@ fun RecordButton(
     }
     val shape = RoundedCornerShape(cornerRadius)
 
-    val containerColor by transition.animateColor(label = "containerColor") { recording ->
-        if (recording) MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-        else MaterialTheme.colorScheme.primaryContainer
-    }
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            isRecording && !isWaitingForGps -> ErrorRed
+            isRecording -> MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+            else -> MaterialTheme.colorScheme.primaryContainer
+        },
+        label = "containerColor"
+    )
 
     val elevation by transition.animateDp(label = "elevation") { recording ->
         if (recording) 8.dp else 2.dp
@@ -144,11 +152,11 @@ fun RecordButton(
         // Main Button Surface
         AnimatedBorderBox(
             modifier = Modifier
-                .shadow(elevation = elevation, shape = shape, spotColor = activeColor),
+                .shadow(elevation = elevation, shape = shape, spotColor = if (isRecording && !isWaitingForGps) ErrorRed else activeColor),
             shape = shape,
             borderWidth = 2.dp,
-            borderColor = if (isRecording) activeColor else Color.Transparent,
-            isAnimating = isRecording && !isPaused
+            borderColor = if (isRecording && isWaitingForGps) activeColor else Color.Transparent,
+            isAnimating = isRecording && !isPaused && isWaitingForGps
         ) {
             Surface(
                 onClick = { if (isRecording) onStopRecord() else onRecord() },
@@ -179,9 +187,8 @@ fun RecordButton(
                         } else {
                             Text(
                                 text = if (isWaitingForGps) "WAIT GPS" else "RECORDING",
-                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Black,
-                                color = activeColor,
+                                color = if (isRecording && !isWaitingForGps) TextPrimary else activeColor,
                                 fontSize = 9.sp,
                                 textAlign = TextAlign.Center,
                                 softWrap = false,

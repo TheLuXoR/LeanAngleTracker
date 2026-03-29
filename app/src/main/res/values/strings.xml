@@ -1,13 +1,6 @@
 <resources>
     <string name="app_name">Lean Angle Tracker</string>
 
-    <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">Um die App zu kalibrieren muss dein Motorrad </string>
-    <string name="instructions_hold_still_for_bias">Bitte Motorrad/Telefon ruhig halten, damit Gyro-Bias ermittelt werden kann.</string>
-    <string name="instructions_tilt_left_then_return">Links neigen → zurück aufrecht (vorsichtig!)</string>
-    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück aufrecht (vorsichtig!)</string>
-    <string name="instructions_calibrated">Kalibriert</string>
-
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="history_title">History</string>
     <string name="history_max_left">Left: %1$.1f°</string>
@@ -59,4 +52,33 @@
     <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
     <string name="intro_button_understood">Verstanden</string>
     <string name="intro_button_attached">Befestigt</string>
+
+    <!-- Calibration Wizard -->
+    <string name="calibration_title">Präzisions-Kalibrierung</string>
+    <string name="calibration_action_fix_center">Das Motorrad steht gerade</string>
+    <string name="calibration_action_left_saved">Links gespeichert</string>
+    <string name="calibration_action_right_saved">Rechts gespeichert &amp; Fertig</string>
+    <string name="calibration_action_left_confirmed">Fertig</string>
+    <string name="calibration_action_right_confirmed">Fertig</string>
+    <string name="calibration_error_wrong_direction">Falsche Richtung!</string>
+    <string name="calibration_hint_min_angle">Achte darauf dein Motorrad nicht fallen zu lassen. Gehe nur so weit, wie du dich wirklich sicher fühlst!</string>
+    <string name="calibration_instr_upright">Stelle das Motorrad gerade hin.</string>
+    <string name="calibration_instr_tilt_left">Neige das Motorrad nach LINKS und wieder zurück.</string>
+    <string name="calibration_instr_tilt_right">Neige das Motorrad nach RECHTS und wieder zurück.</string>
+    <string name="calibration_instr_ready">System bereit!</string>
+    <string name="calibration_hint_firm_mount">Versuche so genau wie möglich gerade zu stehen, dass verbessert die Ergebnisse.</string>
+    <string name="calibration_hint_ready">Du kannst jetzt losfahren.</string>
+    <string name="calibration_progress_label">Fortschritt: %1$d%%</string>
+
+    <!-- Tracking Labels -->
+    <string name="tracking_wait_gps">WAIT GPS</string>
+    <string name="tracking_recording">RECORDING</string>
+
+    <!-- Legacy / Backup Instructions (Still used in ViewModel logic) -->
+    <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
+    <string name="instructions_upright">Mitte erfassen…</string>
+    <string name="instructions_hold_still_for_bias">Bitte ruhig halten (Bias-Check)…</string>
+    <string name="instructions_tilt_left_then_return">Links neigen → zurück</string>
+    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück</string>
+    <string name="instructions_calibrated">Kalibriert!</string>
 </resources>

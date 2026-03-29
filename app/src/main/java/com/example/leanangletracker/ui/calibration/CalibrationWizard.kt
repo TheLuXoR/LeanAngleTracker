@@ -28,10 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
+import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -55,7 +57,7 @@ fun CalibrationWizardLandscape(
         ) {
             // Header
             Text(
-                text = "Präzisions-Kalibrierung",
+                text = stringResource(R.string.calibration_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -109,9 +111,9 @@ fun CalibrationWizardLandscape(
                             )
                         ) {
                             val buttonText = when (state.calibrationStep) {
-                                BikeLean.UPRIGHT -> "Mitte fixieren"
-                                BikeLean.LEFT -> "Links gespeichert"
-                                BikeLean.RIGHT -> "Rechts gespeichert & Fertig"
+                                BikeLean.UPRIGHT -> stringResource(R.string.calibration_action_fix_center)
+                                BikeLean.LEFT -> stringResource(R.string.calibration_action_left_saved)
+                                BikeLean.RIGHT -> stringResource(R.string.calibration_action_right_saved)
                                 else -> ""
                             }
                             Text(text = buttonText, fontWeight = FontWeight.Bold)
@@ -141,7 +143,7 @@ fun CalibrationWizardPortrait(
             verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
         ) {
             Text(
-                text = "Präzisions-Kalibrierung",
+                text = stringResource(R.string.calibration_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -195,9 +197,9 @@ fun CalibrationWizardPortrait(
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
                 ) {
                     val buttonText = when (state.calibrationStep) {
-                        BikeLean.UPRIGHT -> "Mitte fixieren"
-                        BikeLean.LEFT -> "Links bestätigt"
-                        BikeLean.RIGHT -> "Rechts bestätigt & Fertig"
+                        BikeLean.UPRIGHT -> stringResource(R.string.calibration_action_fix_center)
+                        BikeLean.LEFT -> stringResource(R.string.calibration_action_left_confirmed)
+                        BikeLean.RIGHT -> stringResource(R.string.calibration_action_right_confirmed)
                         else -> ""
                     }
                     Text(text = buttonText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
@@ -228,7 +230,7 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red)
                 Text(
-                    text = "Falsche Richtung!",
+                    text = stringResource(R.string.calibration_error_wrong_direction),
                     color = Color.Red,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyLarge
@@ -237,10 +239,10 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
         }
 
         val instructionText = when (state.calibrationStep) {
-            BikeLean.UPRIGHT -> "Stelle das Motorrad exakt gerade."
-            BikeLean.LEFT -> "Neige es nun weit nach LINKS."
-            BikeLean.RIGHT -> "Neige es nun weit nach RECHTS."
-            else -> "System bereit!"
+            BikeLean.UPRIGHT -> stringResource(R.string.calibration_instr_upright)
+            BikeLean.LEFT -> stringResource(R.string.calibration_instr_tilt_left)
+            BikeLean.RIGHT -> stringResource(R.string.calibration_instr_tilt_right)
+            else -> stringResource(R.string.calibration_instr_ready)
         }
 
         Text(
@@ -252,9 +254,9 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
 
         Text(
             text = when(state.calibrationStep) {
-                BikeLean.UPRIGHT -> "Wichtig: Das Handy muss fest sitzen."
-                BikeLean.LEFT, BikeLean.RIGHT -> "Erreiche min. 20° für hohe Genauigkeit."
-                else -> "Du kannst jetzt losfahren."
+                BikeLean.UPRIGHT -> stringResource(R.string.calibration_hint_firm_mount)
+                BikeLean.LEFT, BikeLean.RIGHT -> stringResource(R.string.calibration_hint_min_angle)
+                else -> stringResource(R.string.calibration_hint_ready)
             },
             style = MaterialTheme.typography.bodySmall,
             color = TextSecondary,
@@ -326,7 +328,7 @@ private fun CalibrationProgressIndicator(state: CalibrationUiState) {
         // Progress label
         if (state.calibrationStep == BikeLean.LEFT || state.calibrationStep == BikeLean.RIGHT) {
             Text(
-                text = "Fortschritt: ${(state.currentProgress * 100).toInt()}%",
+                text = stringResource(R.string.calibration_progress_label, (state.currentProgress * 100).toInt()),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (state.currentProgress > 0.6f) Color.Green else TextSecondary,
                 modifier = Modifier.padding(top = 4.dp)
