@@ -2,7 +2,6 @@ package com.example.leanangletracker.ui.tracking
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.RideSummary
 import com.example.leanangletracker.ui.components.admob.loadInterstitial
 import com.example.leanangletracker.ui.components.admob.showInterstitial
 import com.example.leanangletracker.ui.theme.TextSecondary
@@ -46,12 +46,14 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RideHistoryScreen(
-    rideHistory: List<RideSession>,
+    rideHistory: List<RideSummary>,
+    expandedRides: Map<Long, RideSession>,
+    onLoadDetails: (Long) -> Unit,
     onBack: () -> Unit,
-    onDeleteRide: (RideSession) -> Unit,
+    onDeleteRide: (RideSummary) -> Unit,
     lastSavedRideId: Long? = null,
-    onUpdateName: (RideSession, String) -> Unit = { _, _ -> },
-    onCombineRides: (List<RideSession>) -> Unit = {}
+    onUpdateName: (RideSummary, String) -> Unit = { _, _ -> },
+    onCombineRides: (List<RideSummary>) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     var expandedIndex by rememberSaveable { mutableIntStateOf(if (lastSavedRideId != null) 0 else -1) }
@@ -67,6 +69,7 @@ internal fun RideHistoryScreen(
             val index = rideHistory.indexOfFirst { it.startedAtMs == lastSavedRideId }
             if (index != -1) {
                 expandedIndex = index
+                onLoadDetails(lastSavedRideId)
             }
         }
     }
@@ -123,30 +126,33 @@ internal fun RideHistoryScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(rideHistory, key = { _, s -> s.startedAtMs }) { index, session ->
+                itemsIndexed(rideHistory, key = { _, s -> s.startedAtMs }) { index, summary ->
                     val isExpanded = expandedIndex == index
-                    val isSelected = session.startedAtMs in selectedSessionIds
-                    val isNewlySaved = session.startedAtMs == lastSavedRideId
+                    val isSelected = summary.startedAtMs in selectedSessionIds
+                    val isNewlySaved = summary.startedAtMs == lastSavedRideId
+                    val fullSession = expandedRides[summary.startedAtMs]
                     
                     RideHistoryItem(
-                        session = session,
+                        summary = summary,
+                        fullSession = fullSession,
                         isExpanded = isExpanded,
                         isSelected = isSelected,
                         isNewlySaved = isNewlySaved,
                         onToggle = { 
                             if (isSelectionMode) {
-                                selectedSessionIds = if (isSelected) selectedSessionIds - session.startedAtMs else selectedSessionIds + session.startedAtMs
+                                selectedSessionIds = if (isSelected) selectedSessionIds - summary.startedAtMs else selectedSessionIds + summary.startedAtMs
                             } else {
+                                if (!isExpanded) onLoadDetails(summary.startedAtMs)
                                 expandedIndex = if (isExpanded) -1 else index 
                             }
                         },
                         onLongClick = {
                             if (!isSelectionMode) {
-                                selectedSessionIds = setOf(session.startedAtMs)
+                                selectedSessionIds = setOf(summary.startedAtMs)
                             }
                         },
-                        onDelete = { onDeleteRide(session) },
-                        onUpdateName = { onUpdateName(session, it) }
+                        onDelete = { onDeleteRide(summary) },
+                        onUpdateName = { onUpdateName(summary, it) }
                     )
                 }
             }
@@ -157,7 +163,8 @@ internal fun RideHistoryScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RideHistoryItem(
-    session: RideSession,
+    summary: RideSummary,
+    fullSession: RideSession?,
     isExpanded: Boolean,
     isSelected: Boolean,
     isNewlySaved: Boolean,
@@ -170,7 +177,7 @@ private fun RideHistoryItem(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     
     var isEditingName by remember { mutableStateOf(false) }
-    var editedName by remember(session.name) { mutableStateOf(session.name ?: "") }
+    var editedName by remember(summary.name) { mutableStateOf(summary.name ?: "") }
 
     val containerColor by animateColorAsState(
         targetValue = when {
@@ -184,10 +191,8 @@ private fun RideHistoryItem(
 
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
-            // Wait for expansion animation to start/proceed before requesting view
             delay(150)
             bringIntoViewRequester.bringIntoView()
-            // Second call after animation is mostly done to ensure full visibility
             delay(200)
             bringIntoViewRequester.bringIntoView()
         }
@@ -239,10 +244,10 @@ private fun RideHistoryItem(
                             singleLine = true
                         )
                     } else {
-                        val titleText = if (session.name.isNullOrBlank()) {
-                            formatDate(session.startedAtMs)
+                        val titleText = if (summary.name.isNullOrBlank()) {
+                            formatDate(summary.startedAtMs)
                         } else {
-                            "${session.name}: ${formatDate(session.startedAtMs)}"
+                            "${summary.name}: ${formatDate(summary.startedAtMs)}"
                         }
                         
                         Text(
@@ -252,7 +257,7 @@ private fun RideHistoryItem(
                         )
                     }
                     Text(
-                        text = stringResource(R.string.ride_history_points_recorded, session.points.size),
+                        text = stringResource(R.string.ride_history_points_recorded, summary.pointCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -268,24 +273,30 @@ private fun RideHistoryItem(
                             )
                         }
                         // Open with...
-                        IconButton(onClick = {
-                            loadInterstitial(context) { interstitialAd ->
-                                showInterstitial(context, interstitialAd) {
-                                    openGpxFile(context, session)
+                        IconButton(
+                            enabled = fullSession != null,
+                            onClick = {
+                                loadInterstitial(context) { interstitialAd ->
+                                    showInterstitial(context, interstitialAd) {
+                                        fullSession?.let { openGpxFile(context, it) }
+                                    }
                                 }
                             }
-                        }) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = "Open in...", tint = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = "Open in...", tint = if (fullSession != null) MaterialTheme.colorScheme.primary else TextSecondary)
                         }
                         // Share...
-                        IconButton(onClick = {
-                            loadInterstitial(context) { interstitialAd ->
-                                showInterstitial(context, interstitialAd) {
-                                    shareGpxFile(context, session)
+                        IconButton(
+                            enabled = fullSession != null,
+                            onClick = {
+                                loadInterstitial(context) { interstitialAd ->
+                                    showInterstitial(context, interstitialAd) {
+                                        fullSession?.let { shareGpxFile(context, it) }
+                                    }
                                 }
                             }
-                        }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share", tint = if (fullSession != null) MaterialTheme.colorScheme.primary else TextSecondary)
                         }
                         IconButton(onClick = onDelete) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.ride_history_action_delete), tint = MaterialTheme.colorScheme.error)
@@ -306,7 +317,13 @@ private fun RideHistoryItem(
                 enter = expandVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)),
                 exit = shrinkVertically(animationSpec = tween(300, easing = FastOutSlowInEasing))
             ) {
-                RideReviewTemplate(rideSession = session)
+                if (fullSession == null) {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    }
+                } else {
+                    RideReviewTemplate(rideSession = fullSession)
+                }
             }
         }
     }

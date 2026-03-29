@@ -20,11 +20,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.ui.animation.BikeLean
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -85,6 +87,20 @@ data class RideSession(
     val name: String? = null
 )
 
+data class RideSummary(
+    val startedAtMs: Long,
+    val endedAtMs: Long,
+    val name: String? = null,
+    val pointCount: Int = 0
+)
+
+fun RideSession.toSummary() = RideSummary(
+    startedAtMs = startedAtMs,
+    endedAtMs = endedAtMs,
+    name = name,
+    pointCount = points.size
+)
+
 data class TrackingUiState(
     val leanAngleDeg: Float = 0f,
     val maxLeftDeg: Float = 0f,
@@ -117,7 +133,8 @@ data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),
     val tracking: TrackingUiState = TrackingUiState(),
     val settings: SettingsUiState = SettingsUiState(),
-    val rideHistory: List<RideSession> = emptyList(),
+    val rideHistory: List<RideSummary> = emptyList(),
+    val expandedRides: Map<Long, RideSession> = emptyMap(),
     val lastSavedRideId: Long? = null,
     val offerExtendSession: RideSession? = null
 )
@@ -171,13 +188,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val recentLeanBufferSize: Int
         )
 
-        // Keep all timing/rate limits centralized for easier device-specific tuning.
         private val SENSOR_TIMING_POLICY = SensorTimingPolicy(
-            minDtNs = 1_000_000L, // 1 ms
-            leanClampDtNs = 50_000_000L, // 50 ms
-            leanDropDtNs = 250_000_000L, // 250 ms
-            gyroClampDtNs = 50_000_000L, // 50 ms
-            gyroDropDtNs = 200_000_000L, // 200 ms
+            minDtNs = 1_000_000L,
+            leanClampDtNs = 50_000_000L,
+            leanDropDtNs = 250_000_000L,
+            gyroClampDtNs = 50_000_000L,
+            gyroDropDtNs = 200_000_000L,
             fusionRotationFreshNs = 120_000_000L,
             maxLeanRateDegPerSec = 180f,
             maxRollRateRadPerSec = MAX_ROLL_RATE_RAD_PER_SEC,
@@ -278,7 +294,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
         }
 
-        _uiState.value = _uiState.value.copy(rideHistory = rideRepository.loadRides())
+        _uiState.value = _uiState.value.copy(rideHistory = rideRepository.loadRides().map { it.toSummary() })
 
         if (!prefs.getBoolean(KEY_CALIBRATED, false)) return
 
@@ -437,25 +453,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             startLocationUpdates()
         }
 
-        // Check if there's a ride from the same day
-        val lastRide = state.rideHistory.firstOrNull()
-        val isSameDayRideAvailable = lastRide != null && isSameDay(lastRide.endedAtMs, System.currentTimeMillis())
+        val lastRideSummary = state.rideHistory.firstOrNull()
+        val isSameDayRideAvailable = lastRideSummary != null && isSameDay(lastRideSummary.endedAtMs, System.currentTimeMillis())
 
         if (isSameDayRideAvailable) {
             val currentLoc = latestGpsLocation
             if (currentLoc != null) {
-                // We have a location, check proximity now
-                val lastPoint = lastRide!!.points.lastOrNull()
-                if (lastPoint != null) {
-                    val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, currentLoc.latitude, currentLoc.longitude)
-                    if (dist < EXTEND_PROXIMITY_METERS) {
-                        _uiState.value = state.copy(offerExtendSession = lastRide)
-                        return
+                viewModelScope.launch(Dispatchers.IO) {
+                    val fullRide = rideRepository.loadRides().firstOrNull { it.startedAtMs == lastRideSummary!!.startedAtMs }
+                    if (fullRide != null) {
+                        val lastPoint = fullRide.points.lastOrNull()
+                        if (lastPoint != null) {
+                            val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, currentLoc.latitude, currentLoc.longitude)
+                            if (dist < EXTEND_PROXIMITY_METERS) {
+                                launch(Dispatchers.Main) {
+                                    _uiState.value = state.copy(offerExtendSession = fullRide)
+                                }
+                                return@launch
+                            }
+                        }
+                    }
+                    launch(Dispatchers.Main) {
+                        performStartNewRide()
                     }
                 }
-                performStartNewRide()
             } else {
-                // No location yet, start tracking UI but wait for first GPS update before deciding extend/new
                 isCheckingForExtension = true
                 updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
             }
@@ -493,7 +515,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             startLocationUpdates()
         }
         activeRideStartedMs = session.startedAtMs
-        // Calculate previous track length
         trackLengthMeters = 0f
         for (i in 0 until session.points.size - 1) {
             trackLengthMeters += distanceMeters(
@@ -501,14 +522,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 session.points[i+1].latitude, session.points[i+1].longitude
             )
         }
-        // Accumulated time from previous session
         accumulatedTimeMs = session.endedAtMs - session.startedAtMs
         lastResumeMs = System.currentTimeMillis()
         
         ridePoints.clear()
         ridePoints.addAll(session.points)
         
-        // Remove the ride from history as it will be replaced
         rideRepository.deleteRide(session)
         _uiState.value = _uiState.value.copy(rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != session.startedAtMs })
 
@@ -523,11 +542,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         val now = System.currentTimeMillis()
         if (currentState.isPaused) {
-            // Resuming
             lastResumeMs = now
             updateTrackingState { it.copy(isPaused = false) }
         } else {
-            // Pausing
             accumulatedTimeMs += (now - lastResumeMs)
             updateTrackingState { it.copy(isPaused = true) }
         }
@@ -546,7 +563,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             rideRepository.saveRide(newSession)
             
             _uiState.value = _uiState.value.copy(
-                rideHistory = (listOf(newSession) + _uiState.value.rideHistory).sortedByDescending { it.startedAtMs },
+                rideHistory = (listOf(newSession.toSummary()) + _uiState.value.rideHistory).sortedByDescending { it.startedAtMs },
                 lastSavedRideId = newSession.startedAtMs
             )
         }
@@ -576,45 +593,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    fun deleteRide(session: RideSession) {
-        rideRepository.deleteRide(session)
-        _uiState.value = _uiState.value.copy(
-            rideHistory = _uiState.value.rideHistory.filter { it != session }
-        )
-    }
-
-    fun updateRideName(session: RideSession, newName: String) {
-        val updatedSession = session.copy(name = newName)
-        rideRepository.saveRide(updatedSession)
-        _uiState.value = _uiState.value.copy(
-            rideHistory = _uiState.value.rideHistory.map {
-                if (it.startedAtMs == session.startedAtMs) updatedSession else it
+    fun deleteRide(summary: RideSummary) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
+            if (session != null) {
+                rideRepository.deleteRide(session)
+                launch(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != summary.startedAtMs },
+                        expandedRides = _uiState.value.expandedRides - summary.startedAtMs
+                    )
+                }
             }
-        )
+        }
     }
 
-    fun combineRides(sessions: List<RideSession>) {
-        if (sessions.size < 2) return
-        val sorted = sessions.sortedBy { it.startedAtMs }
-        val mergedPoints = sorted.flatMap { it.points }.sortedBy { it.timestampMs }
-        val newSession = RideSession(
-            startedAtMs = sorted.first().startedAtMs,
-            endedAtMs = sorted.last().endedAtMs,
-            points = mergedPoints,
-            name = "Combined Ride"
-        )
-        
-        // Save new
-        rideRepository.saveRide(newSession)
-        
-        // Delete old
-        sessions.forEach { rideRepository.deleteRide(it) }
-        
-        val idsToRemove = sessions.map { it.startedAtMs }.toSet()
-        _uiState.value = _uiState.value.copy(
-            rideHistory = (listOf(newSession) + _uiState.value.rideHistory.filter { it.startedAtMs !in idsToRemove })
-                .sortedByDescending { it.startedAtMs }
-        )
+    fun updateRideName(summary: RideSummary, newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
+            if (session != null) {
+                val updated = session.copy(name = newName)
+                rideRepository.saveRide(updated)
+                launch(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        rideHistory = _uiState.value.rideHistory.map {
+                            if (it.startedAtMs == summary.startedAtMs) updated.toSummary() else it
+                        },
+                        expandedRides = if (_uiState.value.expandedRides.containsKey(summary.startedAtMs)) {
+                            _uiState.value.expandedRides + (summary.startedAtMs to updated)
+                        } else _uiState.value.expandedRides
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadFullSession(startedAtMs: Long) {
+        if (_uiState.value.expandedRides.containsKey(startedAtMs)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val session = rideRepository.loadRides().find { it.startedAtMs == startedAtMs }
+            if (session != null) {
+                launch(Dispatchers.Main) {
+                    _uiState.update { it.copy(expandedRides = it.expandedRides + (startedAtMs to session)) }
+                }
+            }
+        }
+    }
+
+    fun combineRides(summaries: List<RideSummary>) {
+        if (summaries.size < 2) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val allRides = rideRepository.loadRides()
+            val sessions = summaries.mapNotNull { summary -> allRides.find { it.startedAtMs == summary.startedAtMs } }
+            if (sessions.size < 2) return@launch
+            
+            val sorted = sessions.sortedBy { it.startedAtMs }
+            val mergedPoints = sorted.flatMap { it.points }.sortedBy { it.timestampMs }
+            val newSession = RideSession(
+                startedAtMs = sorted.first().startedAtMs,
+                endedAtMs = sorted.last().endedAtMs,
+                points = mergedPoints,
+                name = "Combined Ride"
+            )
+            
+            rideRepository.saveRide(newSession)
+            sessions.forEach { rideRepository.deleteRide(it) }
+            
+            val idsToRemove = summaries.map { it.startedAtMs }.toSet()
+            launch(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    rideHistory = (listOf(newSession.toSummary()) + _uiState.value.rideHistory.filter { it.startedAtMs !in idsToRemove })
+                        .sortedByDescending { it.startedAtMs },
+                    expandedRides = _uiState.value.expandedRides.filterKeys { it !in idsToRemove }
+                )
+            }
+        }
     }
 
     fun startCalibration() {
@@ -679,7 +732,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    fun continueCalibrationFallback() = Unit // Removed logic for automated fallback
+    fun continueCalibrationFallback() = Unit
 
     fun setInvertLeanAngle(invert: Boolean) {
         val previous = _uiState.value
@@ -831,7 +884,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroBiasSampleCount = 0
         
         if (isDynamicBiasPossible) {
-            persistCalibration() // Background save
+            persistCalibration() 
         }
     }
 
@@ -842,7 +895,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         val step = _uiState.value.calibration.calibrationStep
 
-        // Side detection: Only initialize once when a significant tilt (>3 deg) is detected during the LEFT step
         if (calibrationSideAxis == null && step == BikeLean.LEFT && angleDeg > 3f) {
             calibrationSideAxis = (currentUp - up * currentUp.dot(up)).normalized()
         }
@@ -863,11 +915,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val newLeftMax = if (step == BikeLean.LEFT && isLeftSide) maxOf(state.leftMax, progress) else state.leftMax
             val newRightMax = if (step == BikeLean.RIGHT && isRightSide) maxOf(state.rightMax, progress) else state.rightMax
             
-            // Track the actual vectors for the peak to calculate forward axis later
             if (step == BikeLean.LEFT && isLeftSide && progress >= newLeftMax) leftUpPeak = currentUp
             if (step == BikeLean.RIGHT && isRightSide && progress >= newRightMax) rightUpPeak = currentUp
 
-            // Only show progress if moving in the correct direction for the current step
             val directionProgress = when (step) {
                 BikeLean.LEFT -> if (isLeftSide) progress else 0f
                 BikeLean.RIGHT -> if (isRightSide) progress else 0f
@@ -889,8 +939,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val left = leftUpPeak ?: up
         val right = rightUpPeak ?: up
         
-        // Improve forward axis calculation: use cross product of left and right peaks if they differ
-        // If they are too similar, fall back to side axis cross upright
         var forward = left.cross(right).normalized()
         if (forward.norm() < 0.2f) {
             val side = calibrationSideAxis ?: Vec3(1f, 0f, 0f)
@@ -905,6 +953,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastYawRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
+        lastLeanComputationTimestampNs = null
+        recentLeanSamples.clear()
 
         updateCalibrationState {
             it.copy(
@@ -948,7 +998,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val previousTimestamp = lastLeanComputationTimestampNs
         if (previousTimestamp != null) {
             val rawDeltaNs = timestampNs - previousTimestamp
-            if (rawDeltaNs <= 0L) return // enforce monotonic timestamps
+            if (rawDeltaNs <= 0L) return 
             if (rawDeltaNs > SENSOR_TIMING_POLICY.leanDropDtNs) {
                 lastLeanComputationTimestampNs = timestampNs
                 fallbackLeanFromRecentSamples(timestampNs)
@@ -990,13 +1040,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val rawConfidence = (gravityTrust * observabilityTrust * lateralInnovationGate).coerceIn(0f, 1f)
             fusionConfidence = (fusionConfidence * 0.88f + rawConfidence * 0.12f).coerceIn(0f, 1f)
 
-            // Centripetal Correction: tan(lean) = v * omega / g
             val speedMs = speedKmh / 3.6f
             val centripetalLeanRad = atan2(speedMs * lastYawRateRadPerSec, 9.81f)
             val centripetalLeanDeg = Math.toDegrees(centripetalLeanRad.toDouble()).toFloat()
             
-            // In a curve, the accelerometer (accelLeanDeg) is biased towards 0 because of lateral acceleration.
-            // We use centripetalLeanDeg as a better reference when moving.
             val referenceLeanDeg = if (speedKmh > 5f && lateralInnovationGate < 0.7f) {
                 centripetalLeanDeg
             } else {
@@ -1030,7 +1077,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestLeanDeg = leanDeg
         latestLeanTimestampNs = timestampNs
 
-        // Update peak since last recorder tick
         if (Math.abs(leanDeg) > Math.abs(peakLeanSinceLastTick)) {
             peakLeanSinceLastTick = leanDeg
         }
@@ -1089,7 +1135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         val rawDeltaNs = event.timestamp - previousTimestamp
-        if (rawDeltaNs <= 0L) return // enforce monotonic timestamps
+        if (rawDeltaNs <= 0L) return 
         if (rawDeltaNs > SENSOR_TIMING_POLICY.gyroDropDtNs) {
             lastGyroTimestampNs = event.timestamp
             lastRollRateRadPerSec = 0f
@@ -1102,8 +1148,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val dt = clampedDeltaNs / 1_000_000_000f
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
-        
-        // Compensate for bias
         val biasVector = gyroBiasVectorRadPerSec ?: Vec3(0f, 0f, 0f)
         val unbiasedOmega = omega - biasVector
         
@@ -1166,18 +1210,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         if (isCheckingForExtension) {
             isCheckingForExtension = false
-            val lastRide = _uiState.value.rideHistory.firstOrNull()
-            if (lastRide != null) {
-                val lastPoint = lastRide.points.lastOrNull()
-                if (lastPoint != null) {
-                    val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, location.latitude, location.longitude)
-                    if (dist < EXTEND_PROXIMITY_METERS) {
-                        _uiState.value = _uiState.value.copy(offerExtendSession = lastRide)
-                        return
+            val lastSummary = _uiState.value.rideHistory.firstOrNull()
+            if (lastSummary != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val lastRide = rideRepository.loadRides().find { it.startedAtMs == lastSummary.startedAtMs }
+                    if (lastRide != null) {
+                        val lastPoint = lastRide.points.lastOrNull()
+                        if (lastPoint != null) {
+                            val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, location.latitude, location.longitude)
+                            if (dist < EXTEND_PROXIMITY_METERS) {
+                                launch(Dispatchers.Main) {
+                                    _uiState.value = _uiState.value.copy(offerExtendSession = lastRide)
+                                }
+                                return@launch
+                            }
+                        }
+                    }
+                    launch(Dispatchers.Main) {
+                        performStartNewRide()
                     }
                 }
+            } else {
+                performStartNewRide()
             }
-            performStartNewRide()
         }
 
         if (_uiState.value.settings.gpsTrackingEnabled) {
@@ -1246,7 +1301,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             )
         }
 
-        // Use the peak lean angle captured since the last recording tick
         val recordedLean = if (peakLeanSinceLastTick != 0f) peakLeanSinceLastTick else latestLeanDeg
         
         ridePoints += TrackPoint(
@@ -1261,7 +1315,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             lapIndex = 0
         )
         
-        // Reset peak for the next interval
         peakLeanSinceLastTick = latestLeanDeg
 
         val elapsedMs = accumulatedTimeMs + if (!state.tracking.isPaused) (nowMs - lastResumeMs) else 0L

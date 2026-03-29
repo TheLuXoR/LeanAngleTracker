@@ -166,6 +166,8 @@ class MainActivity : ComponentActivity() {
 
                             AppRoute.TrackReview -> RideHistoryScreen(
                                 rideHistory = state.rideHistory,
+                                expandedRides = state.expandedRides,
+                                onLoadDetails = viewModel::loadFullSession,
                                 onBack = { routeUiState = routeUiState.copy(showHistory = false) },
                                 onDeleteRide = viewModel::deleteRide,
                                 lastSavedRideId = state.lastSavedRideId,
