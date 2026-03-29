@@ -214,6 +214,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var gyroBiasSampleCount = 0
     private var lastGyroTimestampNs: Long? = null
     private var lastRollRateRadPerSec = 0f
+    private var lastYawRateRadPerSec = 0f
     private var latestRotationLeanDeg: Float? = null
     private var latestRotationTimestampNs: Long? = null
     private var lastLeanComputationTimestampNs: Long? = null
@@ -239,10 +240,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val ridePoints = mutableListOf<TrackPoint>()
 
     init {
-        accelerometerSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
-        gravitySensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
-        linearAccelerationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
-        gyroscopeSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        val delay = SensorManager.SENSOR_DELAY_FASTEST
+        accelerometerSensor?.let { sensorManager.registerListener(this, it, delay) }
+        gravitySensor?.let { sensorManager.registerListener(this, it, delay) }
+        linearAccelerationSensor?.let { sensorManager.registerListener(this, it, delay) }
+        gyroscopeSensor?.let { sensorManager.registerListener(this, it, delay) }
 
         updateSettingsState {
             it.copy(
@@ -290,6 +292,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroBiasRadPerSec = gyroBiasVectorRadPerSec?.dot(savedForward) ?: 0f
         lastGyroTimestampNs = null
         lastRollRateRadPerSec = 0f
+        lastYawRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
         lastLeanComputationTimestampNs = null
@@ -628,6 +631,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroBiasSampleCount = 0
         lastGyroTimestampNs = null
         lastRollRateRadPerSec = 0f
+        lastYawRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
         lastLeanComputationTimestampNs = null
@@ -774,7 +778,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun collectGyroBiasSample(event: SensorEvent) {
-        if (_uiState.value.calibration.calibrationStep != BikeLean.UPRIGHT) return
+        val calibrationStep = _uiState.value.calibration.calibrationStep
+        val isManualUpright = calibrationStep == BikeLean.UPRIGHT
+        val isDynamicBiasPossible = calibrationStep == BikeLean.DONE && speedKmh < 1.0f && abs(gyroLeanDeg) < 3.0f
+
+        if (!isManualUpright && !isDynamicBiasPossible) return
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
         val angularSpeed = omega.norm()
@@ -786,13 +794,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             gyroBiasCollectionStartNs = null
             gyroBiasAccumulated = Vec3(0f, 0f, 0f)
             gyroBiasSampleCount = 0
-            updateCalibrationState { state ->
-                state.copy(instructionsResId = R.string.instructions_hold_still_for_bias)
+            if (isManualUpright) {
+                updateCalibrationState { state ->
+                    state.copy(instructionsResId = R.string.instructions_hold_still_for_bias)
+                }
             }
             return
         }
 
-        if (_uiState.value.calibration.instructionsResId == R.string.instructions_hold_still_for_bias) {
+        if (isManualUpright && _uiState.value.calibration.instructionsResId == R.string.instructions_hold_still_for_bias) {
             updateCalibrationState { state ->
                 state.copy(instructionsResId = R.string.instructions_upright)
             }
@@ -810,11 +820,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (event.timestamp - start < GYRO_BIAS_COLLECTION_DURATION_NS || gyroBiasSampleCount < 10) return
 
         val invCount = 1f / gyroBiasSampleCount
-        gyroBiasVectorRadPerSec = gyroBiasAccumulated * invCount
-        gyroBiasRadPerSec = 0f
+        val newBias = gyroBiasAccumulated * invCount
+        
+        gyroBiasVectorRadPerSec = newBias
+        bikeForwardAxis?.let { forward ->
+            gyroBiasRadPerSec = newBias.dot(forward)
+        }
+        
         gyroBiasCollectionStartNs = null
         gyroBiasAccumulated = Vec3(0f, 0f, 0f)
         gyroBiasSampleCount = 0
+        
+        if (isDynamicBiasPossible) {
+            persistCalibration() // Background save
+        }
     }
 
     private fun handleManualCalibrationSensorUpdate() {
@@ -884,6 +903,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroBiasRadPerSec = gyroBiasVectorRadPerSec?.dot(forward) ?: 0f
         lastGyroTimestampNs = null
         lastRollRateRadPerSec = 0f
+        lastYawRateRadPerSec = 0f
         latestRotationLeanDeg = null
         latestRotationTimestampNs = null
 
@@ -971,13 +991,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val rawConfidence = (gravityTrust * observabilityTrust * lateralInnovationGate).coerceIn(0f, 1f)
             fusionConfidence = (fusionConfidence * 0.88f + rawConfidence * 0.12f).coerceIn(0f, 1f)
 
+            // Centripetal Correction: tan(lean) = v * omega / g
+            val speedMs = speedKmh / 3.6f
+            val centripetalLeanRad = atan2(speedMs * lastYawRateRadPerSec, 9.81f)
+            val centripetalLeanDeg = Math.toDegrees(centripetalLeanRad.toDouble()).toFloat()
+            
+            // In a curve, the accelerometer (accelLeanDeg) is biased towards 0 because of lateral acceleration.
+            // We use centripetalLeanDeg as a better reference when moving.
+            val referenceLeanDeg = if (speedKmh > 5f && lateralInnovationGate < 0.7f) {
+                centripetalLeanDeg
+            } else {
+                accelLeanDeg
+            }
+
             val accelCorrectionLimitDeg = (1f + 10f * fusionConfidence) * lateralInnovationGate
-            val accelInnovation = (accelLeanDeg - gyroLeanDeg).coerceIn(-accelCorrectionLimitDeg, accelCorrectionLimitDeg)
+            val accelInnovation = (referenceLeanDeg - gyroLeanDeg).coerceIn(-accelCorrectionLimitDeg, accelCorrectionLimitDeg)
             val accelGain = 0.003f + 0.14f * fusionConfidence * fusionConfidence
 
             val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= SENSOR_TIMING_POLICY.fusionRotationFreshNs } == true
             val rotationGain = if (rotationFresh) 0.03f else 0f
-            val rotationInnovation = ((latestRotationLeanDeg ?: accelLeanDeg) - gyroLeanDeg).coerceIn(-4f, 4f)
+            val rotationInnovation = ((latestRotationLeanDeg ?: referenceLeanDeg) - gyroLeanDeg).coerceIn(-4f, 4f)
 
             val fused = gyroLeanDeg + (accelInnovation * accelGain) + (rotationInnovation * rotationGain)
             val maxFusedStepDeg = SENSOR_TIMING_POLICY.maxLeanRateDegPerSec * leanDtSec
@@ -1039,16 +1072,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (_uiState.value.calibration.calibrationStep != BikeLean.DONE) {
             lastGyroTimestampNs = null
             lastRollRateRadPerSec = 0f
+            lastYawRateRadPerSec = 0f
             return
         }
 
         if (gyroscopeSensor == null) {
             lastGyroTimestampNs = event.timestamp
             lastRollRateRadPerSec = 0f
+            lastYawRateRadPerSec = 0f
             return
         }
 
         val forward = bikeForwardAxis ?: return
+        val up = uprightUp ?: return
         val previousTimestamp = lastGyroTimestampNs
         if (previousTimestamp == null) {
             lastGyroTimestampNs = event.timestamp
@@ -1060,6 +1096,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (rawDeltaNs > SENSOR_TIMING_POLICY.gyroDropDtNs) {
             lastGyroTimestampNs = event.timestamp
             lastRollRateRadPerSec = 0f
+            lastYawRateRadPerSec = 0f
             return
         }
 
@@ -1068,9 +1105,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val dt = clampedDeltaNs / 1_000_000_000f
 
         val omega = Vec3(event.values[0], event.values[1], event.values[2])
-        val rollRateRadPerSec = (omega.dot(forward) - gyroBiasRadPerSec)
+        
+        // Compensate for bias
+        val biasVector = gyroBiasVectorRadPerSec ?: Vec3(0f, 0f, 0f)
+        val unbiasedOmega = omega - biasVector
+        
+        val rollRateRadPerSec = unbiasedOmega.dot(forward)
             .coerceIn(-SENSOR_TIMING_POLICY.maxRollRateRadPerSec, SENSOR_TIMING_POLICY.maxRollRateRadPerSec)
+        
+        val yawRateRadPerSec = unbiasedOmega.dot(up)
+        
         lastRollRateRadPerSec = rollRateRadPerSec
+        lastYawRateRadPerSec = yawRateRadPerSec
+        
         val deltaDeg = Math.toDegrees((rollRateRadPerSec * dt).toDouble()).toFloat()
         val maxStepDeg = SENSOR_TIMING_POLICY.maxLeanRateDegPerSec * dt
         val boundedDeltaDeg = deltaDeg.coerceIn(-maxStepDeg, maxStepDeg)
