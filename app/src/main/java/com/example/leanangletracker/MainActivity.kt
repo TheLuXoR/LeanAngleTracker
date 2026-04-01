@@ -79,6 +79,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // Auto-open last saved ride and handle back stack requirements
+                    LaunchedEffect(state.lastSavedRideId) {
+                        state.lastSavedRideId?.let { id ->
+                            viewModel.loadFullSession(id)
+                            routeUiState = routeUiState.copy(
+                                showHistory = true, // Ensure history is "behind" in the resolve logic
+                                selectedRideId = id
+                            )
+                        }
+                    }
+
                     LaunchedEffect(routeUiState.introStage) {
                         if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
                         delay(800)
@@ -106,7 +117,10 @@ class MainActivity : ComponentActivity() {
                         when (route) {
                             AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
-                            is AppRoute.RideDetail -> routeUiState = routeUiState.copy(selectedRideId = null)
+                            is AppRoute.RideDetail -> {
+                                // Direct routing requirement: Back from Detail goes to History list
+                                routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
+                            }
                             AppRoute.Calibration -> {
                                 if (state.calibration.isCalibrated) {
                                 }
@@ -183,11 +197,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel.startTracking()
                                 },
                                 onFinishRide = {
-                                    val hadData = state.tracking.hasTrackData
                                     viewModel.finishRide()
-                                    if (hadData) {
-                                        routeUiState = routeUiState.copy(showHistory = true)
-                                    }
                                 },
                                 onTogglePause = viewModel::togglePauseTracking,
                                 offerExtend = state.offerExtendSession,
@@ -245,11 +255,11 @@ class MainActivity : ComponentActivity() {
                                     RideDetailScreen(
                                         rideSummary = summary,
                                         fullSession = state.expandedRides[currentRoute.rideId],
-                                        onBack = { routeUiState = routeUiState.copy(selectedRideId = null) },
+                                        onBack = { routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true) },
                                         onUpdateName = { viewModel.updateRideName(summary, it) },
                                         onDelete = { 
                                             viewModel.deleteRide(summary)
-                                            routeUiState = routeUiState.copy(selectedRideId = null)
+                                            routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
                                         }
                                     )
                                 }
