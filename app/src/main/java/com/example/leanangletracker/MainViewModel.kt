@@ -94,7 +94,8 @@ data class RideSummary(
     val endedAtMs: Long,
     val name: String? = null,
     val routeDescription: String? = null,
-    val pointCount: Int = 0
+    val pointCount: Int = 0,
+    val isSkeleton: Boolean = false
 )
 
 fun RideSession.toSummary() = RideSummary(
@@ -594,8 +595,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val started = activeRideStartedMs ?: System.currentTimeMillis()
         val ended = System.currentTimeMillis()
         
-        viewModelScope.launch(Dispatchers.IO) {
-            if (pointsSnapshot.isNotEmpty()) {
+        if (pointsSnapshot.isNotEmpty()) {
+            val skeleton = RideSummary(
+                startedAtMs = started,
+                endedAtMs = ended,
+                isSkeleton = true
+            )
+            _uiState.value = _uiState.value.copy(
+                rideHistory = (listOf(skeleton) + _uiState.value.rideHistory).sortedByDescending { it.startedAtMs },
+                lastSavedRideId = started
+            )
+
+            viewModelScope.launch(Dispatchers.IO) {
                 val tempSession = RideSession(
                     startedAtMs = started,
                     endedAtMs = ended,
@@ -608,8 +619,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 
                 launch(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
-                        rideHistory = (listOf(newSession.toSummary()) + _uiState.value.rideHistory).sortedByDescending { it.startedAtMs },
-                        lastSavedRideId = newSession.startedAtMs
+                        rideHistory = _uiState.value.rideHistory.map {
+                            if (it.startedAtMs == started) newSession.toSummary() else it
+                        },
+                        expandedRides = _uiState.value.expandedRides + (started to newSession)
                     )
                 }
             }
