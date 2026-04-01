@@ -276,9 +276,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         loadPersistedState()
         backfillRouteDescriptions()
+        checkForUnfinishedRides()
 
         if (accelerometerSensor == null && gravitySensor == null) {
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
+        }
+    }
+
+    private fun checkForUnfinishedRides() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val unfinishedIds = rideRepository.getUnfinishedRideIds()
+            unfinishedIds.forEach { startedAt ->
+                val points = rideRepository.loadTempPoints(startedAt)
+                if (points.isNotEmpty()) {
+                    val endedAt = points.last().timestampMs
+                    val tempSession = RideSession(
+                        startedAtMs = startedAt,
+                        endedAtMs = endedAt,
+                        points = points,
+                        name = "Recovered Ride"
+                    )
+                    val description = calculateRouteDescription(getApplication(), tempSession)
+                    val recoveredRide = tempSession.copy(routeDescription = description)
+                    rideRepository.saveRide(recoveredRide)
+                    
+                    launch(Dispatchers.Main) {
+                        _uiState.update { state ->
+                            state.copy(rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs })
+                        }
+                    }
+                } else {
+                    rideRepository.clearTempRide(startedAt)
+                }
+            }
         }
     }
 
@@ -607,6 +637,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             )
 
             viewModelScope.launch(Dispatchers.IO) {
+                // Massive delay for testing UI states
+                delay(10000)
+                
                 val tempSession = RideSession(
                     startedAtMs = started,
                     endedAtMs = ended,
@@ -1367,7 +1400,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         val recordedLean = if (peakLeanSinceLastTick != 0f) peakLeanSinceLastTick else latestLeanDeg
         
-        ridePoints += TrackPoint(
+        val point = TrackPoint(
             timestampMs = nowMs,
             latitude = gps.latitude,
             longitude = gps.longitude,
@@ -1378,6 +1411,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             hasFreshGps = gpsAgeMs <= GPS_FRESHNESS_THRESHOLD_MS,
             lapIndex = 0
         )
+        ridePoints += point
+        
+        activeRideStartedMs?.let { startedAt ->
+            viewModelScope.launch(Dispatchers.IO) {
+                rideRepository.saveTempPoints(startedAt, ridePoints.toList())
+            }
+        }
         
         peakLeanSinceLastTick = latestLeanDeg
 
