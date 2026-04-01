@@ -19,7 +19,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,9 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -185,15 +186,28 @@ fun RecordButton(
                                 modifier = Modifier.size(24.dp)
                             )
                         } else {
-                            Text(
-                                text = if (isWaitingForGps) "WAIT GPS" else "RECORDING",
-                                fontWeight = FontWeight.Black,
-                                color = if (isRecording && !isWaitingForGps) TextPrimary else activeColor,
-                                fontSize = 9.sp,
-                                textAlign = TextAlign.Center,
-                                softWrap = false,
-                                maxLines = 1
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (!isWaitingForGps) {
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = "Stop",
+                                        tint = if (isRecording && !isWaitingForGps) TextPrimary else activeColor,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                Text(
+                                    text = if (isWaitingForGps) "WAIT GPS" else "RECORDING",
+                                    fontWeight = FontWeight.Black,
+                                    color = if (isRecording && !isWaitingForGps) TextPrimary else activeColor,
+                                    fontSize = 9.sp,
+                                    textAlign = TextAlign.Center,
+                                    softWrap = false,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }

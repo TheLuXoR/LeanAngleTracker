@@ -2,6 +2,8 @@ package com.example.leanangletracker
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -54,16 +56,23 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(RouteUiState())
                     }
 
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.RequestPermission()
-                    ) { granted ->
-                        viewModel.onLocationPermissionResult(granted)
+                    val permissionsLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestMultiplePermissions()
+                    ) { permissions ->
+                        val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+                        viewModel.onLocationPermissionResult(locationGranted)
                     }
 
                     // Handle Foreground Service for tracking
-                    LaunchedEffect(state.tracking.trackingStarted) {
+                    LaunchedEffect(
+                        state.tracking.trackingStarted,
+                        state.tracking.trackLengthKm,
+                        state.tracking.elapsedTimeMs / 1000
+                    ) {
                         val intent = Intent(this@MainActivity, TrackingService::class.java)
                         if (state.tracking.trackingStarted) {
+                            intent.putExtra(TrackingService.EXTRA_DISTANCE, state.tracking.trackLengthKm)
+                            intent.putExtra(TrackingService.EXTRA_TIME, state.tracking.elapsedTimeMs)
                             ContextCompat.startForegroundService(this@MainActivity, intent)
                         } else {
                             stopService(intent)
@@ -99,10 +108,7 @@ class MainActivity : ComponentActivity() {
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
                             is AppRoute.RideDetail -> routeUiState = routeUiState.copy(selectedRideId = null)
                             AppRoute.Calibration -> {
-                                // Calibration is mandatory if not calibrated, otherwise we can go back
                                 if (state.calibration.isCalibrated) {
-                                    // Normally calibration is triggered from settings
-                                    // If we're here, we just want to go back to wherever we came from
                                 }
                             }
                             else -> Unit
@@ -163,7 +169,19 @@ class MainActivity : ComponentActivity() {
                                 trackingState = state.tracking,
                                 onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
                                 onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
-                                onStartTracking = viewModel::startTracking,
+                                onStartTracking = {
+                                    val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                            ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                    
+                                    if (needsNotificationPermission) {
+                                        permissionsLauncher.launch(
+                                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
+                                        )
+                                    } else if (!state.settings.locationPermissionGranted) {
+                                        permissionsLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+                                    }
+                                    viewModel.startTracking()
+                                },
                                 onFinishRide = {
                                     val hadData = state.tracking.hasTrackData
                                     viewModel.finishRide()
@@ -187,8 +205,17 @@ class MainActivity : ComponentActivity() {
                                 onBack = { routeUiState = routeUiState.copy(showSettings = false) },
                                 onToggleInvertLean = viewModel::setInvertLeanAngle,
                                 onToggleGpsTracking = { enabled ->
-                                    if (enabled && !state.settings.locationPermissionGranted) {
-                                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    if (enabled) {
+                                        val needsLoc = !state.settings.locationPermissionGranted
+                                        val needsNotif = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                        
+                                        if (needsLoc || needsNotif) {
+                                            val list = mutableListOf<String>()
+                                            if (needsLoc) list.add(Manifest.permission.ACCESS_FINE_LOCATION)
+                                            if (needsNotif) list.add(Manifest.permission.POST_NOTIFICATIONS)
+                                            permissionsLauncher.launch(list.toTypedArray())
+                                        }
                                     }
                                     viewModel.setGpsTrackingEnabled(enabled)
                                 },
