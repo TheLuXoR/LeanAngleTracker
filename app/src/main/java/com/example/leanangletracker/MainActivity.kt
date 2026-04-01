@@ -3,6 +3,7 @@ package com.example.leanangletracker
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -82,6 +83,15 @@ class MainActivity : ComponentActivity() {
                         selectedRideId = routeUiState.selectedRideId,
                         isCalibrated = state.calibration.isCalibrated
                     )
+
+                    // Keep screen on while on the tracking screen
+                    LaunchedEffect(route) {
+                        if (route is AppRoute.Tracking) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                    }
 
                     BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration) {
                         when (route) {
