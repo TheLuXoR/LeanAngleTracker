@@ -1,13 +1,10 @@
 package com.example.leanangletracker.ui.tracking
 
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import android.graphics.Point
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -21,7 +18,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.Overlay
+import kotlin.math.abs
 
 @Composable
 internal fun OSMTrackMap(
@@ -34,6 +32,9 @@ internal fun OSMTrackMap(
     val context = LocalContext.current
     val points = remember(rideSession.points) {
         rideSession.points.map { GeoPoint(it.latitude, it.longitude) }
+    }
+    val leans = remember(rideSession.points) {
+        rideSession.points.map { it.leanAngleDeg }
     }
 
     // Re-center only once when a new session is shown.
@@ -58,16 +59,9 @@ internal fun OSMTrackMap(
         }
     }
 
-    // Keep overlays persistent instead of recreating them on every recomposition.
-    val routeOverlay = remember {
-        Polyline().apply {
-            outlinePaint.apply {
-                color = Color.parseColor("#00B4FF")
-                strokeWidth = 12f
-                strokeCap = Paint.Cap.ROUND
-                isAntiAlias = true
-            }
-        }
+    // Custom overlay that colors segments by lean angle
+    val routeOverlay = remember(rideSession.startedAtMs) {
+        LeanAngleOverlay(points, leans)
     }
 
     val marker = remember(mapView) {
@@ -115,8 +109,6 @@ internal fun OSMTrackMap(
                 return@AndroidView
             }
 
-            routeOverlay.setPoints(points)
-
             val selectedGeoPoint = points.getOrNull(selectedIndex) ?: points.last()
             marker.position = selectedGeoPoint
 
@@ -136,11 +128,68 @@ internal fun OSMTrackMap(
     )
 }
 
+/**
+ * Custom Overlay to draw path segments with colors based on lean angle.
+ * Efficiently draws line segments using standard Canvas operations.
+ */
+private class LeanAngleOverlay(
+    private val points: List<GeoPoint>,
+    private val leanAngles: List<Float>
+) : Overlay() {
+    private val paint = Paint().apply {
+        strokeWidth = 14f
+        strokeCap = Paint.Cap.ROUND
+        isAntiAlias = true
+    }
+    
+    private val p1 = Point()
+    private val p2 = Point()
+
+    override fun draw(canvas: Canvas, map: MapView, shadow: Boolean) {
+        if (shadow) return
+        if (points.size < 2) return
+
+        val projection = map.projection
+        val width = canvas.width
+        val height = canvas.height
+
+        for (i in 0 until points.size - 1) {
+            projection.toPixels(points[i], p1)
+            projection.toPixels(points[i + 1], p2)
+            
+            // Basic viewport clipping for performance
+            if ((p1.x < 0 && p2.x < 0) || (p1.x > width && p2.x > width) ||
+                (p1.y < 0 && p2.y < 0) || (p1.y > height && p2.y > height)) continue
+
+            paint.color = getInterpolatedColor(leanAngles[i])
+            canvas.drawLine(p1.x.toFloat(), p1.y.toFloat(), p2.x.toFloat(), p2.y.toFloat(), paint)
+        }
+    }
+
+    private fun getInterpolatedColor(lean: Float): Int {
+        val absLean = abs(lean).coerceIn(0f, 50f)
+        // Matching colors from LeanHistoryGraph: Green (0), Orange (Mid), Red (Extreme)
+        return if (absLean < 25f) {
+            val ratio = absLean / 25f
+            interpolateColor(0xFF00E676.toInt(), 0xFFFF8C00.toInt(), ratio)
+        } else {
+            val ratio = (absLean - 25f) / 25f
+            interpolateColor(0xFFFF8C00.toInt(), 0xFFFF5252.toInt(), ratio)
+        }
+    }
+
+    private fun interpolateColor(color1: Int, color2: Int, ratio: Float): Int {
+        val r = (Color.red(color1) * (1 - ratio) + Color.red(color2) * ratio).toInt()
+        val g = (Color.green(color1) * (1 - ratio) + Color.green(color2) * ratio).toInt()
+        val b = (Color.blue(color1) * (1 - ratio) + Color.blue(color2) * ratio).toInt()
+        return Color.rgb(r, g, b)
+    }
+}
+
 private fun keepPointAwayFromBorder(
     map: MapView,
     point: GeoPoint,
-    horizontalMarginFraction: Double = 0.9,
-    verticalMarginFraction: Double = 0.9
+    paddingFraction: Double = 0.15
 ) {
     val width = map.width
     val height = map.height
@@ -150,16 +199,11 @@ private fun keepPointAwayFromBorder(
     val projection = map.projection ?: return
     val screenPoint = projection.toPixels(point, null) ?: return
 
-    val marginX = width * horizontalMarginFraction
-    val marginY = height * verticalMarginFraction
+    val marginX = width * paddingFraction
+    val marginY = height * paddingFraction
 
-    val isNearLeft = screenPoint.x < marginX
-    val isNearRight = screenPoint.x > width - marginX
-    val isNearTop = screenPoint.y < marginY
-    val isNearBottom = screenPoint.y > height - marginY
-
-    if (isNearLeft || isNearRight || isNearTop || isNearBottom) {
-        // Instant re-center is much faster than animateTo for frequently changing track points.
+    if (screenPoint.x < marginX || screenPoint.x > width - marginX ||
+        screenPoint.y < marginY || screenPoint.y > height - marginY) {
         map.controller.setCenter(point)
     }
 }
