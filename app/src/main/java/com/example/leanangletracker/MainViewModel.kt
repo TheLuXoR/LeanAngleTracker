@@ -141,7 +141,8 @@ data class UiState(
     val rideHistory: List<RideSummary> = emptyList(),
     val expandedRides: Map<Long, RideSession> = emptyMap(),
     val lastSavedRideId: Long? = null,
-    val offerExtendSession: RideSession? = null
+    val offerExtendSession: RideSession? = null,
+    val pendingRecovery: RideSession? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
@@ -285,28 +286,67 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun checkForUnfinishedRides() {
         viewModelScope.launch(Dispatchers.IO) {
-            val unfinishedIds = rideRepository.getUnfinishedRideIds()
-            unfinishedIds.forEach { startedAt ->
-                val points = rideRepository.loadTempPoints(startedAt)
-                if (points.isNotEmpty()) {
-                    val endedAt = points.last().timestampMs
-                    val tempSession = RideSession(
-                        startedAtMs = startedAt,
-                        endedAtMs = endedAt,
-                        points = points,
-                        name = "Recovered Ride"
+            val unfinishedIds = rideRepository.getUnfinishedRideIds().sortedDescending()
+            val latestId = unfinishedIds.firstOrNull() ?: return@launch
+            
+            val points = rideRepository.loadTempPoints(latestId)
+            if (points.isNotEmpty()) {
+                val tempSession = RideSession(
+                    startedAtMs = latestId,
+                    endedAtMs = points.last().timestampMs,
+                    points = points,
+                    name = "Unfinished Ride"
+                )
+                launch(Dispatchers.Main) {
+                    _uiState.update { it.copy(pendingRecovery = tempSession) }
+                }
+            } else {
+                rideRepository.clearTempRide(latestId)
+            }
+            
+            unfinishedIds.drop(1).forEach { rideRepository.clearTempRide(it) }
+        }
+    }
+
+    fun resolveRecovery(continueRide: Boolean) {
+        val session = _uiState.value.pendingRecovery ?: return
+        _uiState.update { it.copy(pendingRecovery = null) }
+        
+        if (continueRide) {
+            viewModelScope.launch(Dispatchers.Main) {
+                if (hasLocationPermission()) {
+                    startLocationUpdates()
+                }
+                activeRideStartedMs = session.startedAtMs
+                ridePoints.clear()
+                ridePoints.addAll(session.points)
+                
+                trackLengthMeters = 0f
+                for (i in 0 until session.points.size - 1) {
+                    trackLengthMeters += distanceMeters(
+                        session.points[i].latitude, session.points[i].longitude,
+                        session.points[i+1].latitude, session.points[i+1].longitude
                     )
-                    val description = calculateRouteDescription(getApplication(), tempSession)
-                    val recoveredRide = tempSession.copy(routeDescription = description)
-                    rideRepository.saveRide(recoveredRide)
-                    
-                    launch(Dispatchers.Main) {
-                        _uiState.update { state ->
-                            state.copy(rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs })
-                        }
+                }
+                
+                accumulatedTimeMs = session.endedAtMs - session.startedAtMs
+                lastResumeMs = System.currentTimeMillis()
+                peakLeanSinceLastTick = 0f
+                startRecorder()
+                updateTrackingState { it.copy(trackingStarted = true, isPaused = false, hasTrackData = true) }
+            }
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                val description = calculateRouteDescription(getApplication(), session)
+                val recoveredRide = session.copy(name = "Recovered Ride", routeDescription = description)
+                rideRepository.saveRide(recoveredRide)
+                launch(Dispatchers.Main) {
+                    _uiState.update { state ->
+                        state.copy(
+                            rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs },
+                            lastSavedRideId = recoveredRide.startedAtMs
+                        )
                     }
-                } else {
-                    rideRepository.clearTempRide(startedAt)
                 }
             }
         }
@@ -362,7 +402,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private fun backfillRouteDescriptions() {
         viewModelScope.launch(Dispatchers.IO) {
             val ridesToUpdate = _uiState.value.rideHistory.filter { it.routeDescription.isNullOrBlank() }
-            // val ridesToUpdate = _uiState.value.rideHistory
             if (ridesToUpdate.isEmpty()) return@launch
             
             val allFullRides = rideRepository.loadRides()
@@ -637,7 +676,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             )
 
             viewModelScope.launch(Dispatchers.IO) {
-                // Massive delay for testing UI states
                 delay(10000)
                 
                 val tempSession = RideSession(

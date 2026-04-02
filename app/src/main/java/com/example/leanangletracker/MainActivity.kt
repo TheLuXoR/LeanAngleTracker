@@ -16,7 +16,10 @@ import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +29,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.leanangletracker.ui.intro.IntroScreen
@@ -84,7 +88,7 @@ class MainActivity : ComponentActivity() {
                         state.lastSavedRideId?.let { id ->
                             viewModel.loadFullSession(id)
                             routeUiState = routeUiState.copy(
-                                showHistory = true, // Ensure history is "behind" in the resolve logic
+                                showHistory = true,
                                 selectedRideId = id
                             )
                         }
@@ -118,7 +122,6 @@ class MainActivity : ComponentActivity() {
                             AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
                             is AppRoute.RideDetail -> {
-                                // Direct routing requirement: Back from Detail goes to History list
                                 routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
                             }
                             AppRoute.Calibration -> {
@@ -153,7 +156,7 @@ class MainActivity : ComponentActivity() {
                                     initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
                                 ) togetherWith slideOutVertically(
                                     animationSpec = tween(300),
-                                    targetOffsetY = { fullHeight -> if (forward) fullHeight else -fullHeight }
+                                    targetOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
                                 )
                             }
                         },
@@ -179,30 +182,51 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
 
-                            AppRoute.Tracking -> LeanAngleScreen(
-                                trackingState = state.tracking,
-                                onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
-                                onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
-                                onStartTracking = {
-                                    val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                            ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                    
-                                    if (needsNotificationPermission) {
-                                        permissionsLauncher.launch(
-                                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
-                                        )
-                                    } else if (!state.settings.locationPermissionGranted) {
-                                        permissionsLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
-                                    }
-                                    viewModel.startTracking()
-                                },
-                                onFinishRide = {
-                                    viewModel.finishRide()
-                                },
-                                onTogglePause = viewModel::togglePauseTracking,
-                                offerExtend = state.offerExtendSession,
-                                onConfirmExtend = viewModel::confirmExtendRide
-                            )
+                            AppRoute.Tracking -> {
+                                // Handle Recovery Dialog only when Tracking screen is active
+                                state.pendingRecovery?.let { recovery ->
+                                    AlertDialog(
+                                        onDismissRequest = { viewModel.resolveRecovery(false) },
+                                        title = { Text("Unfinished Ride Found") },
+                                        text = { Text("It looks like the app closed unexpectedly. Would you like to continue the last recording or save it as a finished ride?") },
+                                        confirmButton = {
+                                            TextButton(onClick = { viewModel.resolveRecovery(true) }) {
+                                                Text("Continue")
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { viewModel.resolveRecovery(false) }) {
+                                                Text("Save and Finish")
+                                            }
+                                        }
+                                    )
+                                }
+
+                                LeanAngleScreen(
+                                    trackingState = state.tracking,
+                                    onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
+                                    onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
+                                    onStartTracking = {
+                                        val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                        
+                                        if (needsNotificationPermission) {
+                                            permissionsLauncher.launch(
+                                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
+                                            )
+                                        } else if (!state.settings.locationPermissionGranted) {
+                                            permissionsLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+                                        }
+                                        viewModel.startTracking()
+                                    },
+                                    onFinishRide = {
+                                        viewModel.finishRide()
+                                    },
+                                    onTogglePause = viewModel::togglePauseTracking,
+                                    offerExtend = state.offerExtendSession,
+                                    onConfirmExtend = viewModel::confirmExtendRide
+                                )
+                            }
 
                             AppRoute.Calibration -> CalibrationScreen(
                                 calibrationState = state.calibration,
