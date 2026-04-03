@@ -38,6 +38,7 @@ internal fun LeanHistoryGraph(
     selectedIndex: Int? = null,
     visibleRangePoints: Int? = null, // If null, show full track. If set, center on selectedIndex
     isScrollable: Boolean = false,
+    showCursorLine: Boolean = true,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -248,12 +249,14 @@ internal fun LeanHistoryGraph(
                             
                             val selY = yFor(interpolatedValue)
 
-                            drawLine(
-                                color = Color.White.copy(alpha = 0.4f),
-                                start = Offset(selX, 0f),
-                                end = Offset(selX, height),
-                                strokeWidth = 1.dp.toPx()
-                            )
+                            if (showCursorLine) {
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.4f),
+                                    start = Offset(selX, 0f),
+                                    end = Offset(selX, height),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
                             drawCircle(
                                 color = Color.White,
                                 radius = 4.dp.toPx(),

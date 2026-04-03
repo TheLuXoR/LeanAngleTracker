@@ -199,6 +199,8 @@ internal fun LeanAngleScreen(
                         LeanHistoryGraph(
                             modifier = Modifier.weight(1f),
                             values = trackingState.leanHistoryDeg,
+                            showCursorLine = false,
+                            selectedIndex = trackingState.leanHistoryDeg.lastIndex.coerceAtLeast(0)
                         )
 
                         AnimatedVisibility(
@@ -241,6 +243,8 @@ internal fun LeanAngleScreen(
 
                 LeanHistoryGraph(
                     values = trackingState.leanHistoryDeg,
+                    showCursorLine = false,
+                    selectedIndex = trackingState.leanHistoryDeg.lastIndex.coerceAtLeast(0),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
