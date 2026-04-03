@@ -1,6 +1,7 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
+import android.location.Location
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -62,11 +63,13 @@ internal fun RideReviewTemplate(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Left Side: Map
+            // Left Side: Map and Summary
             Column(
                 modifier = Modifier.weight(1.2f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                RideSessionSummary(rideSession)
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,6 +126,8 @@ internal fun RideReviewTemplate(
                 .padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            RideSessionSummary(rideSession)
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -169,6 +174,55 @@ internal fun RideReviewTemplate(
 }
 
 @Composable
+private fun RideSessionSummary(rideSession: RideSession) {
+    val distanceKm = remember(rideSession.points) {
+        var total = 0f
+        val results = FloatArray(1)
+        for (i in 0 until rideSession.points.size - 1) {
+            val p1 = rideSession.points[i]
+            val p2 = rideSession.points[i + 1]
+            try {
+                Location.distanceBetween(
+                    p1.latitude, p1.longitude,
+                    p2.latitude, p2.longitude,
+                    results
+                )
+                total += results[0]
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+        total / 1000f
+    }
+
+    val maxLean = remember(rideSession.points) {
+        rideSession.points.maxOfOrNull { kotlin.math.abs(it.leanAngleDeg) } ?: 0f
+    }
+
+    val maxSpeed = remember(rideSession.points) {
+        rideSession.points.maxOfOrNull { it.speedKmh } ?: 0f
+    }
+
+    val avgSpeed = remember(rideSession.points) {
+        if (rideSession.points.isEmpty()) 0f
+        else rideSession.points.map { it.speedKmh }.average().toFloat()
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StatItem(label = "DISTANCE", value = "%.2f km".format(distanceKm))
+        StatItem(label = "MAX LEAN", value = "%.1f°".format(maxLean))
+        StatItem(label = "MAX SPEED", value = "${maxSpeed.toInt()} km/h")
+        StatItem(label = "AVG SPEED", value = "${avgSpeed.toInt()} km/h")
+    }
+}
+
+@Composable
 internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     
@@ -200,14 +254,22 @@ internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
             modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Map area
-            Box(
-                modifier = Modifier
-                    .weight(1.2f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(brush)
-            )
+            // Map area and summary skeleton
+            Column(
+                modifier = Modifier.weight(1.2f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    repeat(4) { SkeletonStatItem(brush) }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(brush)
+                )
+            }
 
             // Stats and Graph area
             Column(
@@ -241,6 +303,9 @@ internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
             modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                repeat(4) { SkeletonStatItem(brush) }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
