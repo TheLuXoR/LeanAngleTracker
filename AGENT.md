@@ -15,6 +15,11 @@ LeanAngleTracker is an Android application designed for motorcyclists to track a
 - **Maps**: osmdroid
 - **Navigation**: Custom route-based navigation (see `AppRoute.kt` and `MainActivity.kt`)
 
+## Code Style
+
+- Clean Code
+- Solid
+
 ## Key Components
 
 ### 1. `MainActivity.kt`
