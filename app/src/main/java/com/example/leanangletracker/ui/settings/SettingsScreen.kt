@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,7 +40,9 @@ internal fun SettingsScreen(
     onSetHistoryWindow: (Int) -> Unit,
     onSetRecorderIntervalMs: (Int) -> Unit,
     onResetExtrema: () -> Unit,
-    onStartCalibration: () -> Unit
+    onStartCalibration: () -> Unit,
+    onToggleAutoResume: (Boolean) -> Unit,
+    onPurchaseAutoResume: () -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var showInfo by rememberSaveable { mutableStateOf(false) }
@@ -138,6 +141,37 @@ internal fun SettingsScreen(
                     border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp)
                 ) {
                     Text(stringResource(R.string.settings_recalibrate_device), style = MaterialTheme.typography.titleMedium)
+                }
+            }
+
+            SettingsGroup(title = "Premium Features") {
+                if (state.isAutoResumePurchased) {
+                    SettingsSwitchItem(
+                        title = "Auto Resume",
+                        subtitle = "Automatically resume recording when speed exceeds 20km/h for 10s while paused.",
+                        checked = state.autoResumeEnabled,
+                        onCheckedChange = onToggleAutoResume
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Auto Resume", style = MaterialTheme.typography.titleMedium)
+                            Text("Resume recording automatically when you forget to unpause.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Button(
+                            onClick = onPurchaseAutoResume,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Get for $0.99")
+                        }
+                    }
                 }
             }
 

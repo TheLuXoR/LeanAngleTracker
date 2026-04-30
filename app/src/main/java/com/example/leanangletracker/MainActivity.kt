@@ -260,9 +260,13 @@ class MainActivity : ComponentActivity() {
                                     Log.i(TAG, "onToggleGpsTracking: $enabled")
                                     if (enabled) {
                                         val needsLoc = !state.settings.locationPermissionGranted
-                                        val needsNotif = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                        
+                                        val needsNotif =
+                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                    ContextCompat.checkSelfPermission(
+                                                        this@MainActivity,
+                                                        Manifest.permission.POST_NOTIFICATIONS
+                                                    ) != PackageManager.PERMISSION_GRANTED
+
                                         if (needsLoc || needsNotif) {
                                             val list = mutableListOf<String>()
                                             if (needsLoc) list.add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -279,7 +283,9 @@ class MainActivity : ComponentActivity() {
                                     Log.i(TAG, "onStartCalibration clicked from settings")
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
-                                }
+                                },
+                                onToggleAutoResume = viewModel::setAutoResumeEnabled,
+                                onPurchaseAutoResume = viewModel::purchaseAutoResume
                             )
 
                             AppRoute.TrackReview -> RideHistoryScreen(

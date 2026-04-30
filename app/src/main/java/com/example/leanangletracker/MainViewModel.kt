@@ -132,7 +132,9 @@ data class SettingsUiState(
     val recorderIntervalMs: Int = 200,
     val gyroscopeAvailable: Boolean = false,
     val gpsTrackingEnabled: Boolean = false,
-    val locationPermissionGranted: Boolean = false
+    val locationPermissionGranted: Boolean = false,
+    val autoResumeEnabled: Boolean = false,
+    val isAutoResumePurchased: Boolean = false
 )
 
 data class UiState(
@@ -169,6 +171,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val KEY_GYRO_BIAS_X = "gyro_bias_x"
         const val KEY_GYRO_BIAS_Y = "gyro_bias_y"
         const val KEY_GYRO_BIAS_Z = "gyro_bias_z"
+        const val KEY_AUTO_REWIND = "auto_resume_enabled"
+        const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
         const val MAX_LEAN_DEG = 75f
@@ -183,6 +187,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val LATERAL_ACCEL_GATING_FULL_MS2 = 4.2f
         const val MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC = 240f
         const val RECENT_LEAN_BUFFER_SIZE = 8
+        const val AUTO_REWIND_SPEED_THRESHOLD_KMH = 20f
+        const val AUTO_REWIND_DURATION_MS = 10_000L
 
         private data class SensorTimingPolicy(
             val minDtNs: Long,
@@ -257,6 +263,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var isCheckingForExtension = false
     private var latestLinearAccelerationMagnitude = 0f
     private var fusionConfidence = 1f
+    private var autoResumeTimerStartMs: Long? = null
+    private val pausedPointsBuffer = ArrayDeque<TrackPoint>()
 
     private data class TimedLean(val timestampNs: Long, val valueDeg: Float)
     private val leanHistory = ArrayDeque<TimedLean>()
@@ -384,13 +392,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val savedHistory = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120)
         val savedRecorder = prefs.getInt(KEY_RECORDER_INTERVAL, 200).coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
         val savedGps = prefs.getBoolean(KEY_GPS_ENABLED, false)
+        val savedAutoResume = prefs.getBoolean(KEY_AUTO_REWIND, false)
+        val savedAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false)
 
         updateSettingsState {
             it.copy(
                 invertLeanAngle = savedInvert,
                 historyWindowSeconds = savedHistory,
                 recorderIntervalMs = savedRecorder,
-                gpsTrackingEnabled = savedGps && it.locationPermissionGranted
+                gpsTrackingEnabled = savedGps && it.locationPermissionGranted,
+                autoResumeEnabled = savedAutoResume,
+                isAutoResumePurchased = savedAutoResumePurchased
             )
         }
         updateTrackingState {
@@ -484,6 +496,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
             .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
+            .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
+            .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
             .apply()
     }
 
@@ -564,6 +578,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (!enabled) {
             stopLocationUpdates()
             ridePoints.clear()
+            pausedPointsBuffer.clear()
             activeRideStartedMs = null
             accumulatedTimeMs = 0L
             latestGpsLocation = null
@@ -661,6 +676,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastResumeMs = activeRideStartedMs!!
         trackLengthMeters = 0f
         ridePoints.clear()
+        pausedPointsBuffer.clear()
         peakLeanSinceLastTick = 0f
         startRecorder()
         updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = false) }
@@ -684,6 +700,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         ridePoints.clear()
         ridePoints.addAll(session.points)
+        pausedPointsBuffer.clear()
         
         rideRepository.deleteRide(session)
         _uiState.value = _uiState.value.copy(rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != session.startedAtMs })
@@ -701,10 +718,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (currentState.isPaused) {
             Log.i(TAG, "Resuming tracking")
             lastResumeMs = now
+            if (pausedPointsBuffer.isNotEmpty()) {
+                Log.d(TAG, "Resumeing: adding ${pausedPointsBuffer.size} buffered points from pause duration")
+                ridePoints.addAll(pausedPointsBuffer)
+                pausedPointsBuffer.clear()
+            }
             updateTrackingState { it.copy(isPaused = false) }
         } else {
             Log.i(TAG, "Pausing tracking")
             accumulatedTimeMs += (now - lastResumeMs)
+            pausedPointsBuffer.clear()
+            autoResumeTimerStartMs = null
             updateTrackingState { it.copy(isPaused = true) }
         }
     }
@@ -758,12 +782,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         stopLocationUpdates()
         stopRecorder()
         ridePoints.clear()
+        pausedPointsBuffer.clear()
         activeRideStartedMs = null
         accumulatedTimeMs = 0L
         latestGpsLocation = null
         latestGpsTimestampNs = null
         speedKmh = 0f
         trackLengthMeters = 0f
+        autoResumeTimerStartMs = null
         updateTrackingState {
             it.copy(
                 hasTrackData = false,
@@ -984,6 +1010,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (previous.settings.recorderIntervalMs == clamped) return
 
         _uiState.value = previous.copy(settings = previous.settings.copy(recorderIntervalMs = clamped))
+        persistSettings()
+    }
+
+    fun setAutoResumeEnabled(enabled: Boolean) {
+        Log.i(TAG, "Setting auto resume enabled: $enabled")
+        updateSettingsState { it.copy(autoResumeEnabled = enabled) }
+        if (!enabled) {
+            pausedPointsBuffer.clear()
+            autoResumeTimerStartMs = null
+        }
+        persistSettings()
+    }
+
+    fun purchaseAutoResume() {
+        Log.i(TAG, "Purchasing auto resume feature")
+        updateSettingsState { it.copy(isAutoResumePurchased = true, autoResumeEnabled = true) }
         persistSettings()
     }
 
@@ -1456,12 +1498,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
         }
 
-        if (_uiState.value.settings.gpsTrackingEnabled) {
-            if (_uiState.value.tracking.trackingStarted && activeRideStartedMs == null && !isCheckingForExtension) {
+        val state = _uiState.value
+        if (state.settings.gpsTrackingEnabled) {
+            if (state.tracking.trackingStarted && activeRideStartedMs == null && !isCheckingForExtension) {
                 activeRideStartedMs = System.currentTimeMillis()
                 lastResumeMs = activeRideStartedMs!!
             }
-            if (!_uiState.value.tracking.trackingStarted) {
+
+            // Auto Resume Logic
+            if (state.tracking.trackingStarted && state.tracking.isPaused && state.settings.autoResumeEnabled) {
+                if (speedKmh >= AUTO_REWIND_SPEED_THRESHOLD_KMH) {
+                    val now = System.currentTimeMillis()
+                    val start = autoResumeTimerStartMs ?: now.also { autoResumeTimerStartMs = it }
+                    if (now - start >= AUTO_REWIND_DURATION_MS) {
+                        Log.i(TAG, "Auto Resume triggered: speed=$speedKmh for ${now - start}ms")
+                        autoResumeTimerStartMs = null
+                        togglePauseTracking()
+                    }
+                } else {
+                    autoResumeTimerStartMs = null
+                }
+            }
+
+            if (!state.tracking.trackingStarted) {
                 updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning, currentLatitude = location.latitude, currentLongitude = location.longitude) }
                 return
             }
@@ -1502,7 +1561,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun recordFusedSample() {
         val state = _uiState.value
-        if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted || state.tracking.isPaused || isCheckingForExtension) return
+        if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted || isCheckingForExtension) return
 
         val gps = latestGpsLocation ?: return
         val nowNs = SystemClock.elapsedRealtimeNanos()
@@ -1515,7 +1574,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         val nowMs = System.currentTimeMillis()
         val previousPoint = ridePoints.lastOrNull()
-        if (previousPoint != null) {
+        if (previousPoint != null && !state.tracking.isPaused) {
             trackLengthMeters += distanceMeters(
                 previousPoint.latitude,
                 previousPoint.longitude,
@@ -1537,6 +1596,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             hasFreshGps = gpsAgeMs <= GPS_FRESHNESS_THRESHOLD_MS,
             lapIndex = 0
         )
+
+        if (state.tracking.isPaused) {
+            if (state.settings.autoResumeEnabled) {
+                pausedPointsBuffer.addLast(point)
+                // Keep only last 30 seconds of paused data to avoid memory issues
+                val cutoff = nowMs - 30_000L
+                while (pausedPointsBuffer.isNotEmpty() && pausedPointsBuffer.first().timestampMs < cutoff) {
+                    pausedPointsBuffer.removeFirst()
+                }
+            }
+            return
+        }
+
         ridePoints += point
         
         activeRideStartedMs?.let { startedAt ->
@@ -1547,7 +1619,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         peakLeanSinceLastTick = latestLeanDeg
 
-        val elapsedMs = accumulatedTimeMs + if (!state.tracking.isPaused) (nowMs - lastResumeMs) else 0L
+        val elapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
         val avgSpeed = if (ridePoints.isNotEmpty()) ridePoints.map { it.speedKmh }.average().toFloat() else 0f
         val avgLean = if (ridePoints.isNotEmpty()) ridePoints.map { kotlin.math.abs(it.leanAngleDeg.toDouble()) }.average().toFloat() else 0f
 
