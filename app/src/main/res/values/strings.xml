@@ -73,6 +73,7 @@
     <!-- Tracking Labels -->
     <string name="tracking_wait_gps">WAIT GPS</string>
     <string name="tracking_recording">RECORDING</string>
+    <string name="tracking_warning_upside_down">Phone upside down! Please flip it.</string>
 
     <!-- Legacy / Backup Instructions (Still used in ViewModel logic) -->
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>

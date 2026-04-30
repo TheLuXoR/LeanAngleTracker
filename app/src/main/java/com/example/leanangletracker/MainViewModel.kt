@@ -123,7 +123,8 @@ data class TrackingUiState(
     val elapsedTimeMs: Long = 0L,
     val averageSpeedKmh: Float = 0f,
     val trackLengthKm: Float = 0f,
-    val averageLeanAngleDeg: Float = 0f
+    val averageLeanAngleDeg: Float = 0f,
+    val isUpsideDown: Boolean = false
 )
 
 data class SettingsUiState(
@@ -176,6 +177,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
         const val MAX_LEAN_DEG = 75f
+        const val AUTO_PAUSE_LEAN_THRESHOLD = 70f
         const val MAX_ROLL_RATE_RAD_PER_SEC = 8.5f
         const val GYRO_REVERSAL_DAMPING = 0.55f
         const val GYRO_BIAS_COLLECTION_DURATION_NS = 1_500_000_000L
@@ -599,7 +601,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     elapsedTimeMs = 0L,
                     averageSpeedKmh = 0f,
                     trackLengthKm = 0f,
-                    averageLeanAngleDeg = 0f
+                    averageLeanAngleDeg = 0f,
+                    isUpsideDown = false
                 )
             }
         }
@@ -802,7 +805,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 elapsedTimeMs = 0L,
                 averageSpeedKmh = 0f,
                 trackLengthKm = 0f,
-                averageLeanAngleDeg = 0f
+                averageLeanAngleDeg = 0f,
+                isUpsideDown = false
             )
         }
     }
@@ -1336,6 +1340,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             peakLeanSinceLastTick = leanDeg
         }
 
+        // Auto pause if lean angle is too high (likely crash or extreme event)
+        if (abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD) {
+            val currentState = _uiState.value.tracking
+            if (currentState.trackingStarted && !currentState.isPaused) {
+                Log.w(TAG, "Auto-pausing recording due to extreme lean angle: $leanDeg°")
+                togglePauseTracking()
+            }
+        }
+
         leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
         registerRecentLeanSample(timestampNs, leanDeg)
 
@@ -1343,6 +1356,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         pruneHistory(timestampNs, previous.settings.historyWindowSeconds)
 
         val visibleHistory = leanHistory.map { it.valueDeg }
+
+        // Detect upside down: if gravity points in same direction as uprightUp (captured as -gravity)
+        val upsideDown = filteredGravity.dot(upRef) > 5.0f
 
         _uiState.value = previous.copy(
             tracking = previous.tracking.copy(
@@ -1354,7 +1370,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 gpsActive = locationUpdatesRunning,
                 hasTrackData = ridePoints.isNotEmpty(),
                 currentLatitude = latestGpsLocation?.latitude,
-                currentLongitude = latestGpsLocation?.longitude
+                currentLongitude = latestGpsLocation?.longitude,
+                isUpsideDown = upsideDown
             )
         )
     }
