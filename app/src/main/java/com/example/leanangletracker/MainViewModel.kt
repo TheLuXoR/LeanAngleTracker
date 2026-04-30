@@ -13,6 +13,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
@@ -148,6 +149,7 @@ data class UiState(
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
 
     private companion object {
+        const val TAG = "MainViewModel"
         const val RECORDER_INTERVAL_MIN_MS = 50
         const val RECORDER_INTERVAL_MAX_MS = 1_000
         const val RECORDER_INTERVAL_STEP_MS = 50
@@ -262,11 +264,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val ridePoints = mutableListOf<TrackPoint>()
 
     init {
+        Log.d(TAG, "Initializing MainViewModel")
         val delay = SensorManager.SENSOR_DELAY_FASTEST
-        accelerometerSensor?.let { sensorManager.registerListener(this, it, delay) }
-        gravitySensor?.let { sensorManager.registerListener(this, it, delay) }
-        linearAccelerationSensor?.let { sensorManager.registerListener(this, it, delay) }
-        gyroscopeSensor?.let { sensorManager.registerListener(this, it, delay) }
+        accelerometerSensor?.let { 
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Accelerometer registered")
+        }
+        gravitySensor?.let { 
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Gravity sensor registered")
+        }
+        linearAccelerationSensor?.let { 
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Linear acceleration sensor registered")
+        }
+        gyroscopeSensor?.let { 
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Gyroscope registered")
+        }
 
         updateSettingsState {
             it.copy(
@@ -280,6 +295,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         checkForUnfinishedRides()
 
         if (accelerometerSensor == null && gravitySensor == null) {
+            Log.w(TAG, "No orientation sensors available!")
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
     }
@@ -287,10 +303,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private fun checkForUnfinishedRides() {
         viewModelScope.launch(Dispatchers.IO) {
             val unfinishedIds = rideRepository.getUnfinishedRideIds().sortedDescending()
+            if (unfinishedIds.isNotEmpty()) {
+                Log.i(TAG, "Found ${unfinishedIds.size} unfinished rides")
+            }
             val latestId = unfinishedIds.firstOrNull() ?: return@launch
             
             val points = rideRepository.loadTempPoints(latestId)
             if (points.isNotEmpty()) {
+                Log.d(TAG, "Latest unfinished ride $latestId has ${points.size} points. Offering recovery.")
                 val tempSession = RideSession(
                     startedAtMs = latestId,
                     endedAtMs = points.last().timestampMs,
@@ -301,15 +321,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     _uiState.update { it.copy(pendingRecovery = tempSession) }
                 }
             } else {
+                Log.d(TAG, "Latest unfinished ride $latestId is empty. Clearing.")
                 rideRepository.clearTempRide(latestId)
             }
             
-            unfinishedIds.drop(1).forEach { rideRepository.clearTempRide(it) }
+            unfinishedIds.drop(1).forEach { 
+                Log.d(TAG, "Clearing older unfinished ride $it")
+                rideRepository.clearTempRide(it) 
+            }
         }
     }
 
     fun resolveRecovery(continueRide: Boolean) {
         val session = _uiState.value.pendingRecovery ?: return
+        Log.i(TAG, "Resolving recovery: continue=$continueRide")
         _uiState.update { it.copy(pendingRecovery = null) }
         
         if (continueRide) {
@@ -334,12 +359,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 peakLeanSinceLastTick = 0f
                 startRecorder()
                 updateTrackingState { it.copy(trackingStarted = true, isPaused = false, hasTrackData = true) }
+                Log.d(TAG, "Ride recovery complete. Continued with ${ridePoints.size} points.")
             }
         } else {
             viewModelScope.launch(Dispatchers.IO) {
                 val description = calculateRouteDescription(getApplication(), session)
                 val recoveredRide = session.copy(name = "Recovered Ride", routeDescription = description)
                 rideRepository.saveRide(recoveredRide)
+                Log.d(TAG, "Ride recovery complete. Saved as new ride.")
                 launch(Dispatchers.Main) {
                     _uiState.update { state ->
                         state.copy(
@@ -370,12 +397,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
         }
 
-        _uiState.value = _uiState.value.copy(rideHistory = rideRepository.loadRides().map { it.toSummary() })
+        val history = rideRepository.loadRides()
+        Log.d(TAG, "Loaded ${history.size} rides from repository")
+        _uiState.value = _uiState.value.copy(rideHistory = history.map { it.toSummary() })
 
-        if (!prefs.getBoolean(KEY_CALIBRATED, false)) return
+        if (!prefs.getBoolean(KEY_CALIBRATED, false)) {
+            Log.i(TAG, "No persisted calibration found")
+            return
+        }
 
-        val savedUpright = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)?.normalized() ?: return
-        val savedForward = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)?.normalized() ?: return
+        val savedUpright = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)?.normalized()
+        val savedForward = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)?.normalized()
+
+        if (savedUpright == null || savedForward == null) {
+            Log.w(TAG, "Persisted calibration data is incomplete or invalid")
+            return
+        }
 
         uprightUp = savedUpright
         bikeForwardAxis = savedForward
@@ -390,6 +427,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastLeanComputationTimestampNs = null
         recentLeanSamples.clear()
 
+        Log.i(TAG, "Calibration loaded successfully")
         updateCalibrationState {
             it.copy(
                 calibrationStep = BikeLean.DONE,
@@ -404,6 +442,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val ridesToUpdate = _uiState.value.rideHistory.filter { it.routeDescription.isNullOrBlank() }
             if (ridesToUpdate.isEmpty()) return@launch
             
+            Log.d(TAG, "Backfilling route descriptions for ${ridesToUpdate.size} rides")
             val allFullRides = rideRepository.loadRides()
             
             ridesToUpdate.forEach { summary ->
@@ -451,6 +490,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private fun persistCalibration() {
         val up = uprightUp ?: return
         val forward = bikeForwardAxis ?: return
+        Log.d(TAG, "Persisting calibration data")
         val editor = prefs.edit()
             .putBoolean(KEY_CALIBRATED, true)
             .putFloat(KEY_UPRIGHT_X, up.x)
@@ -475,6 +515,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun clearPersistedCalibration() {
+        Log.d(TAG, "Clearing persisted calibration")
         prefs.edit()
             .putBoolean(KEY_CALIBRATED, false)
             .remove(KEY_UPRIGHT_X)
@@ -502,6 +543,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun onLocationPermissionResult(granted: Boolean) {
+        Log.i(TAG, "Location permission granted: $granted")
         updateSettingsState { it.copy(locationPermissionGranted = granted) }
         if (!granted) {
             stopLocationUpdates()
@@ -517,6 +559,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun setGpsTrackingEnabled(enabled: Boolean) {
+        Log.i(TAG, "GPS tracking enabled: $enabled")
         updateSettingsState { it.copy(gpsTrackingEnabled = enabled) }
         if (!enabled) {
             stopLocationUpdates()
@@ -554,6 +597,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     fun startTracking() {
         val state = _uiState.value
+        Log.i(TAG, "Start tracking requested. GPS enabled: ${state.settings.gpsTrackingEnabled}")
         if (!state.settings.gpsTrackingEnabled || !state.settings.locationPermissionGranted) return
 
         if (!locationUpdatesRunning) {
@@ -573,6 +617,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                         if (lastPoint != null) {
                             val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, currentLoc.latitude, currentLoc.longitude)
                             if (dist < EXTEND_PROXIMITY_METERS) {
+                                Log.d(TAG, "Proximity check: last ride is close ($dist m). Offering extension.")
                                 launch(Dispatchers.Main) {
                                     _uiState.value = state.copy(offerExtendSession = fullRide)
                                 }
@@ -585,6 +630,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     }
                 }
             } else {
+                Log.d(TAG, "Waiting for GPS to check for session extension")
                 isCheckingForExtension = true
                 updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
             }
@@ -595,6 +641,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun confirmExtendRide(extend: Boolean) {
         val offer = _uiState.value.offerExtendSession
+        Log.i(TAG, "Confirm extend ride: $extend")
         _uiState.value = _uiState.value.copy(offerExtendSession = null)
         if (extend && offer != null) {
             performExtendRide(offer)
@@ -605,6 +652,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun performStartNewRide() {
+        Log.i(TAG, "Starting new ride")
         if (!locationUpdatesRunning) {
             startLocationUpdates()
         }
@@ -619,6 +667,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun performExtendRide(session: RideSession) {
+        Log.i(TAG, "Extending existing ride from ${session.startedAtMs}")
         if (!locationUpdatesRunning) {
             startLocationUpdates()
         }
@@ -650,21 +699,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         
         val now = System.currentTimeMillis()
         if (currentState.isPaused) {
+            Log.i(TAG, "Resuming tracking")
             lastResumeMs = now
             updateTrackingState { it.copy(isPaused = false) }
         } else {
+            Log.i(TAG, "Pausing tracking")
             accumulatedTimeMs += (now - lastResumeMs)
             updateTrackingState { it.copy(isPaused = true) }
         }
     }
 
     fun finishRide() {
+        Log.i(TAG, "Finishing ride")
         isCheckingForExtension = false
         val pointsSnapshot = ridePoints.toList()
         val started = activeRideStartedMs ?: System.currentTimeMillis()
         val ended = System.currentTimeMillis()
         
         if (pointsSnapshot.isNotEmpty()) {
+            Log.d(TAG, "Saving ride with ${pointsSnapshot.size} points")
             val skeleton = RideSummary(
                 startedAtMs = started,
                 endedAtMs = ended,
@@ -687,6 +740,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 val newSession = tempSession.copy(routeDescription = description)
                 
                 rideRepository.saveRide(newSession)
+                Log.d(TAG, "Ride data saved asynchronously")
                 
                 launch(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
@@ -697,6 +751,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     )
                 }
             }
+        } else {
+            Log.d(TAG, "No points recorded, discarding ride")
         }
         
         stopLocationUpdates()
@@ -726,6 +782,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun deleteRide(summary: RideSummary) {
+        Log.i(TAG, "Deleting ride: ${summary.startedAtMs}")
         viewModelScope.launch(Dispatchers.IO) {
             val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
             if (session != null) {
@@ -741,20 +798,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun updateRideName(summary: RideSummary, newName: String) {
+        Log.d(TAG, "Updating ride name to '$newName' for ${summary.startedAtMs}")
         viewModelScope.launch(Dispatchers.IO) {
             val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
             if (session != null) {
                 val updated = session.copy(name = newName)
                 rideRepository.saveRide(updated)
                 launch(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        rideHistory = _uiState.value.rideHistory.map {
-                            if (it.startedAtMs == summary.startedAtMs) updated.toSummary() else it
-                        },
-                        expandedRides = if (_uiState.value.expandedRides.containsKey(summary.startedAtMs)) {
-                            _uiState.value.expandedRides + (summary.startedAtMs to updated)
-                        } else _uiState.value.expandedRides
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            rideHistory = state.rideHistory.map {
+                                if (it.startedAtMs == summary.startedAtMs) updated.toSummary() else it
+                            },
+                            expandedRides = if (state.expandedRides.containsKey(summary.startedAtMs)) {
+                                state.expandedRides + (summary.startedAtMs to updated)
+                            } else state.expandedRides
+                        )
+                    }
                 }
             }
         }
@@ -762,6 +822,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun loadFullSession(startedAtMs: Long) {
         if (_uiState.value.expandedRides.containsKey(startedAtMs)) return
+        Log.d(TAG, "Loading full session data for $startedAtMs")
         viewModelScope.launch(Dispatchers.IO) {
             val session = rideRepository.loadRides().find { it.startedAtMs == startedAtMs }
             if (session != null) {
@@ -774,6 +835,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun combineRides(summaries: List<RideSummary>) {
         if (summaries.size < 2) return
+        Log.i(TAG, "Combining ${summaries.size} rides")
         viewModelScope.launch(Dispatchers.IO) {
             val allRides = rideRepository.loadRides()
             val sessions = summaries.mapNotNull { summary -> allRides.find { it.startedAtMs == summary.startedAtMs } }
@@ -806,6 +868,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun startCalibration() {
+        Log.i(TAG, "Starting calibration process")
         uprightUp = null
         leftUpPeak = null
         rightUpPeak = null
@@ -842,9 +905,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun captureUpright() {
         val state = _uiState.value.calibration
+        Log.d(TAG, "Capturing upright position. Current step: ${state.calibrationStep}")
         when (state.calibrationStep) {
             BikeLean.UPRIGHT -> {
                 uprightUp = (filteredGravity * -1f).normalized()
+                Log.d(TAG, "Upright vector: $uprightUp")
                 updateCalibrationState {
                     it.copy(
                         calibrationStep = BikeLean.LEFT,
@@ -853,6 +918,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 }
             }
             BikeLean.LEFT -> {
+                Log.d(TAG, "Left tilt capture complete")
                 updateCalibrationState {
                     it.copy(
                         calibrationStep = BikeLean.RIGHT,
@@ -861,6 +927,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 }
             }
             BikeLean.RIGHT -> {
+                Log.d(TAG, "Right tilt capture complete. Finalizing.")
                 finalizeManualCalibration()
             }
             else -> Unit
@@ -870,6 +937,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun continueCalibrationFallback() = Unit
 
     fun setInvertLeanAngle(invert: Boolean) {
+        Log.i(TAG, "Setting invert lean angle: $invert")
         val previous = _uiState.value
         if (previous.settings.invertLeanAngle == invert) return
 
@@ -895,6 +963,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun setHistoryWindowSeconds(seconds: Int) {
+        Log.d(TAG, "Setting history window to $seconds seconds")
         val clamped = seconds.coerceIn(5, 120)
         val previous = _uiState.value
         if (previous.settings.historyWindowSeconds == clamped) return
@@ -908,6 +977,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun setRecorderIntervalMs(intervalMs: Int) {
+        Log.d(TAG, "Setting recorder interval to $intervalMs ms")
         val stepped = (intervalMs / RECORDER_INTERVAL_STEP_MS) * RECORDER_INTERVAL_STEP_MS
         val clamped = stepped.coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
         val previous = _uiState.value
@@ -918,6 +988,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     fun resetExtrema() {
+        Log.d(TAG, "Resetting max lean angles")
         updateTrackingState {
             it.copy(
                 maxLeftDeg = 0f,
@@ -1009,6 +1080,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val invCount = 1f / gyroBiasSampleCount
         val newBias = gyroBiasAccumulated * invCount
         
+        Log.d(TAG, "Collected gyro bias sample: $newBias")
         gyroBiasVectorRadPerSec = newBias
         bikeForwardAxis?.let { forward ->
             gyroBiasRadPerSec = newBias.dot(forward)
@@ -1019,6 +1091,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         gyroBiasSampleCount = 0
         
         if (isDynamicBiasPossible) {
+            Log.d(TAG, "Updating dynamic gyro bias")
             persistCalibration() 
         }
     }
@@ -1078,6 +1151,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (forward.norm() < 0.2f) {
             val side = calibrationSideAxis ?: Vec3(1f, 0f, 0f)
             forward = side.cross(up).normalized()
+            Log.d(TAG, "Forward vector derived from side axis")
+        } else {
+            Log.d(TAG, "Forward vector derived from tilt peaks")
         }
         
         bikeForwardAxis = forward
@@ -1091,6 +1167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         lastLeanComputationTimestampNs = null
         recentLeanSamples.clear()
 
+        Log.i(TAG, "Calibration finalized. Forward: $forward")
         updateCalibrationState {
             it.copy(
                 calibrationStep = BikeLean.DONE,
@@ -1135,6 +1212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val rawDeltaNs = timestampNs - previousTimestamp
             if (rawDeltaNs <= 0L) return 
             if (rawDeltaNs > SENSOR_TIMING_POLICY.leanDropDtNs) {
+                Log.w(TAG, "Large gap in lean computation: ${rawDeltaNs / 1_000_000} ms")
                 lastLeanComputationTimestampNs = timestampNs
                 fallbackLeanFromRecentSamples(timestampNs)
                 return
@@ -1272,6 +1350,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val rawDeltaNs = event.timestamp - previousTimestamp
         if (rawDeltaNs <= 0L) return 
         if (rawDeltaNs > SENSOR_TIMING_POLICY.gyroDropDtNs) {
+            Log.w(TAG, "Large gap in gyro data: ${rawDeltaNs / 1_000_000} ms")
             lastGyroTimestampNs = event.timestamp
             lastRollRateRadPerSec = 0f
             lastYawRateRadPerSec = 0f
@@ -1317,10 +1396,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         if (provider == null) {
+            Log.w(TAG, "No location provider available")
             updateTrackingState { it.copy(gpsActive = false) }
             return
         }
 
+        Log.i(TAG, "Starting location updates using $provider")
         locationManager.requestLocationUpdates(provider, 1000L, 2f, this)
         locationUpdatesRunning = true
         updateTrackingState { it.copy(gpsActive = true) }
@@ -1331,13 +1412,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             updateTrackingState { it.copy(gpsActive = false) }
             return
         }
+        Log.i(TAG, "Stopping location updates")
         locationManager.removeUpdates(this)
         locationUpdatesRunning = false
         updateTrackingState { it.copy(gpsActive = false) }
     }
 
     override fun onLocationChanged(location: Location) {
-        if (location.hasAccuracy() && location.accuracy > 60f) return
+        if (location.hasAccuracy() && location.accuracy > 60f) {
+            Log.d(TAG, "Ignoring low accuracy location: ${location.accuracy}m")
+            return
+        }
 
         latestGpsLocation = location
         latestGpsTimestampNs = location.elapsedRealtimeNanos
@@ -1354,6 +1439,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                         if (lastPoint != null) {
                             val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, location.latitude, location.longitude)
                             if (dist < EXTEND_PROXIMITY_METERS) {
+                                Log.d(TAG, "Proximity check successful ($dist m). Offering extension.")
                                 launch(Dispatchers.Main) {
                                     _uiState.value = _uiState.value.copy(offerExtendSession = lastRide)
                                 }
@@ -1397,6 +1483,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun startRecorder() {
         if (recorderJob?.isActive == true) return
+        Log.i(TAG, "Starting sample recorder")
         recorderJob = viewModelScope.launch {
             while (isActive) {
                 val intervalMs = _uiState.value.settings.recorderIntervalMs
@@ -1408,6 +1495,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun stopRecorder() {
+        Log.i(TAG, "Stopping sample recorder")
         recorderJob?.cancel()
         recorderJob = null
     }
@@ -1493,6 +1581,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     override fun onCleared() {
+        Log.d(TAG, "ViewModel onCleared. Unregistering sensors.")
         sensorManager.unregisterListener(this)
         stopLocationUpdates()
         stopRecorder()

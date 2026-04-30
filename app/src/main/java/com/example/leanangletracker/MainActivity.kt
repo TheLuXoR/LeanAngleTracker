@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate")
         enableEdgeToEdge()
         setContent {
             LeanAngleTrackerTheme {
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity() {
                         ActivityResultContracts.RequestMultiplePermissions()
                     ) { permissions ->
                         val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+                        Log.d(TAG, "Permissions result: locationGranted=$locationGranted")
                         viewModel.onLocationPermissionResult(locationGranted)
                     }
 
@@ -77,8 +80,10 @@ class MainActivity : ComponentActivity() {
                         if (state.tracking.trackingStarted) {
                             intent.putExtra(TrackingService.EXTRA_DISTANCE, state.tracking.trackLengthKm)
                             intent.putExtra(TrackingService.EXTRA_TIME, state.tracking.elapsedTimeMs)
+                            Log.d(TAG, "Starting/Updating foreground service")
                             ContextCompat.startForegroundService(this@MainActivity, intent)
                         } else {
+                            Log.d(TAG, "Stopping foreground service")
                             stopService(intent)
                         }
                     }
@@ -86,6 +91,7 @@ class MainActivity : ComponentActivity() {
                     // Auto-open last saved ride and handle back stack requirements
                     LaunchedEffect(state.lastSavedRideId) {
                         state.lastSavedRideId?.let { id ->
+                            Log.d(TAG, "Auto-opening last saved ride: $id")
                             viewModel.loadFullSession(id)
                             routeUiState = routeUiState.copy(
                                 showHistory = true,
@@ -111,6 +117,7 @@ class MainActivity : ComponentActivity() {
                     // Keep screen on while on the tracking screen
                     LaunchedEffect(route) {
                         if (route is AppRoute.Tracking) {
+                            Log.d(TAG, "Enabling FLAG_KEEP_SCREEN_ON")
                             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         } else {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -118,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration) {
+                        Log.d(TAG, "Back pressed on route: $route")
                         when (route) {
                             AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
@@ -126,6 +134,7 @@ class MainActivity : ComponentActivity() {
                             }
                             AppRoute.Calibration -> {
                                 if (state.calibration.isCalibrated) {
+                                    // Normally handled by resolveRoute
                                 }
                             }
                             else -> Unit
@@ -167,6 +176,7 @@ class MainActivity : ComponentActivity() {
                             is AppRoute.Intro -> renderIntroRoute(
                                 stage = currentRoute.stage,
                                 onAction = {
+                                    Log.d(TAG, "Intro action at stage: ${currentRoute.stage}")
                                     when (currentRoute.stage) {
                                         IntroStage.LEGAL -> {
                                             routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
@@ -190,12 +200,18 @@ class MainActivity : ComponentActivity() {
                                         title = { Text("Unfinished Ride Found") },
                                         text = { Text("It looks like the app closed unexpectedly. Would you like to continue the last recording or save it as a finished ride?") },
                                         confirmButton = {
-                                            TextButton(onClick = { viewModel.resolveRecovery(true) }) {
+                                            TextButton(onClick = { 
+                                                Log.i(TAG, "User chose to continue recovered ride")
+                                                viewModel.resolveRecovery(true) 
+                                            }) {
                                                 Text("Continue")
                                             }
                                         },
                                         dismissButton = {
-                                            TextButton(onClick = { viewModel.resolveRecovery(false) }) {
+                                            TextButton(onClick = { 
+                                                Log.i(TAG, "User chose to save recovered ride")
+                                                viewModel.resolveRecovery(false) 
+                                            }) {
                                                 Text("Save and Finish")
                                             }
                                         }
@@ -207,6 +223,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
                                     onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                     onStartTracking = {
+                                        Log.i(TAG, "onStartTracking clicked")
                                         val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                                 ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                                         
@@ -220,6 +237,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel.startTracking()
                                     },
                                     onFinishRide = {
+                                        Log.i(TAG, "onFinishRide clicked")
                                         viewModel.finishRide()
                                     },
                                     onTogglePause = viewModel::togglePauseTracking,
@@ -239,6 +257,7 @@ class MainActivity : ComponentActivity() {
                                 onBack = { routeUiState = routeUiState.copy(showSettings = false) },
                                 onToggleInvertLean = viewModel::setInvertLeanAngle,
                                 onToggleGpsTracking = { enabled ->
+                                    Log.i(TAG, "onToggleGpsTracking: $enabled")
                                     if (enabled) {
                                         val needsLoc = !state.settings.locationPermissionGranted
                                         val needsNotif = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -257,6 +276,7 @@ class MainActivity : ComponentActivity() {
                                 onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
                                 onResetExtrema = viewModel::resetExtrema,
                                 onStartCalibration = {
+                                    Log.i(TAG, "onStartCalibration clicked from settings")
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
                                 }
@@ -265,6 +285,7 @@ class MainActivity : ComponentActivity() {
                             AppRoute.TrackReview -> RideHistoryScreen(
                                 rideHistory = state.rideHistory,
                                 onSelectRide = { id -> 
+                                    Log.d(TAG, "Ride selected from history: $id")
                                     viewModel.loadFullSession(id)
                                     routeUiState = routeUiState.copy(selectedRideId = id) 
                                 },
@@ -282,6 +303,7 @@ class MainActivity : ComponentActivity() {
                                         onBack = { routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true) },
                                         onUpdateName = { viewModel.updateRideName(summary, it) },
                                         onDelete = { 
+                                            Log.i(TAG, "Deleting ride from detail screen: ${summary.startedAtMs}")
                                             viewModel.deleteRide(summary)
                                             routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
                                         }
@@ -322,6 +344,10 @@ class MainActivity : ComponentActivity() {
         onTransitionFinished: () -> Unit
     ) {
         IntroScreen(stage = stage, onAction = onAction, onTransitionFinished = onTransitionFinished)
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
 
