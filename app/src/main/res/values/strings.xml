@@ -33,55 +33,68 @@
     <string name="settings_reset_max_values">Reset Max Values</string>
     <string name="settings_recalibrate_device">Recalibrate Device</string>
 
-    <string name="ride_history_selected_count">%1$d ausgewählt</string>
+    <string name="ride_history_selected_count">%1$d selected</string>
     <string name="ride_history_title">Ride History</string>
-    <string name="ride_history_action_combine">Zusammenführen</string>
-    <string name="ride_history_empty">Noch keine Aufzeichnungen.</string>
+    <string name="ride_history_action_combine">Combine</string>
+    <string name="ride_history_empty">No rides recorded yet.</string>
     <string name="ride_history_selected">Selected</string>
-    <string name="ride_history_name_placeholder">Fahrt Name</string>
-    <string name="action_save">Speichern</string>
-    <string name="ride_history_points_recorded">%1$d Wegpunkte aufgezeichnet</string>
-    <string name="ride_history_action_edit_name">Name bearbeiten</string>
-    <string name="ride_history_action_export">Exportieren</string>
-    <string name="ride_history_action_delete">Löschen</string>
+    <string name="ride_history_name_placeholder">Ride Name</string>
+    <string name="action_save">Save</string>
+    <string name="ride_history_points_recorded">%1$d waypoints recorded</string>
+    <string name="ride_history_action_edit_name">Edit Name</string>
+    <string name="ride_history_action_export">Export</string>
+    <string name="ride_history_action_delete">Delete</string>
     <string name="ride_history_action_details">Details</string>
     <string name="ride_history_default_name">Ride %1$d</string>
     <string name="ride_history_export_filename">ride-%1$d.gpx</string>
 
-    <string name="intro_legal_title">Wichtiger Hinweis</string>
-    <string name="intro_attach_title">Telefon montieren</string>
-    <string name="intro_legal_text">Sicherheit geht vor: Die Nutzung dieser App erfolgt auf eigene Gefahr. Achten Sie beim Neigen des Motorrads im Stand auf einen sicheren Stand und festen Untergrund. Die App darf während der Fahrt nicht bedient werden. Der Entwickler übernimmt keine Haftung für Unfälle, Personen- oder Sachschäden jeglicher Art.</string>
-    <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
-    <string name="intro_button_understood">Verstanden</string>
-    <string name="intro_button_attached">Befestigt</string>
+    <string name="intro_legal_title">Important Notice</string>
+    <string name="intro_attach_title">Mount Phone</string>
+    <string name="intro_legal_text">Safety first: Using this app is at your own risk. When leaning the motorcycle while stationary, ensure secure footing and stable ground. The app must not be operated while riding. The developer accepts no liability for accidents, personal injury, or property damage of any kind.</string>
+    <string name="intro_attach_text">Securely mount your smartphone in a holder on the motorcycle.</string>
+    <string name="intro_button_understood">Understood</string>
+    <string name="intro_button_attached">Mounted</string>
 
     <!-- Calibration Wizard -->
-    <string name="calibration_title">Präzisions-Kalibrierung</string>
-    <string name="calibration_action_fix_center">Das Motorrad steht gerade</string>
-    <string name="calibration_action_left_saved">Links gespeichert</string>
-    <string name="calibration_action_right_saved">Rechts gespeichert &amp; Fertig</string>
-    <string name="calibration_action_left_confirmed">Fertig</string>
-    <string name="calibration_action_right_confirmed">Fertig</string>
-    <string name="calibration_error_wrong_direction">Falsche Richtung!</string>
-    <string name="calibration_hint_min_angle">Achte darauf dein Motorrad nicht fallen zu lassen. Gehe nur so weit, wie du dich wirklich sicher fühlst!</string>
-    <string name="calibration_instr_upright">Stelle das Motorrad gerade hin.</string>
-    <string name="calibration_instr_tilt_left">Neige das Motorrad nach LINKS und wieder zurück.</string>
-    <string name="calibration_instr_tilt_right">Neige das Motorrad nach RECHTS und wieder zurück.</string>
-    <string name="calibration_instr_ready">System bereit!</string>
-    <string name="calibration_hint_firm_mount">Versuche so genau wie möglich gerade zu stehen, dass verbessert die Ergebnisse.</string>
-    <string name="calibration_hint_ready">Du kannst jetzt losfahren.</string>
-    <string name="calibration_progress_label">Fortschritt: %1$d%%</string>
+    <string name="calibration_title">Precision Calibration</string>
+    <string name="calibration_action_fix_center">Motorcycle is upright</string>
+    <string name="calibration_action_left_saved">Left Saved</string>
+    <string name="calibration_action_right_saved">Right Saved &amp; Done</string>
+    <string name="calibration_action_left_confirmed">Done</string>
+    <string name="calibration_action_right_confirmed">Done</string>
+    <string name="calibration_error_wrong_direction">Wrong Direction!</string>
+    <string name="calibration_hint_min_angle">Be careful not to drop your motorcycle. Only go as far as you feel safe!</string>
+    <string name="calibration_instr_upright">Place the motorcycle upright.</string>
+    <string name="calibration_instr_tilt_left">Lean the motorcycle to the LEFT and back.</string>
+    <string name="calibration_instr_tilt_right">Lean the motorcycle to the RIGHT and back.</string>
+    <string name="calibration_instr_ready">System Ready!</string>
+    <string name="calibration_hint_firm_mount">Try to stand as upright as possible, this improves the results.</string>
+    <string name="calibration_hint_ready">You can start riding now.</string>
+    <string name="calibration_progress_label">Progress: %1$d%%</string>
 
     <!-- Tracking Labels -->
     <string name="tracking_wait_gps">WAIT GPS</string>
     <string name="tracking_recording">RECORDING</string>
+    <string name="tracking_searching_gps">Searching GPS…</string>
     <string name="tracking_warning_upside_down">Phone upside down! Please flip it.</string>
 
+    <!-- Extend Ride Dialog -->
+    <string name="dialog_extend_ride_title">Continue Ride?</string>
+    <string name="dialog_extend_ride_message">A ride from today was found. Would you like to continue it or start a new recording?</string>
+    <string name="dialog_extend_ride_confirm">Continue</string>
+    <string name="dialog_extend_ride_dismiss">New Ride</string>
+
+    <!-- Recovery Dialog -->
+    <string name="dialog_recovery_title">Unfinished Ride Found</string>
+    <string name="dialog_recovery_message">It looks like the app closed unexpectedly. Would you like to continue the last recording or save it as a finished ride?</string>
+    <string name="dialog_recovery_continue">Continue</string>
+    <string name="dialog_recovery_save">Save and Finish</string>
+
     <!-- Legacy / Backup Instructions (Still used in ViewModel logic) -->
-    <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">Mitte erfassen…</string>
-    <string name="instructions_hold_still_for_bias">Bitte ruhig halten (Bias-Check)…</string>
-    <string name="instructions_tilt_left_then_return">Links neigen → zurück</string>
-    <string name="instructions_tilt_right_then_return">Rechts neigen → zurück</string>
-    <string name="instructions_calibrated">Kalibriert!</string>
+    <string name="instructions_sensor_missing">Acceleration sensor missing</string>
+    <string name="instructions_upright">Capturing center…</string>
+    <string name="instructions_hold_still_for_bias">Hold still (Bias check)…</string>
+    <string name="instructions_tilt_left_then_return">Lean left → return</string>
+    <string name="instructions_tilt_right_then_return">Lean right → return</string>
+    <string name="instructions_calibrated">Calibrated!</string>
 </resources>

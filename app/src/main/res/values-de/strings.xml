@@ -30,7 +30,7 @@
     <string name="action_decrease">Verringern</string>
     <string name="action_increase">Erhöhen</string>
     <string name="settings_value_seconds">%1$ds</string>
-    <string name="settings_group_recording">AUFZEICHNUNG</string>
+    <string name="settings_group_recording">RECORDING</string>
     <string name="settings_recorder_tick_title">Recorder-Takt</string>
     <string name="settings_recorder_tick_subtitle">50ms bis 1000ms in 50ms-Schritten</string>
     <string name="settings_value_milliseconds">%1$dms</string>
@@ -58,4 +58,14 @@
     <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
     <string name="intro_button_understood">Verstanden</string>
     <string name="intro_button_attached">Befestigt</string>
+
+    <!-- Tracking Labels -->
+    <string name="tracking_searching_gps">GPS wird gesucht…</string>
+    <string name="tracking_warning_upside_down">Handy steht auf dem Kopf! Bitte umdrehen.</string>
+
+    <!-- Extend Ride Dialog -->
+    <string name="dialog_extend_ride_title">Fahrt fortsetzen?</string>
+    <string name="dialog_extend_ride_message">Es wurde eine Fahrt von heute gefunden. Möchtest du diese fortsetzen oder eine neue Aufzeichnung starten?</string>
+    <string name="dialog_extend_ride_confirm">Fortsetzen</string>
+    <string name="dialog_extend_ride_dismiss">Neue Fahrt</string>
 </resources>

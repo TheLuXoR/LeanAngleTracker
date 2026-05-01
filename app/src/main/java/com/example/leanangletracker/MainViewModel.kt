@@ -128,7 +128,7 @@ data class UiState(
 
 class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
 
-    private companion object {
+    companion object {
         const val TAG = "MainViewModel"
         const val RECORDER_INTERVAL_MIN_MS = 50
         const val RECORDER_INTERVAL_MAX_MS = 1_000
@@ -137,7 +137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
         const val MAX_LEAN_DEG = 75f
-        const val AUTO_PAUSE_LEAN_THRESHOLD = 70f
+        const val AUTO_PAUSE_LEAN_THRESHOLD = 60f
         const val MAX_ROLL_RATE_RAD_PER_SEC = 8.5f
         const val GYRO_REVERSAL_DAMPING = 0.55f
         const val GYRO_BIAS_COLLECTION_DURATION_NS = 1_500_000_000L
@@ -320,14 +320,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
         } else {
             viewModelScope.launch(Dispatchers.IO) {
-                val recoveredRide = rideSessionUseCases.saveRecoveredRide(session)
-                launch(Dispatchers.Main) {
-                    _uiState.update { state ->
-                        state.copy(
-                            rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs },
-                            lastSavedRideId = recoveredRide.startedAtMs
-                        )
+                if (session.points.isNotEmpty()) {
+                    val recoveredRide = rideSessionUseCases.saveRecoveredRide(session)
+                    launch(Dispatchers.Main) {
+                        _uiState.update { state ->
+                            state.copy(
+                                rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs },
+                                lastSavedRideId = recoveredRide.startedAtMs
+                            )
+                        }
                     }
+                } else {
+                    rideRepository.deleteRide(session.startedAtMs)
                 }
             }
         }

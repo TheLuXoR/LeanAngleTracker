@@ -58,4 +58,19 @@
     <string name="intro_attach_text">Securely mount your smartphone in a holder on the motorcycle.</string>
     <string name="intro_button_understood">Understood</string>
     <string name="intro_button_attached">Mounted</string>
+
+    <!-- Tracking Labels -->
+    <string name="tracking_searching_gps">Searching GPS…</string>
+
+    <!-- Extend Ride Dialog -->
+    <string name="dialog_extend_ride_title">Continue Ride?</string>
+    <string name="dialog_extend_ride_message">A ride from today was found. Would you like to continue it or start a new recording?</string>
+    <string name="dialog_extend_ride_confirm">Continue</string>
+    <string name="dialog_extend_ride_dismiss">New Ride</string>
+
+    <!-- Recovery Dialog -->
+    <string name="dialog_recovery_title">Unfinished Ride Found</string>
+    <string name="dialog_recovery_message">It looks like the app closed unexpectedly. Would you like to continue the last recording or save it as a finished ride?</string>
+    <string name="dialog_recovery_continue">Continue</string>
+    <string name="dialog_recovery_save">Save and Finish</string>
 </resources>

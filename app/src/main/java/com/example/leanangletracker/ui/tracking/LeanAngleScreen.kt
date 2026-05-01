@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.MainViewModel
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
@@ -62,6 +63,7 @@ import com.example.leanangletracker.ui.components.admob.AdMobBanner
 import com.example.leanangletracker.ui.components.buttons.PauseButton
 import com.example.leanangletracker.ui.components.buttons.RecordButton
 import com.example.leanangletracker.ui.theme.AccentGreen
+import kotlin.math.abs
 
 @Composable
 internal fun LeanAngleScreen(
@@ -122,8 +124,19 @@ internal fun LeanAngleScreen(
                     if (trackingState.trackingStarted && trackingState.currentLatitude == null) {
                         RainbowSearchGpsText()
                     } else if (trackingState.gpsActive) {
+                        var text = ""
+                        if (trackingState.isPaused){
+                            if(trackingState.leanAngleDeg > MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD){
+                                text = "Rotation too far — paused."
+                            } else {
+                                text = "PAUSED"
+                            }
+                        } else {
+                            text = "GPS ACTIVE"
+                        }
+
                         Text(
-                            text = if (trackingState.isPaused) "PAUSED" else "GPS ACTIVE",
+                            text =  text,
                             style = MaterialTheme.typography.labelMedium,
                             color = if (trackingState.isPaused) Color.Yellow else AccentGreen
                         )
@@ -138,7 +151,7 @@ internal fun LeanAngleScreen(
                     PauseButton(onClick = onTogglePause,
                         isPaused = trackingState.isPaused,
                         isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null,
-                        enabled = !(trackingState.isPaused && trackingState.isUpsideDown)
+                        enabled = !trackingState.isUpsideDown && abs(trackingState.leanAngleDeg) < MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD
                     )
 
                     RecordButton(
@@ -280,7 +293,7 @@ internal fun LeanAngleScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 )
-                
+
                 movableBanner()
             }
         }
@@ -289,16 +302,16 @@ internal fun LeanAngleScreen(
     if (offerExtend != null) {
         AlertDialog(
             onDismissRequest = { onConfirmExtend(false) },
-            title = { Text("Ride fortsetzen?") },
-            text = { Text("Du befindest dich in der Nähe des Endpunkts deiner letzten Fahrt von heute. Möchtest du diese Fahrt fortsetzen oder eine neue starten?") },
+            title = { Text(stringResource(R.string.dialog_extend_ride_title)) },
+            text = { Text(stringResource(R.string.dialog_extend_ride_message)) },
             confirmButton = {
-                Button(onClick = { onConfirmExtend(true) }) {
-                    Text("Fortsetzen")
+                TextButton(onClick = { onConfirmExtend(true) }) {
+                    Text(stringResource(R.string.dialog_extend_ride_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onConfirmExtend(false) }) {
-                    Text("Neu starten")
+                    Text(stringResource(R.string.dialog_extend_ride_dismiss))
                 }
             }
         )
@@ -307,7 +320,8 @@ internal fun LeanAngleScreen(
 
 @Composable
 private fun RainbowSearchGpsText() {
-    val text = "SEARCHING GPS..."
+    val text = stringResource(R.string.tracking_searching_gps)
+
     val infiniteTransition = rememberInfiniteTransition(label = "rainbow")
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,

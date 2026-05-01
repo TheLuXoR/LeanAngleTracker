@@ -188,20 +188,20 @@ class MainActivity : ComponentActivity() {
                                 state.pendingRecovery?.let { recovery ->
                                     AlertDialog(
                                         onDismissRequest = { viewModel.resolveRecovery(false) },
-                                        title = { Text("Unfinished Ride Found") },
-                                        text = { Text("It looks like the app closed unexpectedly. Would you like to continue the last recording or save it as a finished ride?") },
+                                        title = { Text(stringResource(R.string.dialog_recovery_title)) },
+                                        text = { Text(stringResource(R.string.dialog_recovery_message)) },
                                         confirmButton = {
                                             TextButton(onClick = { 
                                                 viewModel.resolveRecovery(true) 
                                             }) {
-                                                Text("Continue")
+                                                Text(stringResource(R.string.dialog_recovery_continue))
                                             }
                                         },
                                         dismissButton = {
                                             TextButton(onClick = { 
                                                 viewModel.resolveRecovery(false) 
                                             }) {
-                                                Text("Save and Finish")
+                                                Text(stringResource(R.string.dialog_recovery_save))
                                             }
                                         }
                                     )
