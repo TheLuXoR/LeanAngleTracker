@@ -332,7 +332,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     launch(Dispatchers.Main) {
                         _uiState.update { state ->
                             state.copy(
-                                rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs },
+                                rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory.filter { it.rideId != recoveredRide.rideId })
+                                    .sortedByDescending { it.startedAtMs },
                                 lastSavedRideId = recoveredRide.rideId
                             )
                         }
@@ -408,7 +409,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             launch(Dispatchers.Main) {
                 _uiState.update { state ->
                     state.copy(rideHistory = state.rideHistory.map { summary ->
-                        updated.find { it.startedAtMs == summary.startedAtMs }?.toSummary() ?: summary
+                        updated.find { it.rideId == summary.rideId }?.toSummary() ?: summary
                     })
                 }
             }
@@ -683,7 +684,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                         _uiState.update { state ->
                             state.copy(
                                 rideHistory = state.rideHistory.map {
-                                    if (it.startedAtMs == started) newSession.toSummary() else it
+                                    if (it.rideId == currentRideId) newSession.toSummary() else it
                                 },
                                 expandedRides = state.expandedRides + (currentRideId to newSession)
                             )
@@ -781,7 +782,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val idsToRemove = summaries.map { it.rideId }.toSet()
             launch(Dispatchers.Main) {
                 _uiState.update { it.copy(
-                    rideHistory = (listOf(newSession.toSummary()) + it.rideHistory.filter { it.startedAtMs !in idsToRemove })
+                    rideHistory = (listOf(newSession.toSummary()) + it.rideHistory.filter { it.rideId !in idsToRemove })
                         .sortedByDescending { it.startedAtMs },
                     expandedRides = it.expandedRides.filterKeys { it !in idsToRemove }
                 ) }
