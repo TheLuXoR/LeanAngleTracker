@@ -644,32 +644,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val started = activeRideStartedMs ?: System.currentTimeMillis()
         val ended = System.currentTimeMillis()
         
-        if (currentRideId != null && ridePointCount > 0) {
-            val skeleton = RideSummary(
-                startedAtMs = started,
-                endedAtMs = ended,
-                isSkeleton = true
-            )
-            _uiState.update { it.copy(
-                rideHistory = (listOf(skeleton) + it.rideHistory).sortedByDescending { it.startedAtMs },
-                lastSavedRideId = started
-            ) }
+        if (currentRideId != null) {
+            if (ridePointCount > 0) {
+                val skeleton = RideSummary(
+                    startedAtMs = started,
+                    endedAtMs = ended,
+                    isSkeleton = true
+                )
+                _uiState.update { it.copy(
+                    rideHistory = (listOf(skeleton) + it.rideHistory).sortedByDescending { it.startedAtMs },
+                    lastSavedRideId = started
+                ) }
 
-            viewModelScope.launch(Dispatchers.IO) {
-                delay(2000) 
-                // Load points once from DB to finalize the session (route description etc)
-                val allPoints = rideRepository.loadFullSession(currentRideId)?.points ?: emptyList()
-                val newSession = rideSessionUseCases.saveFinishedRide(currentRideId, started, ended, allPoints)
-                
-                launch(Dispatchers.Main) {
-                    _uiState.update { state ->
-                        state.copy(
-                            rideHistory = state.rideHistory.map {
-                                if (it.startedAtMs == started) newSession.toSummary() else it
-                            },
-                            expandedRides = state.expandedRides + (started to newSession)
-                        )
+                viewModelScope.launch(Dispatchers.IO) {
+                    delay(2000) 
+                    // Load points once from DB to finalize the session (route description etc)
+                    val allPoints = rideRepository.loadFullSession(currentRideId)?.points ?: emptyList()
+                    val newSession = rideSessionUseCases.saveFinishedRide(currentRideId, started, ended, allPoints)
+                    
+                    launch(Dispatchers.Main) {
+                        _uiState.update { state ->
+                            state.copy(
+                                rideHistory = state.rideHistory.map {
+                                    if (it.startedAtMs == started) newSession.toSummary() else it
+                                },
+                                expandedRides = state.expandedRides + (started to newSession)
+                            )
+                        }
                     }
+                }
+            } else {
+                // No points stored, delete the empty ride record
+                viewModelScope.launch(Dispatchers.IO) {
+                    rideRepository.deleteRide(currentRideId)
                 }
             }
         }
