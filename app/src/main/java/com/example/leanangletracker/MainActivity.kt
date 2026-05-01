@@ -276,6 +276,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     viewModel.setGpsTrackingEnabled(enabled)
                                 },
+                                onToggleFastSensorSpeed = viewModel::setFastSensorSpeedEnabled,
                                 onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
                                 onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
                                 onResetExtrema = viewModel::resetExtrema,

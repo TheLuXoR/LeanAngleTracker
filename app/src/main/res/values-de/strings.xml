@@ -24,6 +24,9 @@
     <string name="settings_gps_tracking_title">GPS-Tracking</string>
     <string name="settings_gps_tracking_subtitle_granted">Geschwindigkeit + Streckenaufzeichnung</string>
     <string name="settings_gps_tracking_subtitle_missing">Standortberechtigung erforderlich</string>
+    <string name="settings_sensor_speed_title">Schnelle Sensorrate</string>
+    <string name="settings_sensor_speed_subtitle_fast">Höhere Aktualisierungsrate für maximale Reaktion</string>
+    <string name="settings_sensor_speed_subtitle_normal">Ausgewogene Aktualisierungsrate für normale Nutzung</string>
     <string name="settings_group_visuals">ANZEIGE</string>
     <string name="settings_history_window_title">Verlaufsfenster</string>
     <string name="settings_history_window_subtitle">Im Verlaufsdiagramm angezeigte Zeit</string>
