@@ -45,6 +45,7 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
         const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
         const val KEY_AUTO_PAUSE = "auto_pause_enabled"
+        const val KEY_PENDING_RIDE_ID = "pending_ride_id"
     }
 
     private val prefs: SharedPreferences =
@@ -129,6 +130,17 @@ class SettingsStore(applicationContext: Context) {
             .remove(KEY_GYRO_BIAS_Y)
             .remove(KEY_GYRO_BIAS_Z)
             .apply()
+    }
+
+    fun savePendingRideId(rideId: Long?) {
+        prefs.edit().apply {
+            if (rideId == null) remove(KEY_PENDING_RIDE_ID) else putLong(KEY_PENDING_RIDE_ID, rideId)
+        }.apply()
+    }
+
+    fun loadPendingRideId(): Long? {
+        if (!prefs.contains(KEY_PENDING_RIDE_ID)) return null
+        return prefs.getLong(KEY_PENDING_RIDE_ID, -1L).takeIf { it > 0L }
     }
 
     private fun readVec3(xKey: String, yKey: String, zKey: String): Vec3? {
