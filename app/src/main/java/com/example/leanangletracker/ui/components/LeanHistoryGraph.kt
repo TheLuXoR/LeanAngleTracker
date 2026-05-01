@@ -16,7 +16,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,38 +35,33 @@ internal fun LeanHistoryGraph(
     values: List<Float>,
     modifier: Modifier = Modifier,
     selectedIndex: Int? = null,
-    visibleRangePoints: Int? = null, // If null, show full track. If set, center on selectedIndex
+    visibleRangePoints: Int? = null,
     isScrollable: Boolean = false,
     showCursorLine: Boolean = true,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
-    // Internal animatable to hold the scroll position, initialized to the current selection
     val scrollOffset = remember { Animatable(selectedIndex?.toFloat() ?: 0f) }
     
     val minBound = 0f
     val maxBound = values.lastIndex.toFloat().coerceAtLeast(0f)
-    val overscrollLimit = 2.5f // Matching JogWheel behavior
+    val overscrollLimit = 2.5f
 
     var showScrollHint by remember { mutableStateOf(false) }
 
-    // Use a stable amplitude to prevent vertical "flickering" when peaks enter/leave the window.
-    // We increase the minimum to 45 degrees so typical street lean doesn't hit the red gradient zones too early.
-    val targetMax = remember(values) { values.maxOfOrNull { abs(it) } ?: 0f }
+    val globalMax = remember(values) { values.maxOfOrNull { abs(it) } ?: 0f }
     val animatedAmplitude by animateFloatAsState(
-        targetValue = maxOf(45f, targetMax),
+        targetValue = maxOf(45f, globalMax),
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "amplitude"
     )
 
-    // Sync internal offset when external selectedIndex changes (e.g. from Map or external update)
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
             scrollOffset.snapTo(selectedIndex.toFloat())
         }
     }
 
-    // Show hint if scrollable and not recently interacted with
     LaunchedEffect(isScrollable) {
         if (isScrollable) {
             delay(2000)
@@ -77,6 +71,15 @@ internal fun LeanHistoryGraph(
         }
     }
 
+    // Interpolate current lean for the header
+    val currentLean = remember(values, scrollOffset.value) {
+        val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
+        val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
+        val nextIdx = (idx + 1).coerceIn(0, values.lastIndex)
+        val fraction = clampedIdx - idx
+        if (idx == nextIdx) values[idx] else values[idx] * (1 - fraction) + values[nextIdx] * fraction
+    }
+
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -84,7 +87,6 @@ internal fun LeanHistoryGraph(
     ) {
         Box {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Determine the window of points to show based on the animated scrollOffset
                 val currentScrollVal = scrollOffset.value
                 val displayStartIndex = remember(values.size, currentScrollVal, visibleRangePoints) {
                     if (visibleRangePoints == null || values.size <= visibleRangePoints) {
@@ -104,11 +106,7 @@ internal fun LeanHistoryGraph(
                     }
                 }
 
-                // Current peak indicators for text display
-                val lowerBound = displayValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
-                val upperBound = displayValues.minOrNull()?.coerceAtMost(-0f) ?: -0f
-
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         stringResource(R.string.history_title).uppercase(),
                         style = MaterialTheme.typography.labelMedium,
@@ -117,8 +115,7 @@ internal fun LeanHistoryGraph(
                     )
                     Spacer(Modifier.weight(1f))
                     Text(
-                        stringResource(R.string.history_max_left, -upperBound),
-                        modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                        "${abs(currentLean).roundToInt()}° ${if (currentLean < 0) "LEFT" else if (currentLean > 0) "RIGHT" else ""}",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -133,7 +130,7 @@ internal fun LeanHistoryGraph(
                             Modifier.draggable(
                                 orientation = Orientation.Horizontal,
                                 state = rememberDraggableState { delta ->
-                                    showScrollHint = false // Hide hint on interaction
+                                    showScrollHint = false
                                     val sensitivity = 0.2f 
                                     var effectiveDelta = -delta * sensitivity
 
@@ -189,22 +186,7 @@ internal fun LeanHistoryGraph(
 
                     val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
-                    // Grid Lines (Current peaks in window)
-                    displayValues.minOrNull()?.let { minVal ->
-                        val minIndex = displayValues.indexOf(minVal)
-                        val startX = minIndex * stepX
-                        drawLine(
-                            color = PrimaryOrange,
-                            start = Offset(startX, yFor(upperBound)),
-                            end = Offset(width, yFor(upperBound)),
-                            strokeWidth = 2f,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-                        )
-                    }
-
-                    // Overscroll visual feedback (Red tint at edges like JogWheel)
-                    // Increased deadzone and alpha gating to prevent "flickering" reds on edge snaps
+                    // Overscroll feedback with deadzone
                     if (scrollOffset.value < minBound - 0.05f) {
                         val alpha = ((abs(scrollOffset.value - minBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
                         if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
@@ -213,22 +195,9 @@ internal fun LeanHistoryGraph(
                         if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
                     }
 
-                    // Zero line
+                    // Grid lines
                     drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
                     drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
-
-                    displayValues.maxOrNull()?.let { maxVal ->
-                        val maxIndex = displayValues.indexOf(maxVal)
-                        val startX = maxIndex * stepX
-                        drawLine(
-                            color = PrimaryOrange,
-                            start = Offset(startX, yFor(lowerBound)),
-                            end = Offset(width, yFor(lowerBound)),
-                            strokeWidth = 2f,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-                        )
-                    }
 
                     if (displayValues.size >= 2) {
                         val path = Path()
@@ -247,36 +216,10 @@ internal fun LeanHistoryGraph(
                             style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // Cursor Position Calculation
-                        // To avoid horizontal "flickering" during live updates, we prefer using the prop selectedIndex
-                        // for X position when not actively scrolling/dragging.
-                        val isAtEnd = selectedIndex == values.lastIndex
-                        val isNotScrolling = !scrollOffset.isRunning && !isScrollable
-                        
-                        val cursorOffset = if (isNotScrolling && isAtEnd) {
-                             values.lastIndex.toFloat()
-                        } else {
-                            scrollOffset.value
-                        }
-
-                        val relativeCursorOffset = cursorOffset - displayStartIndex
-                        
+                        val relativeCursorOffset = scrollOffset.value - displayStartIndex
                         if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
                             val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
-                            
-                            // Interpolate Y for smooth cursor movement
-                            val clampedScrollVal = cursorOffset.coerceIn(0f, values.lastIndex.toFloat())
-                            val currentIdx = clampedScrollVal.toInt().coerceIn(0, values.lastIndex)
-                            val nextIdx = (currentIdx + 1).coerceIn(0, values.lastIndex)
-                            val fraction = clampedScrollVal - currentIdx
-                            
-                            val interpolatedValue = if (currentIdx == nextIdx) {
-                                values[currentIdx]
-                            } else {
-                                values[currentIdx] * (1 - fraction) + values[nextIdx] * fraction
-                            }
-                            
-                            val selY = yFor(interpolatedValue)
+                            val selY = yFor(currentLean.coerceIn(-animatedAmplitude, animatedAmplitude))
 
                             if (showCursorLine) {
                                 drawLine(
@@ -294,16 +237,8 @@ internal fun LeanHistoryGraph(
                         }
                     }
                 }
-                Text(
-                    stringResource(R.string.history_max_right, lowerBound),
-                    modifier = Modifier.padding(end = 8.dp).align(Alignment.End),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
             }
 
-            // Scroll Hint Overlay
             if (showScrollHint) {
                 val infiniteTransition = rememberInfiniteTransition(label = "hint")
                 val offsetX by infiniteTransition.animateFloat(
@@ -327,26 +262,11 @@ internal fun LeanHistoryGraph(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.offset(x = offsetX.dp)
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Icon(
-                                Icons.Default.TouchApp,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
+                            Icon(Icons.Default.TouchApp, null, tint = Color.White, modifier = Modifier.size(32.dp))
                             Spacer(Modifier.width(8.dp))
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
                         Text(
                             text = "Scroll graph to review",

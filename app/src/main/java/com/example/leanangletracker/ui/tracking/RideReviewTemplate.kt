@@ -4,8 +4,11 @@ import android.content.res.Configuration
 import android.location.Location
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
+import com.example.leanangletracker.ui.components.SpeedHistoryGraph
 import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
@@ -36,6 +40,9 @@ internal fun RideReviewTemplate(
         mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) 
     }
     
+    // Key to trigger map re-centering when a stat is clicked
+    var centerTrigger by remember { mutableIntStateOf(0) }
+    
     var currentZoom by remember { mutableDoubleStateOf(16.0) }
     
     if (rideSession.points.isEmpty()) {
@@ -47,6 +54,7 @@ internal fun RideReviewTemplate(
 
     val selectedPoint = rideSession.points[selectedIndex]
     val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
+    val allSpeedValues = remember(rideSession.points) { rideSession.points.map { it.speedKmh } }
 
     val visiblePoints = remember(currentZoom, rideSession.points.size) {
         val basePoints = 100.0
@@ -55,6 +63,11 @@ internal fun RideReviewTemplate(
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val onStatSelected: (Int) -> Unit = { index ->
+        selectedIndex = index
+        centerTrigger++
+    }
 
     if (isLandscape) {
         Row(
@@ -68,12 +81,12 @@ internal fun RideReviewTemplate(
                 modifier = Modifier.weight(1.2f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                RideSessionSummary(rideSession)
+                RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f) // Let map take available space in left column
+                        .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
                 ) {
                     OSMTrackMap(
@@ -81,12 +94,13 @@ internal fun RideReviewTemplate(
                         selectedIndex = selectedIndex,
                         onMapPointSelected = { selectedIndex = it },
                         onZoomChanged = { currentZoom = it },
+                        forceCenterKey = centerTrigger.takeIf { it > 0 },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
 
-            // Right Side: Stats and Graph
+            // Right Side: Stats and Graphs
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -101,16 +115,28 @@ internal fun RideReviewTemplate(
                     StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
                 }
 
-                LeanHistoryGraph(
-                    values = allLeanValues,
-                    selectedIndex = selectedIndex,
-                    visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f), // Graph uses remaining space
-                    isScrollable = true,
-                    onSelectedIndexChange = { selectedIndex = it }
-                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LeanHistoryGraph(
+                        values = allLeanValues,
+                        selectedIndex = selectedIndex,
+                        visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        isScrollable = true,
+                        onSelectedIndexChange = { selectedIndex = it }
+                    )
+
+                    SpeedHistoryGraph(
+                        values = allSpeedValues,
+                        selectedIndex = selectedIndex,
+                        visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                        modifier = Modifier.weight(0.7f).fillMaxWidth(),
+                        isScrollable = true,
+                        onSelectedIndexChange = { selectedIndex = it }
+                    )
+                }
 
                 Text(
                     text = "Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
@@ -120,13 +146,15 @@ internal fun RideReviewTemplate(
             }
         }
     } else {
+        // Portrait Layout
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            RideSessionSummary(rideSession)
+            RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
 
             Box(
                 modifier = Modifier
@@ -139,6 +167,7 @@ internal fun RideReviewTemplate(
                     selectedIndex = selectedIndex,
                     onMapPointSelected = { selectedIndex = it },
                     onZoomChanged = { currentZoom = it },
+                    forceCenterKey = centerTrigger.takeIf { it > 0 },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -159,22 +188,37 @@ internal fun RideReviewTemplate(
                 visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f), // Graph uses remaining space
+                    .height(180.dp),
+                isScrollable = true,
+                onSelectedIndexChange = { selectedIndex = it }
+            )
+
+            SpeedHistoryGraph(
+                values = allSpeedValues,
+                selectedIndex = selectedIndex,
+                visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp),
                 isScrollable = true,
                 onSelectedIndexChange = { selectedIndex = it }
             )
             
             Text(
-                text = "Scroll graph to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
+                text = "Scroll graphs to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
         }
     }
 }
 
 @Composable
-private fun RideSessionSummary(rideSession: RideSession) {
+private fun RideSessionSummary(
+    rideSession: RideSession,
+    onSelectIndex: (Int) -> Unit
+) {
     val distanceKm = remember(rideSession.points) {
         var total = 0f
         val results = FloatArray(1)
@@ -195,13 +239,15 @@ private fun RideSessionSummary(rideSession: RideSession) {
         total / 1000f
     }
 
-    val maxLean = remember(rideSession.points) {
-        rideSession.points.maxOfOrNull { kotlin.math.abs(it.leanAngleDeg) } ?: 0f
+    val maxLeanIndex = remember(rideSession.points) {
+        rideSession.points.indices.maxByOrNull { kotlin.math.abs(rideSession.points[it].leanAngleDeg) } ?: 0
     }
+    val maxLean = rideSession.points[maxLeanIndex].leanAngleDeg
 
-    val maxSpeed = remember(rideSession.points) {
-        rideSession.points.maxOfOrNull { it.speedKmh } ?: 0f
+    val maxSpeedIndex = remember(rideSession.points) {
+        rideSession.points.indices.maxByOrNull { rideSession.points[it].speedKmh } ?: 0
     }
+    val maxSpeed = rideSession.points[maxSpeedIndex].speedKmh
 
     val avgSpeed = remember(rideSession.points) {
         if (rideSession.points.isEmpty()) 0f
@@ -216,8 +262,16 @@ private fun RideSessionSummary(rideSession: RideSession) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         StatItem(label = "DISTANCE", value = "%.2f km".format(distanceKm))
-        StatItem(label = "MAX LEAN", value = "%.1f°".format(maxLean))
-        StatItem(label = "MAX SPEED", value = "${maxSpeed.toInt()} km/h")
+        StatItem(
+            label = "MAX LEAN", 
+            value = "%.1f°".format(kotlin.math.abs(maxLean)),
+            onClick = { onSelectIndex(maxLeanIndex) }
+        )
+        StatItem(
+            label = "MAX SPEED", 
+            value = "${maxSpeed.toInt()} km/h",
+            onClick = { onSelectIndex(maxSpeedIndex) }
+        )
         StatItem(label = "AVG SPEED", value = "${avgSpeed.toInt()} km/h")
     }
 }
@@ -346,8 +400,18 @@ private fun SkeletonStatItem(brush: Brush) {
 }
 
 @Composable
-private fun StatItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatItem(label: String, value: String, onClick: (() -> Unit)? = null) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) {
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(4.dp)
+        } else {
+            Modifier.padding(4.dp)
+        }
+    ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
         Text(value, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
     }

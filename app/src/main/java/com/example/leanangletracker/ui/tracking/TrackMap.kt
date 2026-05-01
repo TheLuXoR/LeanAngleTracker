@@ -27,6 +27,7 @@ internal fun OSMTrackMap(
     selectedIndex: Int,
     onMapPointSelected: (Int) -> Unit,
     onZoomChanged: (Double) -> Unit = {},
+    forceCenterKey: Any? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -98,6 +99,16 @@ internal fun OSMTrackMap(
         mapView.onResume()
         onDispose {
             mapView.onPause()
+        }
+    }
+
+    // Handle external centering requests (e.g. from clicking stats)
+    LaunchedEffect(forceCenterKey) {
+        if (forceCenterKey != null) {
+            val selectedGeoPoint = points.getOrNull(selectedIndex) ?: points.lastOrNull()
+            if (selectedGeoPoint != null) {
+                mapView.controller.animateTo(selectedGeoPoint)
+            }
         }
     }
 
@@ -204,6 +215,6 @@ private fun keepPointAwayFromBorder(
 
     if (screenPoint.x < marginX || screenPoint.x > width - marginX ||
         screenPoint.y < marginY || screenPoint.y > height - marginY) {
-        map.controller.setCenter(point)
+        map.controller.animateTo(point)
     }
 }
