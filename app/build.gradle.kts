@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -77,8 +78,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
-    implementation("com.google.code.gson:gson:2.13.2")
-    implementation("com.google.android.gms:play-services-ads:25.1.0")
+    implementation("com.google.code.gson:gson:2.14.0")
+    implementation("com.google.android.gms:play-services-ads:25.2.0")
+
+    val roomVersion = "2.8.4"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

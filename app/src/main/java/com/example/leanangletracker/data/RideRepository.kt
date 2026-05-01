@@ -3,75 +3,111 @@ package com.example.leanangletracker.data
 import android.content.Context
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
-import com.google.gson.Gson
-import java.io.File
-import java.util.Base64
+import com.example.leanangletracker.RideSummary
 
-class RideRepository(private val context: Context) {
-    private val gson = Gson()
-    private val ridesDir = File(context.filesDir, "internal_tracks").apply { if (!exists()) mkdirs() }
-    private val tempDir = File(context.cacheDir, "recording_temp").apply { if (!exists()) mkdirs() }
+class RideRepository(context: Context) {
+    private val db = RideDatabase.getDatabase(context)
+    private val rideDao = db.rideDao()
 
-    fun saveRide(session: RideSession) {
-        runCatching {
-            val json = gson.toJson(session)
-            val obfuscated = Base64.getEncoder().encodeToString(json.toByteArray())
-            val file = File(ridesDir, "track_${session.startedAtMs}.dat")
-            file.writeText(obfuscated)
-            clearTempRide(session.startedAtMs)
+    /**
+     * Creates a new ride record and returns its unique database ID.
+     */
+    suspend fun startNewRide(startTimeMs: Long): Long {
+        val ride = RideEntity(
+            startTime = startTimeMs,
+            endTime = startTimeMs,
+            name = null,
+            routeDescription = null
+        )
+        return rideDao.insertRide(ride)
+    }
+
+    /**
+     * Persists a single track point to the database immediately.
+     */
+    suspend fun recordPoint(point: TrackPoint, rideId: Long) {
+        val entity = TrackPointEntity(
+            rideId = rideId,
+            latitude = point.latitude,
+            longitude = point.longitude,
+            speed = point.speedKmh,
+            leanAngle = point.leanAngleDeg,
+            timestamp = point.timestampMs
+        )
+        rideDao.insertPoint(entity)
+    }
+
+    /**
+     * Updates the ride metadata when tracking is finished.
+     */
+    suspend fun finishRide(rideId: Long, endTimeMs: Long, routeDescription: String? = null) {
+        val ride = rideDao.getRideById(rideId)
+        if (ride != null) {
+            rideDao.updateRide(ride.copy(
+                endTime = endTimeMs,
+                routeDescription = routeDescription ?: ride.routeDescription
+            ))
         }
     }
 
-    fun saveTempPoints(startedAtMs: Long, points: List<TrackPoint>) {
-        runCatching {
-            val json = gson.toJson(points)
-            val file = File(tempDir, "temp_${startedAtMs}.json")
-            file.writeText(json)
+    /**
+     * Loads only the ride metadata without the coordinate list.
+     */
+    suspend fun getRideSummary(rideId: Long): RideSummary? {
+        val entity = rideDao.getRideById(rideId) ?: return null
+        val pointCount = rideDao.getPointCountForRide(rideId)
+        return RideSummary(
+            startedAtMs = entity.startTime,
+            endedAtMs = entity.endTime,
+            name = entity.name,
+            routeDescription = entity.routeDescription,
+            pointCount = pointCount
+        )
+    }
+
+    suspend fun loadRideHistory(): List<RideSummary> {
+        return rideDao.getAllRides().map { entity ->
+            RideSummary(
+                startedAtMs = entity.startTime,
+                endedAtMs = entity.endTime,
+                name = entity.name,
+                routeDescription = entity.routeDescription,
+                pointCount = rideDao.getPointCountForRide(entity.id)
+            )
         }
     }
 
-    fun loadTempPoints(startedAtMs: Long): List<TrackPoint> {
-        val file = File(tempDir, "temp_${startedAtMs}.json")
-        if (!file.exists()) return emptyList()
-        return runCatching {
-            val json = file.readText()
-            val type = object : com.google.gson.reflect.TypeToken<List<TrackPoint>>() {}.type
-            gson.fromJson<List<TrackPoint>>(json, type)
-        }.getOrElse {
-            emptyList()
+    suspend fun loadFullSession(rideId: Long): RideSession? {
+        val ride = rideDao.getRideById(rideId) ?: return null
+        val points = rideDao.getPointsForRide(rideId).map { entity ->
+            TrackPoint(
+                timestampMs = entity.timestamp,
+                latitude = entity.latitude,
+                longitude = entity.longitude,
+                speedKmh = entity.speed,
+                leanAngleDeg = entity.leanAngle,
+                leanFreshnessMs = 0,
+                gpsFreshnessMs = 0,
+                hasFreshGps = true
+            )
+        }
+        return RideSession(
+            startedAtMs = ride.startTime,
+            endedAtMs = ride.endTime,
+            points = points,
+            name = ride.name,
+            routeDescription = ride.routeDescription
+        )
+    }
+
+    suspend fun updateRideName(rideId: Long, name: String) {
+        val ride = rideDao.getRideById(rideId)
+        if (ride != null) {
+            rideDao.updateRide(ride.copy(name = name))
         }
     }
 
-    fun clearTempRide(startedAtMs: Long) {
-        File(tempDir, "temp_${startedAtMs}.json").delete()
-    }
-
-    fun getUnfinishedRideIds(): List<Long> {
-        return tempDir.listFiles()
-            ?.filter { it.name.startsWith("temp_") && it.extension == "json" }
-            ?.mapNotNull { it.name.removePrefix("temp_").removeSuffix(".json").toLongOrNull() }
-            ?: emptyList()
-    }
-
-    fun loadRides(): List<RideSession> {
-        return ridesDir.listFiles()
-            ?.filter { it.extension == "dat" }
-            ?.mapNotNull { file ->
-                runCatching {
-                    val obfuscated = file.readText()
-                    val json = String(Base64.getDecoder().decode(obfuscated))
-                    gson.fromJson(json, RideSession::class.java)
-                }.getOrNull()
-            }
-            ?.sortedByDescending { it.startedAtMs }
-            ?: emptyList()
-    }
-
-    fun deleteRide(session: RideSession) {
-        val file = File(ridesDir, "track_${session.startedAtMs}.dat")
-        if (file.exists()) {
-            file.delete()
-        }
-        clearTempRide(session.startedAtMs)
+    suspend fun deleteRide(rideId: Long) {
+        rideDao.deleteRide(rideId)
     }
 }
