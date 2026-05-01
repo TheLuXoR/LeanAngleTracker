@@ -19,8 +19,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.leanangletracker.data.RideRepository
+import com.example.leanangletracker.data.Vec3
+import com.example.leanangletracker.domain.RideSessionUseCases
 import com.example.leanangletracker.ui.animation.BikeLean
-import com.example.leanangletracker.ui.tracking.calculateRouteDescription
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,28 +36,6 @@ import kotlin.math.acos
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
-
-data class Vec3(val x: Float, val y: Float, val z: Float) {
-    operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
-    operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
-    operator fun times(scale: Float) = Vec3(x * scale, y * scale, z * scale)
-
-    fun dot(other: Vec3): Float = x * other.x + y * other.y + z * other.z
-
-    fun cross(other: Vec3): Vec3 = Vec3(
-        y * other.z - z * other.y,
-        z * other.x - x * other.z,
-        x * other.y - y * other.x
-    )
-
-    fun norm(): Float = sqrt(dot(this))
-
-    fun normalized(): Vec3 {
-        val n = norm()
-        if (n < 1e-6f) return this
-        return this * (1f / n)
-    }
-}
 
 data class CalibrationUiState(
     val calibrationStep: BikeLean = BikeLean.UPRIGHT,
@@ -206,6 +185,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val locationManager = application.getSystemService(LocationManager::class.java)
     private val rideRepository = RideRepository(application)
+    private val rideSessionUseCases = RideSessionUseCases(application, rideRepository)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -294,33 +274,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun checkForUnfinishedRides() {
         viewModelScope.launch(Dispatchers.IO) {
-            val unfinishedIds = rideRepository.getUnfinishedRideIds().sortedDescending()
-            if (unfinishedIds.isNotEmpty()) {
-                Log.i(TAG, "Found ${unfinishedIds.size} unfinished rides")
-            }
-            val latestId = unfinishedIds.firstOrNull() ?: return@launch
-            
-            val points = rideRepository.loadTempPoints(latestId)
-            if (points.isNotEmpty()) {
-                Log.d(TAG, "Latest unfinished ride $latestId has ${points.size} points. Offering recovery.")
-                val tempSession = RideSession(
-                    startedAtMs = latestId,
-                    endedAtMs = points.last().timestampMs,
-                    points = points,
-                    name = "Unfinished Ride"
-                )
-                launch(Dispatchers.Main) {
-                    _uiState.update { it.copy(pendingRecovery = tempSession) }
-                }
-            } else {
-                Log.d(TAG, "Latest unfinished ride $latestId is empty. Clearing.")
-                rideRepository.clearTempRide(latestId)
-            }
-            
-            unfinishedIds.drop(1).forEach { 
-                Log.d(TAG, "Clearing older unfinished ride $it")
-                rideRepository.clearTempRide(it) 
-            }
+            val pending = rideSessionUseCases.findUnfinishedRideForRecovery() ?: return@launch
+            launch(Dispatchers.Main) { _uiState.update { it.copy(pendingRecovery = pending) } }
         }
     }
 
@@ -355,9 +310,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
         } else {
             viewModelScope.launch(Dispatchers.IO) {
-                val description = calculateRouteDescription(getApplication(), session)
-                val recoveredRide = session.copy(name = "Recovered Ride", routeDescription = description)
-                rideRepository.saveRide(recoveredRide)
+                val recoveredRide = rideSessionUseCases.saveRecoveredRide(session)
                 Log.d(TAG, "Ride recovery complete. Saved as new ride.")
                 launch(Dispatchers.Main) {
                     _uiState.update { state ->
@@ -392,9 +345,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
         }
 
-        val history = rideRepository.loadRides()
+        val history = rideSessionUseCases.loadRideHistory()
         Log.d(TAG, "Loaded ${history.size} rides from repository")
-        _uiState.value = _uiState.value.copy(rideHistory = history.map { it.toSummary() })
+        _uiState.value = _uiState.value.copy(rideHistory = history)
 
         val persistedCalibration = persistedState.calibration
         if (persistedCalibration == null) {
@@ -428,30 +381,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun backfillRouteDescriptions() {
         viewModelScope.launch(Dispatchers.IO) {
-            val ridesToUpdate = _uiState.value.rideHistory.filter { it.routeDescription.isNullOrBlank() }
-            if (ridesToUpdate.isEmpty()) return@launch
-            
-            Log.d(TAG, "Backfilling route descriptions for ${ridesToUpdate.size} rides")
-            val allFullRides = rideRepository.loadRides()
-            
-            ridesToUpdate.forEach { summary ->
-                val fullRide = allFullRides.find { it.startedAtMs == summary.startedAtMs }
-                if (fullRide != null) {
-                    val description = calculateRouteDescription(getApplication(), fullRide)
-                    if (description != null) {
-                        val updatedRide = fullRide.copy(routeDescription = description)
-                        rideRepository.saveRide(updatedRide)
-                        
-                        launch(Dispatchers.Main) {
-                            _uiState.update { state ->
-                                state.copy(
-                                    rideHistory = state.rideHistory.map {
-                                        if (it.startedAtMs == summary.startedAtMs) updatedRide.toSummary() else it
-                                    }
-                                )
-                            }
-                        }
-                    }
+            val updated = rideSessionUseCases.backfillRouteDescriptions()
+            if (updated.isEmpty()) return@launch
+            launch(Dispatchers.Main) {
+                _uiState.update { state ->
+                    state.copy(rideHistory = state.rideHistory.map { summary ->
+                        updated.find { it.startedAtMs == summary.startedAtMs }?.toSummary() ?: summary
+                    })
                 }
             }
         }
@@ -685,15 +621,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             viewModelScope.launch(Dispatchers.IO) {
                 delay(10000)
                 
-                val tempSession = RideSession(
-                    startedAtMs = started,
-                    endedAtMs = ended,
-                    points = pointsSnapshot
-                )
-                val description = calculateRouteDescription(getApplication(), tempSession)
-                val newSession = tempSession.copy(routeDescription = description)
-                
-                rideRepository.saveRide(newSession)
+                val newSession = rideSessionUseCases.saveFinishedRide(started, ended, pointsSnapshot)
                 Log.d(TAG, "Ride data saved asynchronously")
                 
                 launch(Dispatchers.Main) {
@@ -741,15 +669,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun deleteRide(summary: RideSummary) {
         Log.i(TAG, "Deleting ride: ${summary.startedAtMs}")
         viewModelScope.launch(Dispatchers.IO) {
-            val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
-            if (session != null) {
-                rideRepository.deleteRide(session)
-                launch(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != summary.startedAtMs },
-                        expandedRides = _uiState.value.expandedRides - summary.startedAtMs
-                    )
-                }
+            rideSessionUseCases.deleteRide(summary.startedAtMs)
+            launch(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    rideHistory = _uiState.value.rideHistory.filter { it.startedAtMs != summary.startedAtMs },
+                    expandedRides = _uiState.value.expandedRides - summary.startedAtMs
+                )
             }
         }
     }
@@ -757,10 +682,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun updateRideName(summary: RideSummary, newName: String) {
         Log.d(TAG, "Updating ride name to '$newName' for ${summary.startedAtMs}")
         viewModelScope.launch(Dispatchers.IO) {
-            val session = rideRepository.loadRides().find { it.startedAtMs == summary.startedAtMs }
-            if (session != null) {
-                val updated = session.copy(name = newName)
-                rideRepository.saveRide(updated)
+            val updated = rideSessionUseCases.updateRideName(summary.startedAtMs, newName) ?: return@launch
                 launch(Dispatchers.Main) {
                     _uiState.update { state ->
                         state.copy(
@@ -773,7 +695,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                         )
                     }
                 }
-            }
         }
     }
 
@@ -781,11 +702,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (_uiState.value.expandedRides.containsKey(startedAtMs)) return
         Log.d(TAG, "Loading full session data for $startedAtMs")
         viewModelScope.launch(Dispatchers.IO) {
-            val session = rideRepository.loadRides().find { it.startedAtMs == startedAtMs }
-            if (session != null) {
-                launch(Dispatchers.Main) {
-                    _uiState.update { it.copy(expandedRides = it.expandedRides + (startedAtMs to session)) }
-                }
+            val session = rideSessionUseCases.loadSession(startedAtMs) ?: return@launch
+            launch(Dispatchers.Main) {
+                _uiState.update { it.copy(expandedRides = it.expandedRides + (startedAtMs to session)) }
             }
         }
     }
@@ -794,24 +713,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (summaries.size < 2) return
         Log.i(TAG, "Combining ${summaries.size} rides")
         viewModelScope.launch(Dispatchers.IO) {
-            val allRides = rideRepository.loadRides()
-            val sessions = summaries.mapNotNull { summary -> allRides.find { it.startedAtMs == summary.startedAtMs } }
-            if (sessions.size < 2) return@launch
-            
-            val sorted = sessions.sortedBy { it.startedAtMs }
-            val mergedPoints = sorted.flatMap { it.points }.sortedBy { it.timestampMs }
-            
-            val tempSession = RideSession(
-                startedAtMs = sorted.first().startedAtMs,
-                endedAtMs = sorted.last().endedAtMs,
-                points = mergedPoints,
-                name = "Combined Ride"
-            )
-            val description = calculateRouteDescription(getApplication(), tempSession)
-            val newSession = tempSession.copy(routeDescription = description)
-            
-            rideRepository.saveRide(newSession)
-            sessions.forEach { rideRepository.deleteRide(it) }
+            val newSession = rideSessionUseCases.combineRides(summaries.map { it.startedAtMs }) ?: return@launch
             
             val idsToRemove = summaries.map { it.startedAtMs }.toSet()
             launch(Dispatchers.Main) {
