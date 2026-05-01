@@ -406,7 +406,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         bikeForwardAxis = persistedCalibration.bikeForwardAxis
         gyroLeanDeg = 0f
         gyroBiasVectorRadPerSec = persistedCalibration.gyroBiasVectorRadPerSec
-        gyroBiasRadPerSec = gyroBiasVectorRadPerSec?.dot(persistedCalibration.bikeForwardAxis) ?: 0f
+        gyroBiasRadPerSec = persistedCalibration.bikeForwardAxis?.let { gyroBiasVectorRadPerSec?.dot(it) }
+            ?: 0f
         lastGyroTimestampNs = null
         lastRollRateRadPerSec = 0f
         lastYawRateRadPerSec = 0f
