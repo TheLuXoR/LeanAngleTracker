@@ -10,7 +10,8 @@ data class PersistedSettings(
     val recorderIntervalMs: Int,
     val gpsTrackingEnabled: Boolean,
     val autoResumeEnabled: Boolean,
-    val isAutoResumePurchased: Boolean
+    val isAutoResumePurchased: Boolean,
+    val autoPauseEnabled: Boolean
 )
 
 data class PersistedCalibration(
@@ -43,6 +44,7 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_GYRO_BIAS_Z = "gyro_bias_z"
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
         const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
+        const val KEY_AUTO_PAUSE = "auto_pause_enabled"
     }
 
     private val prefs: SharedPreferences =
@@ -56,7 +58,8 @@ class SettingsStore(applicationContext: Context) {
                 .coerceIn(recorderIntervalMinMs, recorderIntervalMaxMs),
             gpsTrackingEnabled = prefs.getBoolean(KEY_GPS_ENABLED, false),
             autoResumeEnabled = prefs.getBoolean(KEY_AUTO_REWIND, false),
-            isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false)
+            isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false),
+            autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, true)
         )
 
         if (!prefs.getBoolean(KEY_CALIBRATED, false)) {
@@ -86,6 +89,7 @@ class SettingsStore(applicationContext: Context) {
             .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
             .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
+            .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)
             .apply()
     }
 

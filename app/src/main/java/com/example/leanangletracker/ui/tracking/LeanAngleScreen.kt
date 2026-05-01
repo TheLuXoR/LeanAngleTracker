@@ -126,7 +126,7 @@ internal fun LeanAngleScreen(
                     } else if (trackingState.gpsActive) {
                         var text = ""
                         if (trackingState.isPaused){
-                            if(trackingState.leanAngleDeg > MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD){
+                            if(trackingState.autoPauseEnabled && abs(trackingState.leanAngleDeg) >= MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD){
                                 text = "Rotation too far — paused."
                             } else {
                                 text = "PAUSED"
@@ -151,7 +151,7 @@ internal fun LeanAngleScreen(
                     PauseButton(onClick = onTogglePause,
                         isPaused = trackingState.isPaused,
                         isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null,
-                        enabled = !trackingState.isUpsideDown && abs(trackingState.leanAngleDeg) < MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD
+                        enabled = !trackingState.isUpsideDown && (!trackingState.autoPauseEnabled || abs(trackingState.leanAngleDeg) < MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD)
                     )
 
                     RecordButton(
@@ -214,7 +214,7 @@ internal fun LeanAngleScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Left Column: Gauge and Ads
                     Column(
@@ -286,35 +286,36 @@ internal fun LeanAngleScreen(
                 }
 
                 LeanHistoryGraph(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     values = trackingState.leanHistoryDeg,
                     showCursorLine = false,
-                    selectedIndex = trackingState.leanHistoryDeg.lastIndex.coerceAtLeast(0),
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    selectedIndex = trackingState.leanHistoryDeg.lastIndex.coerceAtLeast(0)
                 )
 
                 movableBanner()
             }
         }
-    }
 
-    if (offerExtend != null) {
-        AlertDialog(
-            onDismissRequest = { onConfirmExtend(false) },
-            title = { Text(stringResource(R.string.dialog_extend_ride_title)) },
-            text = { Text(stringResource(R.string.dialog_extend_ride_message)) },
-            confirmButton = {
-                TextButton(onClick = { onConfirmExtend(true) }) {
-                    Text(stringResource(R.string.dialog_extend_ride_confirm))
+        // Extend Ride Dialog
+        if (offerExtend != null) {
+            AlertDialog(
+                onDismissRequest = { onConfirmExtend(false) },
+                title = { Text(stringResource(R.string.dialog_extend_ride_title)) },
+                text = { Text(stringResource(R.string.dialog_extend_ride_message)) },
+                confirmButton = {
+                    TextButton(onClick = { onConfirmExtend(true) }) {
+                        Text(stringResource(R.string.dialog_extend_ride_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { onConfirmExtend(false) }) {
+                        Text(stringResource(R.string.dialog_extend_ride_dismiss))
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { onConfirmExtend(false) }) {
-                    Text(stringResource(R.string.dialog_extend_ride_dismiss))
-                }
-            }
-        )
+            )
+        }
     }
 }
 

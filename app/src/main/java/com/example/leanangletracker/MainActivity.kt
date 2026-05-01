@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 initialState.screen.screenEntryDirection
                             }
-                            
+
                             if (effectiveDirection == ScreenDirection.HORIZONTAL) {
                                 slideInHorizontally(
                                     animationSpec = tween(300),
@@ -191,15 +191,15 @@ class MainActivity : ComponentActivity() {
                                         title = { Text(stringResource(R.string.dialog_recovery_title)) },
                                         text = { Text(stringResource(R.string.dialog_recovery_message)) },
                                         confirmButton = {
-                                            TextButton(onClick = { 
-                                                viewModel.resolveRecovery(true) 
+                                            TextButton(onClick = {
+                                                viewModel.resolveRecovery(true)
                                             }) {
                                                 Text(stringResource(R.string.dialog_recovery_continue))
                                             }
                                         },
                                         dismissButton = {
-                                            TextButton(onClick = { 
-                                                viewModel.resolveRecovery(false) 
+                                            TextButton(onClick = {
+                                                viewModel.resolveRecovery(false)
                                             }) {
                                                 Text(stringResource(R.string.dialog_recovery_save))
                                             }
@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
                                     onStartTracking = {
                                         val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                                 ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                        
+
                                         if (needsNotificationPermission) {
                                             permissionsLauncher.launch(
                                                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
@@ -270,7 +270,8 @@ class MainActivity : ComponentActivity() {
                                     viewModel.startCalibration()
                                 },
                                 onToggleAutoResume = viewModel::setAutoResumeEnabled,
-                                onPurchaseAutoResume = viewModel::purchaseAutoResume
+                                onPurchaseAutoResume = viewModel::purchaseAutoResume,
+                                onToggleAutoPause = viewModel::setAutoPauseEnabled
                             )
 
                             AppRoute.TrackReview -> RideHistoryScreen(

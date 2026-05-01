@@ -42,7 +42,8 @@ internal fun SettingsScreen(
     onResetExtrema: () -> Unit,
     onStartCalibration: () -> Unit,
     onToggleAutoResume: (Boolean) -> Unit,
-    onPurchaseAutoResume: () -> Unit
+    onPurchaseAutoResume: () -> Unit,
+    onToggleAutoPause: (Boolean) -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var showInfo by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +100,15 @@ internal fun SettingsScreen(
                     subtitle = if (state.locationPermissionGranted) stringResource(R.string.settings_gps_tracking_subtitle_granted) else stringResource(R.string.settings_gps_tracking_subtitle_missing),
                     checked = state.gpsTrackingEnabled,
                     onCheckedChange = onToggleGpsTracking
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+
+                SettingsSwitchItem(
+                    title = stringResource(R.string.settings_auto_pause_title),
+                    subtitle = stringResource(R.string.settings_auto_pause_subtitle),
+                    checked = state.autoPauseEnabled,
+                    onCheckedChange = onToggleAutoPause
                 )
 
                 Row(

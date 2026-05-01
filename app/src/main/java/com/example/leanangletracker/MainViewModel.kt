@@ -101,7 +101,8 @@ data class TrackingUiState(
     val trackLengthKm: Float = 0f,
     val averageLeanAngleDeg: Float = 0f,
     val isUpsideDown: Boolean = false,
-    val recentPoints: List<TrackPoint> = emptyList()
+    val recentPoints: List<TrackPoint> = emptyList(),
+    val autoPauseEnabled: Boolean = true
 )
 
 data class SettingsUiState(
@@ -112,7 +113,8 @@ data class SettingsUiState(
     val gpsTrackingEnabled: Boolean = false,
     val locationPermissionGranted: Boolean = false,
     val autoResumeEnabled: Boolean = false,
-    val isAutoResumePurchased: Boolean = false
+    val isAutoResumePurchased: Boolean = false,
+    val autoPauseEnabled: Boolean = true
 )
 
 data class UiState(
@@ -351,11 +353,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 recorderIntervalMs = persistedSettings.recorderIntervalMs,
                 gpsTrackingEnabled = persistedSettings.gpsTrackingEnabled && it.locationPermissionGranted,
                 autoResumeEnabled = persistedSettings.autoResumeEnabled,
-                isAutoResumePurchased = persistedSettings.isAutoResumePurchased
+                isAutoResumePurchased = persistedSettings.isAutoResumePurchased,
+                autoPauseEnabled = persistedSettings.autoPauseEnabled
             )
         }
         updateTrackingState {
-            it.copy(gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled)
+            it.copy(
+                gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled,
+                autoPauseEnabled = persistedSettings.autoPauseEnabled
+            )
         }
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -896,6 +902,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         persistSettings()
     }
 
+    fun setAutoPauseEnabled(enabled: Boolean) {
+        updateSettingsState { it.copy(autoPauseEnabled = enabled) }
+        updateTrackingState { it.copy(autoPauseEnabled = enabled) }
+        persistSettings()
+    }
+
     fun purchaseAutoResume() {
         updateSettingsState { it.copy(isAutoResumePurchased = true, autoResumeEnabled = true) }
         persistSettings()
@@ -1201,7 +1213,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         // Auto pause if lean angle is too high (likely crash or extreme event)
-        if (abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD) {
+        if (abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD && _uiState.value.settings.autoPauseEnabled) {
             val currentState = _uiState.value.tracking
             if (currentState.trackingStarted && !currentState.isPaused) {
                 togglePauseTracking()
@@ -1231,7 +1243,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 currentLatitude = latestGpsLocation?.latitude,
                 currentLongitude = latestGpsLocation?.longitude,
                 isUpsideDown = upsideDown,
-                recentPoints = recentRidePoints.toList()
+                recentPoints = recentRidePoints.toList(),
+                autoPauseEnabled = _uiState.value.settings.autoPauseEnabled
             )
         }
     }
