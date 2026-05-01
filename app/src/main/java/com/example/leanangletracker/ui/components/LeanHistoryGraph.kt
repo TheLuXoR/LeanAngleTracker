@@ -186,13 +186,15 @@ internal fun LeanHistoryGraph(
 
                     val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
-                    // Overscroll feedback with deadzone
-                    if (scrollOffset.value < minBound - 0.05f) {
-                        val alpha = ((abs(scrollOffset.value - minBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
-                        if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
-                    } else if (scrollOffset.value > maxBound + 0.05f) {
-                        val alpha = ((abs(scrollOffset.value - maxBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
-                        if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                    // Overscroll feedback with deadzone - only show when scrollable
+                    if (isScrollable) {
+                        if (scrollOffset.value < minBound - 0.05f) {
+                            val alpha = ((abs(scrollOffset.value - minBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
+                            if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                        } else if (scrollOffset.value > maxBound + 0.05f) {
+                            val alpha = ((abs(scrollOffset.value - maxBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
+                            if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                        }
                     }
 
                     // Grid lines
