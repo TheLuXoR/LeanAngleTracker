@@ -3,7 +3,6 @@ package com.example.leanangletracker.ui.components.admob
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -29,8 +28,6 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
-private const val TAG = "AdMob"
-
 @Composable
 fun AdMobBanner(
     modifier: Modifier = Modifier.fillMaxWidth(),
@@ -51,7 +48,6 @@ fun AdMobBanner(
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     super.onAdFailedToLoad(error)
-                    Log.e(TAG, "Banner failed to load: ${error.message}")
                 }
             }
             loadAd(AdRequest.Builder().build())
@@ -89,7 +85,6 @@ fun loadInterstitial(context: Context, onAdLoaded: (InterstitialAd?) -> Unit) {
             }
 
             override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                Log.e(TAG, "Interstitial failed to load: ${loadAdError.message}")
                 onAdLoaded(null)
             }
         }
@@ -105,7 +100,6 @@ fun showInterstitial(context: Context, interstitialAd: InterstitialAd?, onAdDism
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
-                Log.e(TAG, "Interstitial failed to show: ${adError.message}")
                 onAdDismissed()
             }
         }

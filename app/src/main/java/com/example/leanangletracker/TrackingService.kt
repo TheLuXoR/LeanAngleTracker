@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,19 +29,16 @@ class TrackingService : Service() {
     }
 
     override fun onBind(intent: Intent): IBinder {
-        Log.d(TAG, "onBind")
         return binder
     }
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "onCreate")
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_NOTIF_DISMISSED) {
-            Log.d(TAG, "Notification dismissed by user")
             return START_STICKY
         }
 
@@ -66,7 +62,6 @@ class TrackingService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "onDestroy")
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -122,7 +117,6 @@ class TrackingService : Service() {
     }
 
     companion object {
-        private const val TAG = "TrackingService"
         private const val CHANNEL_ID = "tracking_channel"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_NOTIF_DISMISSED = "com.example.leanangletracker.NOTIF_DISMISSED"
