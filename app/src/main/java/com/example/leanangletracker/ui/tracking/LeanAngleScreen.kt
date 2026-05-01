@@ -28,10 +28,12 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +74,7 @@ internal fun LeanAngleScreen(
     onOpenHistory: () -> Unit,
     onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
+    onStartCalibration: () -> Unit = {},
     onTogglePause: () -> Unit = {},
     offerExtend: RideSession? = null,
     onConfirmExtend: (Boolean) -> Unit = {},
@@ -182,30 +185,48 @@ internal fun LeanAngleScreen(
             }
 
             AnimatedVisibility(
-                visible = trackingState.isUpsideDown,
+                visible = trackingState.isUpsideDown || trackingState.showHighRotationWarning,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.errorContainer)
                         .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        text = stringResource(R.string.tracking_warning_upside_down),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = if (trackingState.isUpsideDown) 
+                                stringResource(R.string.tracking_warning_upside_down) 
+                            else 
+                                stringResource(R.string.tracking_warning_high_rotation),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        TextButton(
+                            onClick = onStartCalibration,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Text(stringResource(R.string.action_recalibrate))
+                        }
+                    }
                 }
             }
 

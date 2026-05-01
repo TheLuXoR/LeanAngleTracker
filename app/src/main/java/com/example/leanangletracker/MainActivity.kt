@@ -227,6 +227,10 @@ class MainActivity : ComponentActivity() {
                                     onFinishRide = {
                                         viewModel.finishRide()
                                     },
+                                    onStartCalibration = {
+                                        routeUiState = routeUiState.copy(showSettings = false)
+                                        viewModel.startCalibration()
+                                    },
                                     onTogglePause = viewModel::togglePauseTracking,
                                     offerExtend = state.offerExtendSession,
                                     onConfirmExtend = viewModel::confirmExtendRide

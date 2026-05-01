@@ -101,6 +101,7 @@ data class TrackingUiState(
     val trackLengthKm: Float = 0f,
     val averageLeanAngleDeg: Float = 0f,
     val isUpsideDown: Boolean = false,
+    val showHighRotationWarning: Boolean = false,
     val recentPoints: List<TrackPoint> = emptyList(),
     val autoPauseEnabled: Boolean = true
 )
@@ -232,6 +233,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private var fusionConfidence = 1f
     private var autoResumeTimerStartMs: Long? = null
     private val pausedPointsBuffer = ArrayDeque<TrackPoint>()
+    private var highRotationStartNs: Long? = null
 
     // Rolling ride statistics to avoid keeping all points in memory
     private var ridePointCount = 0
@@ -483,6 +485,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     trackLengthKm = 0f,
                     averageLeanAngleDeg = 0f,
                     isUpsideDown = false,
+                    showHighRotationWarning = false,
                     recentPoints = emptyList()
                 )
             }
@@ -720,6 +723,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 trackLengthKm = 0f,
                 averageLeanAngleDeg = 0f,
                 isUpsideDown = false,
+                showHighRotationWarning = false,
                 recentPoints = emptyList()
             )
         }
@@ -1186,10 +1190,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val accelGain = 0.003f + 0.14f * fusionConfidence * fusionConfidence
 
             val rotationFresh = latestRotationTimestampNs?.let { timestampNs - it <= SENSOR_TIMING_POLICY.fusionRotationFreshNs } == true
-            val rotationGain = if (rotationFresh) 0.03f else 0f
+            val rotationFreshGain = if (rotationFresh) 0.03f else 0f
             val rotationInnovation = ((latestRotationLeanDeg ?: referenceLeanDeg) - gyroLeanDeg).coerceIn(-4f, 4f)
 
-            val fused = gyroLeanDeg + (accelInnovation * accelGain) + (rotationInnovation * rotationGain)
+            val fused = gyroLeanDeg + (accelInnovation * accelGain) + (rotationInnovation * rotationFreshGain)
             val maxFusedStepDeg = SENSOR_TIMING_POLICY.maxLeanRateDegPerSec * leanDtSec
             val boundedFused = (fused - gyroLeanDeg).coerceIn(-maxFusedStepDeg, maxFusedStepDeg) + gyroLeanDeg
             gyroLeanDeg = boundedFused.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
@@ -1231,6 +1235,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         // Detect upside down: if gravity points in same direction as uprightUp (captured as -gravity)
         val upsideDown = filteredGravity.dot(upRef) > 5.0f
 
+        // High rotation detection (not tracking, angle > threshold, not obviously flipped, persists for 10s)
+        val isHighRotation = !previous.tracking.trackingStarted && abs(leanDeg) > AUTO_PAUSE_LEAN_THRESHOLD && !upsideDown
+        if (isHighRotation) {
+            if (highRotationStartNs == null) {
+                highRotationStartNs = timestampNs
+            }
+        } else {
+            highRotationStartNs = null
+        }
+        val showHighRotationWarning = highRotationStartNs?.let { (timestampNs - it) > 10_000_000_000L } ?: false
+
         updateTrackingState {
             it.copy(
                 leanAngleDeg = leanDeg,
@@ -1243,6 +1258,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 currentLatitude = latestGpsLocation?.latitude,
                 currentLongitude = latestGpsLocation?.longitude,
                 isUpsideDown = upsideDown,
+                showHighRotationWarning = showHighRotationWarning,
                 recentPoints = recentRidePoints.toList(),
                 autoPauseEnabled = _uiState.value.settings.autoPauseEnabled
             )

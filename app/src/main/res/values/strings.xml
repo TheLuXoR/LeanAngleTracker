@@ -79,6 +79,8 @@
     <string name="tracking_recording">RECORDING</string>
     <string name="tracking_searching_gps">Searching GPS…</string>
     <string name="tracking_warning_upside_down">Phone upside down! Please flip it.</string>
+    <string name="tracking_warning_high_rotation">High rotation detected. Device orientation may be incorrect.</string>
+    <string name="action_recalibrate">Recalibrate</string>
 
     <!-- Extend Ride Dialog -->
     <string name="dialog_extend_ride_title">Continue Ride?</string>
