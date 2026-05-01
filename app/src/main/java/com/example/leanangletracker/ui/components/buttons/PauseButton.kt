@@ -19,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
@@ -28,6 +29,7 @@ fun PauseButton(
     onClick: () -> Unit,
     isPaused: Boolean = false,
     isVisible: Boolean = false,
+    enabled: Boolean = true,
 ) {
     AnimatedVisibility(
         visible = isVisible,
@@ -36,10 +38,12 @@ fun PauseButton(
     ) {
         IconButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = Modifier
                 .padding(end = 8.dp) // Versatz zu den anderen Buttons
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface)
+                .alpha(if (enabled) 1f else 0.5f)
         ) {
             Icon(
                 imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,

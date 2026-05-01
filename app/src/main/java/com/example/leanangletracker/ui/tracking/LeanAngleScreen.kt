@@ -137,7 +137,8 @@ internal fun LeanAngleScreen(
 
                     PauseButton(onClick = onTogglePause,
                         isPaused = trackingState.isPaused,
-                        isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null
+                        isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null,
+                        enabled = !(trackingState.isPaused && trackingState.isUpsideDown)
                     )
 
                     RecordButton(

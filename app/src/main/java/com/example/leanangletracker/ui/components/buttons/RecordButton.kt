@@ -199,7 +199,11 @@ fun RecordButton(
                                     )
                                 }
                                 Text(
-                                    text = if (isWaitingForGps) "WAIT GPS" else "RECORDING",
+                                    text = when {
+                                        isWaitingForGps -> "WAIT GPS"
+                                        isPaused -> "PAUSED"
+                                        else -> "RECORDING"
+                                    },
                                     fontWeight = FontWeight.Black,
                                     color = if (isRecording && !isWaitingForGps) TextPrimary else activeColor,
                                     fontSize = 9.sp,
