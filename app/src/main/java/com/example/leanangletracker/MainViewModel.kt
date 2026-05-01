@@ -2,7 +2,6 @@ package com.example.leanangletracker
 
 import android.Manifest
 import android.app.Application
-import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -37,7 +36,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
-private data class Vec3(val x: Float, val y: Float, val z: Float) {
+data class Vec3(val x: Float, val y: Float, val z: Float) {
     operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
     operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
     operator fun times(scale: Float) = Vec3(x * scale, y * scale, z * scale)
@@ -157,23 +156,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         const val RECORDER_INTERVAL_MAX_MS = 1_000
         const val RECORDER_INTERVAL_STEP_MS = 50
         const val GPS_FRESHNESS_THRESHOLD_MS = 2_500L
-        const val PREFS_NAME = "lean_angle_tracker_prefs"
-        const val KEY_INVERT = "invert_lean"
-        const val KEY_HISTORY_WINDOW = "history_window_s"
-        const val KEY_RECORDER_INTERVAL = "recorder_interval_ms"
-        const val KEY_GPS_ENABLED = "gps_enabled"
-        const val KEY_CALIBRATED = "is_calibrated"
-        const val KEY_UPRIGHT_X = "upright_x"
-        const val KEY_UPRIGHT_Y = "upright_y"
-        const val KEY_UPRIGHT_Z = "upright_z"
-        const val KEY_FORWARD_X = "forward_x"
-        const val KEY_FORWARD_Y = "forward_y"
-        const val KEY_FORWARD_Z = "forward_z"
-        const val KEY_GYRO_BIAS_X = "gyro_bias_x"
-        const val KEY_GYRO_BIAS_Y = "gyro_bias_y"
-        const val KEY_GYRO_BIAS_Z = "gyro_bias_z"
-        const val KEY_AUTO_REWIND = "auto_resume_enabled"
-        const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
         const val CALIBRATION_TILT_MAX_RANGE = 35f
         const val EXTEND_PROXIMITY_METERS = 500f
         const val MAX_LEAN_DEG = 75f
@@ -227,7 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val settingsStore = SettingsStore(application.applicationContext)
 
     private var filteredGravity = Vec3(0f, 0f, 9.81f)
     private var filteredLinearAcceleration = Vec3(0f, 0f, 0f)
@@ -390,21 +372,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
     private fun loadPersistedState() {
-        val savedInvert = prefs.getBoolean(KEY_INVERT, false)
-        val savedHistory = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120)
-        val savedRecorder = prefs.getInt(KEY_RECORDER_INTERVAL, 200).coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
-        val savedGps = prefs.getBoolean(KEY_GPS_ENABLED, false)
-        val savedAutoResume = prefs.getBoolean(KEY_AUTO_REWIND, false)
-        val savedAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false)
+        val persistedState = settingsStore.load(
+            recorderIntervalMinMs = RECORDER_INTERVAL_MIN_MS,
+            recorderIntervalMaxMs = RECORDER_INTERVAL_MAX_MS
+        )
+        val persistedSettings = persistedState.settings
 
         updateSettingsState {
             it.copy(
-                invertLeanAngle = savedInvert,
-                historyWindowSeconds = savedHistory,
-                recorderIntervalMs = savedRecorder,
-                gpsTrackingEnabled = savedGps && it.locationPermissionGranted,
-                autoResumeEnabled = savedAutoResume,
-                isAutoResumePurchased = savedAutoResumePurchased
+                invertLeanAngle = persistedSettings.invertLeanAngle,
+                historyWindowSeconds = persistedSettings.historyWindowSeconds,
+                recorderIntervalMs = persistedSettings.recorderIntervalMs,
+                gpsTrackingEnabled = persistedSettings.gpsTrackingEnabled && it.locationPermissionGranted,
+                autoResumeEnabled = persistedSettings.autoResumeEnabled,
+                isAutoResumePurchased = persistedSettings.isAutoResumePurchased
             )
         }
         updateTrackingState {
@@ -415,24 +396,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         Log.d(TAG, "Loaded ${history.size} rides from repository")
         _uiState.value = _uiState.value.copy(rideHistory = history.map { it.toSummary() })
 
-        if (!prefs.getBoolean(KEY_CALIBRATED, false)) {
+        val persistedCalibration = persistedState.calibration
+        if (persistedCalibration == null) {
             Log.i(TAG, "No persisted calibration found")
             return
         }
 
-        val savedUpright = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)?.normalized()
-        val savedForward = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)?.normalized()
-
-        if (savedUpright == null || savedForward == null) {
-            Log.w(TAG, "Persisted calibration data is incomplete or invalid")
-            return
-        }
-
-        uprightUp = savedUpright
-        bikeForwardAxis = savedForward
+        uprightUp = persistedCalibration.uprightUp
+        bikeForwardAxis = persistedCalibration.bikeForwardAxis
         gyroLeanDeg = 0f
-        gyroBiasVectorRadPerSec = readVec3(KEY_GYRO_BIAS_X, KEY_GYRO_BIAS_Y, KEY_GYRO_BIAS_Z)
-        gyroBiasRadPerSec = gyroBiasVectorRadPerSec?.dot(savedForward) ?: 0f
+        gyroBiasVectorRadPerSec = persistedCalibration.gyroBiasVectorRadPerSec
+        gyroBiasRadPerSec = persistedCalibration.bikeForwardAxis?.let { gyroBiasVectorRadPerSec?.dot(it) }
+            ?: 0f
         lastGyroTimestampNs = null
         lastRollRateRadPerSec = 0f
         lastYawRateRadPerSec = 0f
@@ -482,68 +457,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    private fun readVec3(xKey: String, yKey: String, zKey: String): Vec3? {
-        if (!prefs.contains(xKey) || !prefs.contains(yKey) || !prefs.contains(zKey)) return null
-        return Vec3(
-            prefs.getFloat(xKey, 0f),
-            prefs.getFloat(yKey, 0f),
-            prefs.getFloat(zKey, 0f)
-        )
-    }
-
     private fun persistSettings() {
-        val settings = _uiState.value.settings
-        prefs.edit()
-            .putBoolean(KEY_INVERT, settings.invertLeanAngle)
-            .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
-            .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
-            .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
-            .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
-            .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
-            .apply()
+        settingsStore.save(_uiState.value.settings)
     }
 
     private fun persistCalibration() {
         val up = uprightUp ?: return
         val forward = bikeForwardAxis ?: return
         Log.d(TAG, "Persisting calibration data")
-        val editor = prefs.edit()
-            .putBoolean(KEY_CALIBRATED, true)
-            .putFloat(KEY_UPRIGHT_X, up.x)
-            .putFloat(KEY_UPRIGHT_Y, up.y)
-            .putFloat(KEY_UPRIGHT_Z, up.z)
-            .putFloat(KEY_FORWARD_X, forward.x)
-            .putFloat(KEY_FORWARD_Y, forward.y)
-            .putFloat(KEY_FORWARD_Z, forward.z)
-        val biasVec = gyroBiasVectorRadPerSec
-        if (biasVec != null) {
-            editor
-                .putFloat(KEY_GYRO_BIAS_X, biasVec.x)
-                .putFloat(KEY_GYRO_BIAS_Y, biasVec.y)
-                .putFloat(KEY_GYRO_BIAS_Z, biasVec.z)
-        } else {
-            editor
-                .remove(KEY_GYRO_BIAS_X)
-                .remove(KEY_GYRO_BIAS_Y)
-                .remove(KEY_GYRO_BIAS_Z)
-        }
-        editor.apply()
+        settingsStore.saveCalibration(up, forward, gyroBiasVectorRadPerSec)
     }
 
     private fun clearPersistedCalibration() {
         Log.d(TAG, "Clearing persisted calibration")
-        prefs.edit()
-            .putBoolean(KEY_CALIBRATED, false)
-            .remove(KEY_UPRIGHT_X)
-            .remove(KEY_UPRIGHT_Y)
-            .remove(KEY_UPRIGHT_Z)
-            .remove(KEY_FORWARD_X)
-            .remove(KEY_FORWARD_Y)
-            .remove(KEY_FORWARD_Z)
-            .remove(KEY_GYRO_BIAS_X)
-            .remove(KEY_GYRO_BIAS_Y)
-            .remove(KEY_GYRO_BIAS_Z)
-            .apply()
+        settingsStore.clearCalibration()
     }
 
     private inline fun updateCalibrationState(transform: (CalibrationUiState) -> CalibrationUiState) {
