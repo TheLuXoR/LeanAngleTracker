@@ -64,7 +64,7 @@ internal fun RideHistoryScreen(
                     if (isSelectionMode && selectedSessionIds.size >= 2) {
                         Button(
                             onClick = {
-                                val toCombine = rideHistory.filter { it.startedAtMs in selectedSessionIds }
+                                val toCombine = rideHistory.filter { it.rideId in selectedSessionIds }
                                 onCombineRides(toCombine)
                                 selectedSessionIds = emptySet()
                             },
@@ -94,22 +94,22 @@ internal fun RideHistoryScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(rideHistory, key = { _, s -> s.startedAtMs }) { _, summary ->
-                    val isSelected = summary.startedAtMs in selectedSessionIds
+                itemsIndexed(rideHistory, key = { _, s -> s.rideId }) { _, summary ->
+                    val isSelected = summary.rideId in selectedSessionIds
                     
                     RideHistoryItem(
                         summary = summary,
                         isSelected = isSelected,
                         onClick = { 
                             if (isSelectionMode) {
-                                selectedSessionIds = if (isSelected) selectedSessionIds - summary.startedAtMs else selectedSessionIds + summary.startedAtMs
+                                selectedSessionIds = if (isSelected) selectedSessionIds - summary.rideId else selectedSessionIds + summary.rideId
                             } else {
-                                onSelectRide(summary.startedAtMs)
+                                onSelectRide(summary.rideId)
                             }
                         },
                         onLongClick = {
                             if (!isSelectionMode) {
-                                selectedSessionIds = setOf(summary.startedAtMs)
+                                selectedSessionIds = setOf(summary.rideId)
                             }
                         },
                         onDelete = { onDeleteRide(summary) }

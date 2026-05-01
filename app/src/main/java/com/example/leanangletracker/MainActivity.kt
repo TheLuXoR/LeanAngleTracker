@@ -290,7 +290,7 @@ class MainActivity : ComponentActivity() {
                             )
 
                             is AppRoute.RideDetail -> {
-                                val summary = state.rideHistory.find { it.startedAtMs == currentRoute.rideId }
+                                val summary = state.rideHistory.find { it.rideId == currentRoute.rideId }
                                 if (summary != null) {
                                     RideDetailScreen(
                                         rideSummary = summary,

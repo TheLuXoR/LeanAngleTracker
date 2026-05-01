@@ -57,6 +57,7 @@ class RideRepository(context: Context) {
         val entity = rideDao.getRideById(rideId) ?: return null
         val pointCount = rideDao.getPointCountForRide(rideId)
         return RideSummary(
+            rideId = entity.id,
             startedAtMs = entity.startTime,
             endedAtMs = entity.endTime,
             name = entity.name,
@@ -68,6 +69,7 @@ class RideRepository(context: Context) {
     suspend fun loadRideHistory(): List<RideSummary> {
         return rideDao.getAllRides().map { entity ->
             RideSummary(
+                rideId = entity.id,
                 startedAtMs = entity.startTime,
                 endedAtMs = entity.endTime,
                 name = entity.name,
@@ -92,6 +94,7 @@ class RideRepository(context: Context) {
             )
         }
         return RideSession(
+            rideId = ride.id,
             startedAtMs = ride.startTime,
             endedAtMs = ride.endTime,
             points = points,
