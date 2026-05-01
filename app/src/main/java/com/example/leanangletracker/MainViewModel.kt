@@ -59,6 +59,7 @@ data class TrackPoint(
 )
 
 data class RideSession(
+    val rideId: Long = 0L,
     val startedAtMs: Long,
     val endedAtMs: Long,
     val points: List<TrackPoint>,
@@ -67,6 +68,7 @@ data class RideSession(
 )
 
 data class RideSummary(
+    val rideId: Long = 0L,
     val startedAtMs: Long,
     val endedAtMs: Long,
     val name: String? = null,
@@ -76,6 +78,7 @@ data class RideSummary(
 )
 
 fun RideSession.toSummary() = RideSummary(
+    rideId = rideId,
     startedAtMs = startedAtMs,
     endedAtMs = endedAtMs,
     name = name,
@@ -330,12 +333,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                         _uiState.update { state ->
                             state.copy(
                                 rideHistory = (listOf(recoveredRide.toSummary()) + state.rideHistory).sortedByDescending { it.startedAtMs },
-                                lastSavedRideId = recoveredRide.startedAtMs
+                                lastSavedRideId = recoveredRide.rideId
                             )
                         }
                     }
                 } else {
-                    rideRepository.deleteRide(session.startedAtMs)
+                    rideRepository.deleteRide(session.rideId)
                 }
             }
         }
@@ -512,7 +515,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val currentLoc = latestGpsLocation
             if (currentLoc != null) {
                 viewModelScope.launch(Dispatchers.IO) {
-                    val fullRide = rideSessionUseCases.loadSession(lastRideSummary!!.startedAtMs)
+                    val fullRide = rideSessionUseCases.loadSession(lastRideSummary!!.rideId)
                     if (fullRide != null) {
                         val lastPoint = fullRide.points.lastOrNull()
                         if (lastPoint != null) {
@@ -604,8 +607,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             recentRidePoints.addAll(session.points.takeLast(LIVE_POINTS_UI_LIMIT))
             pausedPointsBuffer.clear()
             
-            rideSessionUseCases.deleteRide(session.startedAtMs)
-            _uiState.update { state -> state.copy(rideHistory = state.rideHistory.filter { it.startedAtMs != session.startedAtMs }) }
+            rideSessionUseCases.deleteRide(session.rideId)
+            _uiState.update { state -> state.copy(rideHistory = state.rideHistory.filter { it.rideId != session.rideId }) }
 
             peakLeanSinceLastTick = 0f
             startRecorder()
@@ -660,13 +663,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         if (currentRideId != null) {
             if (ridePointCount > 0) {
                 val skeleton = RideSummary(
+                    rideId = currentRideId,
                     startedAtMs = started,
                     endedAtMs = ended,
                     isSkeleton = true
                 )
                 _uiState.update { it.copy(
                     rideHistory = (listOf(skeleton) + it.rideHistory).sortedByDescending { it.startedAtMs },
-                    lastSavedRideId = started
+                    lastSavedRideId = currentRideId
                 ) }
 
                 viewModelScope.launch(Dispatchers.IO) {
@@ -681,7 +685,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                                 rideHistory = state.rideHistory.map {
                                     if (it.startedAtMs == started) newSession.toSummary() else it
                                 },
-                                expandedRides = state.expandedRides + (started to newSession)
+                                expandedRides = state.expandedRides + (currentRideId to newSession)
                             )
                         }
                     }
@@ -731,11 +735,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun deleteRide(summary: RideSummary) {
         viewModelScope.launch(Dispatchers.IO) {
-            rideSessionUseCases.deleteRide(summary.startedAtMs)
+            rideSessionUseCases.deleteRide(summary.rideId)
             launch(Dispatchers.Main) {
                 _uiState.update { it.copy(
-                    rideHistory = it.rideHistory.filter { it.startedAtMs != summary.startedAtMs },
-                    expandedRides = it.expandedRides - summary.startedAtMs
+                    rideHistory = it.rideHistory.filter { it.rideId != summary.rideId },
+                    expandedRides = it.expandedRides - summary.rideId
                 ) }
             }
         }
@@ -743,15 +747,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     fun updateRideName(summary: RideSummary, newName: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val updated = rideSessionUseCases.updateRideName(summary.startedAtMs, newName) ?: return@launch
+            val updated = rideSessionUseCases.updateRideName(summary.rideId, newName) ?: return@launch
                 launch(Dispatchers.Main) {
                     _uiState.update { state ->
                         state.copy(
                             rideHistory = state.rideHistory.map {
-                                if (it.startedAtMs == summary.startedAtMs) updated.toSummary() else it
+                                if (it.rideId == summary.rideId) updated.toSummary() else it
                             },
-                            expandedRides = if (state.expandedRides.containsKey(summary.startedAtMs)) {
-                                state.expandedRides + (summary.startedAtMs to updated)
+                            expandedRides = if (state.expandedRides.containsKey(summary.rideId)) {
+                                state.expandedRides + (summary.rideId to updated)
                             } else state.expandedRides
                         )
                     }
@@ -759,12 +763,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
     }
 
-    fun loadFullSession(startedAtMs: Long) {
-        if (_uiState.value.expandedRides.containsKey(startedAtMs)) return
+    fun loadFullSession(rideId: Long) {
+        if (_uiState.value.expandedRides.containsKey(rideId)) return
         viewModelScope.launch(Dispatchers.IO) {
-            val session = rideSessionUseCases.loadSession(startedAtMs) ?: return@launch
+            val session = rideSessionUseCases.loadSession(rideId) ?: return@launch
             launch(Dispatchers.Main) {
-                _uiState.update { it.copy(expandedRides = it.expandedRides + (startedAtMs to session)) }
+                _uiState.update { it.copy(expandedRides = it.expandedRides + (rideId to session)) }
             }
         }
     }
@@ -772,9 +776,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     fun combineRides(summaries: List<RideSummary>) {
         if (summaries.size < 2) return
         viewModelScope.launch(Dispatchers.IO) {
-            val newSession = rideSessionUseCases.combineRides(summaries.map { it.startedAtMs }) ?: return@launch
+            val newSession = rideSessionUseCases.combineRides(summaries.map { it.rideId }) ?: return@launch
             
-            val idsToRemove = summaries.map { it.startedAtMs }.toSet()
+            val idsToRemove = summaries.map { it.rideId }.toSet()
             launch(Dispatchers.Main) {
                 _uiState.update { it.copy(
                     rideHistory = (listOf(newSession.toSummary()) + it.rideHistory.filter { it.startedAtMs !in idsToRemove })
@@ -1376,7 +1380,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             val lastSummary = _uiState.value.rideHistory.firstOrNull()
             if (lastSummary != null) {
                 viewModelScope.launch(Dispatchers.IO) {
-                    val lastRide = rideSessionUseCases.loadSession(lastSummary.startedAtMs)
+                    val lastRide = rideSessionUseCases.loadSession(lastSummary.rideId)
                     if (lastRide != null) {
                         val lastPoint = lastRide.points.lastOrNull()
                         if (lastPoint != null) {
