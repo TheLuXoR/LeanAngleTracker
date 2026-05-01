@@ -51,6 +51,15 @@ internal fun LeanHistoryGraph(
 
     var showScrollHint by remember { mutableStateOf(false) }
 
+    // Use a stable amplitude to prevent vertical "flickering" when peaks enter/leave the window.
+    // We increase the minimum to 45 degrees so typical street lean doesn't hit the red gradient zones too early.
+    val targetMax = remember(values) { values.maxOfOrNull { abs(it) } ?: 0f }
+    val animatedAmplitude by animateFloatAsState(
+        targetValue = maxOf(45f, targetMax),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "amplitude"
+    )
+
     // Sync internal offset when external selectedIndex changes (e.g. from Map or external update)
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
@@ -95,9 +104,9 @@ internal fun LeanHistoryGraph(
                     }
                 }
 
+                // Current peak indicators for text display
                 val lowerBound = displayValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
                 val upperBound = displayValues.minOrNull()?.coerceAtMost(-0f) ?: -0f
-                val amplitude = maxOf(20f, abs(upperBound), abs(lowerBound))
 
                 Row {
                     Text(
@@ -125,7 +134,6 @@ internal fun LeanHistoryGraph(
                                 orientation = Orientation.Horizontal,
                                 state = rememberDraggableState { delta ->
                                     showScrollHint = false // Hide hint on interaction
-                                    // Replicate JogWheel's sensitivity and resistance
                                     val sensitivity = 0.2f 
                                     var effectiveDelta = -delta * sensitivity
 
@@ -149,20 +157,18 @@ internal fun LeanHistoryGraph(
                                 onDragStopped = { velocity ->
                                     scope.launch {
                                         if (scrollOffset.value < minBound || scrollOffset.value > maxBound) {
-                                            // Rubber band snap back
                                             scrollOffset.animateTo(
                                                 targetValue = if (scrollOffset.value < minBound) minBound else maxBound,
-                                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
                                             )
                                         } else {
-                                            // Decay fling (matching JogWheel's physics)
                                             val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
                                             scrollOffset.animateDecay(-velocity * 0.05f, decay) {
                                                 if (value !in minBound..maxBound) {
                                                     this@launch.launch {
                                                         scrollOffset.animateTo(
                                                             targetValue = if (value < minBound) minBound else maxBound,
-                                                            animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f)
+                                                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
                                                         )
                                                     }
                                                 }
@@ -179,11 +185,11 @@ internal fun LeanHistoryGraph(
                     val height = size.height
                     val centerY = height / 2f
 
-                    fun yFor(deg: Float): Float = centerY + (deg / amplitude) * (height * 0.45f)
+                    fun yFor(deg: Float): Float = centerY + (deg / animatedAmplitude) * (height * 0.45f)
 
                     val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
-                    // Grid Lines
+                    // Grid Lines (Current peaks in window)
                     displayValues.minOrNull()?.let { minVal ->
                         val minIndex = displayValues.indexOf(minVal)
                         val startX = minIndex * stepX
@@ -198,14 +204,16 @@ internal fun LeanHistoryGraph(
                     }
 
                     // Overscroll visual feedback (Red tint at edges like JogWheel)
-                    if (scrollOffset.value < minBound) {
-                        val alpha = (abs(scrollOffset.value - minBound) / overscrollLimit).coerceIn(0f, 0.2f)
-                        drawRect(color = Color.Red.copy(alpha = alpha), size = size)
-                    } else if (scrollOffset.value > maxBound) {
-                        val alpha = (abs(scrollOffset.value - maxBound) / overscrollLimit).coerceIn(0f, 0.2f)
-                        drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                    // Increased deadzone and alpha gating to prevent "flickering" reds on edge snaps
+                    if (scrollOffset.value < minBound - 0.05f) {
+                        val alpha = ((abs(scrollOffset.value - minBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
+                        if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
+                    } else if (scrollOffset.value > maxBound + 0.05f) {
+                        val alpha = ((abs(scrollOffset.value - maxBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
+                        if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
                     }
 
+                    // Zero line
                     drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
                     drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
 
@@ -226,26 +234,47 @@ internal fun LeanHistoryGraph(
                         val path = Path()
                         displayValues.forEachIndexed { index, value ->
                             val x = index * stepX
-                            val y = yFor(value.coerceIn(-amplitude, amplitude))
+                            val y = yFor(value.coerceIn(-animatedAmplitude, animatedAmplitude))
                             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                         }
                         drawPath(
                             path = path,
-                            brush = Brush.verticalGradient(listOf(Color.Red,PrimaryOrange,AccentGreen ,PrimaryOrange,Color.Red)),
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.Red, PrimaryOrange, AccentGreen, PrimaryOrange, Color.Red),
+                                startY = 0f,
+                                endY = height
+                            ),
                             style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // Vertical cursor logic - smoothed with scrollOffset
-                        val relativeScrollOffset = scrollOffset.value - displayStartIndex
+                        // Cursor Position Calculation
+                        // To avoid horizontal "flickering" during live updates, we prefer using the prop selectedIndex
+                        // for X position when not actively scrolling/dragging.
+                        val isAtEnd = selectedIndex == values.lastIndex
+                        val isNotScrolling = !scrollOffset.isRunning && !isScrollable
                         
-                        if (relativeScrollOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
-                            val selX = relativeScrollOffset * stepX
+                        val cursorOffset = if (isNotScrolling && isAtEnd) {
+                             values.lastIndex.toFloat()
+                        } else {
+                            scrollOffset.value
+                        }
+
+                        val relativeCursorOffset = cursorOffset - displayStartIndex
+                        
+                        if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
+                            val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
                             
                             // Interpolate Y for smooth cursor movement
-                            val currentIdx = scrollOffset.value.toInt().coerceIn(0, values.lastIndex)
+                            val clampedScrollVal = cursorOffset.coerceIn(0f, values.lastIndex.toFloat())
+                            val currentIdx = clampedScrollVal.toInt().coerceIn(0, values.lastIndex)
                             val nextIdx = (currentIdx + 1).coerceIn(0, values.lastIndex)
-                            val fraction = scrollOffset.value - currentIdx
-                            val interpolatedValue = values[currentIdx] * (1 - fraction) + values[nextIdx] * fraction
+                            val fraction = clampedScrollVal - currentIdx
+                            
+                            val interpolatedValue = if (currentIdx == nextIdx) {
+                                values[currentIdx]
+                            } else {
+                                values[currentIdx] * (1 - fraction) + values[nextIdx] * fraction
+                            }
                             
                             val selY = yFor(interpolatedValue)
 
