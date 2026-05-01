@@ -114,8 +114,9 @@ internal fun LeanHistoryGraph(
                         letterSpacing = 1.sp
                     )
                     Spacer(Modifier.weight(1f))
+                    val roundedLean = abs(currentLean).roundToInt()
                     Text(
-                        "${abs(currentLean).roundToInt()}° ${if (currentLean < 0) "LEFT" else if (currentLean > 0) "RIGHT" else ""}",
+                        "$roundedLean° ${if (roundedLean == 0) "" else if (currentLean < 0) "LEFT" else "RIGHT"}",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
