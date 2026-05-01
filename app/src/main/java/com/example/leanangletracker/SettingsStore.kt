@@ -2,6 +2,7 @@ package com.example.leanangletracker
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.leanangletracker.data.Vec3
 
 data class PersistedSettings(
     val invertLeanAngle: Boolean,
