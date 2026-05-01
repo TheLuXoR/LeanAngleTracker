@@ -1178,10 +1178,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
         }
 
-        leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = leanDeg)
-        registerRecentLeanSample(timestampNs, leanDeg)
-
         val previous = _uiState.value
+        val protectedLeanDeg = when {
+            leanDeg > AUTO_PAUSE_LEAN_THRESHOLD -> previous.tracking.maxRightDeg
+            leanDeg < -AUTO_PAUSE_LEAN_THRESHOLD -> previous.tracking.maxLeftDeg
+            else -> leanDeg
+        }
+
+        leanHistory += TimedLean(timestampNs = timestampNs, valueDeg = protectedLeanDeg)
+        registerRecentLeanSample(timestampNs, protectedLeanDeg)
+
         pruneHistory(timestampNs, previous.settings.historyWindowSeconds)
 
         val visibleHistory = leanHistory.map { it.valueDeg }
@@ -1191,9 +1197,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
         _uiState.value = previous.copy(
             tracking = previous.tracking.copy(
-                leanAngleDeg = leanDeg,
-                maxLeftDeg = minOf(previous.tracking.maxLeftDeg, if (leanDeg < 0f) leanDeg else 0f),
-                maxRightDeg = maxOf(previous.tracking.maxRightDeg, if (leanDeg > 0f) leanDeg else 0f),
+                leanAngleDeg = protectedLeanDeg,
+                maxLeftDeg = minOf(previous.tracking.maxLeftDeg, if (protectedLeanDeg < 0f) protectedLeanDeg else 0f),
+                maxRightDeg = maxOf(previous.tracking.maxRightDeg, if (protectedLeanDeg > 0f) protectedLeanDeg else 0f),
                 leanHistoryDeg = visibleHistory,
                 speedKmh = speedKmh,
                 gpsActive = locationUpdatesRunning,
