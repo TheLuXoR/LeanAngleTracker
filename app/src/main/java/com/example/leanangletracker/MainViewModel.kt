@@ -281,7 +281,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private fun checkForUnfinishedRides() {
         viewModelScope.launch(Dispatchers.IO) {
-            val pending = rideSessionUseCases.findUnfinishedRideForRecovery() ?: return@launch
+            val pendingRideId = settingsStore.loadPendingRideId() ?: return@launch
+            val pending = rideSessionUseCases.loadSession(pendingRideId) ?: run {
+                settingsStore.savePendingRideId(null)
+                return@launch
+            }
             launch(Dispatchers.Main) { _uiState.update { it.copy(pendingRecovery = pending) } }
         }
     }
@@ -297,6 +301,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 }
                 activeRideStartedMs = session.startedAtMs
                 activeRideId = rideRepository.startNewRide(session.startedAtMs)
+                settingsStore.savePendingRideId(activeRideId)
                 
                 recentRidePoints.clear()
                 recentRidePoints.addAll(session.points.takeLast(LIVE_POINTS_UI_LIMIT))
@@ -329,6 +334,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             viewModelScope.launch(Dispatchers.IO) {
                 if (session.points.isNotEmpty()) {
                     val recoveredRide = rideSessionUseCases.saveRecoveredRide(session)
+                    settingsStore.savePendingRideId(null)
                     launch(Dispatchers.Main) {
                         _uiState.update { state ->
                             state.copy(
@@ -562,6 +568,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         val startTime = System.currentTimeMillis()
         activeRideStartedMs = startTime
         activeRideId = rideRepository.startNewRide(startTime)
+        settingsStore.savePendingRideId(activeRideId)
         accumulatedTimeMs = 0L
         lastResumeMs = startTime
         trackLengthMeters = 0f
@@ -582,6 +589,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
             activeRideStartedMs = session.startedAtMs
             activeRideId = rideRepository.startNewRide(session.startedAtMs)
+            settingsStore.savePendingRideId(activeRideId)
             
             trackLengthMeters = 0f
             ridePointCount = session.points.size
@@ -697,6 +705,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     rideRepository.deleteRide(currentRideId)
                 }
             }
+            settingsStore.savePendingRideId(null)
         }
         
         stopLocationUpdates()
@@ -1410,6 +1419,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     val startTime = System.currentTimeMillis()
                     activeRideStartedMs = startTime
                     activeRideId = rideRepository.startNewRide(startTime)
+                    settingsStore.savePendingRideId(activeRideId)
                     lastResumeMs = startTime
                 }
             }
