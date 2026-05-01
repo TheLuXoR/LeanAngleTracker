@@ -110,6 +110,7 @@ data class SettingsUiState(
     val historyWindowSeconds: Int = 20,
     val recorderIntervalMs: Int = 200,
     val gyroscopeAvailable: Boolean = false,
+    val fastSensorSpeedEnabled: Boolean = true,
     val gpsTrackingEnabled: Boolean = false,
     val locationPermissionGranted: Boolean = false,
     val autoResumeEnabled: Boolean = false,
@@ -237,24 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     init {
         Log.d(TAG, "Initializing MainViewModel")
-        val delay = SensorManager.SENSOR_DELAY_FASTEST
-        accelerometerSensor?.let { 
-            sensorManager.registerListener(this, it, delay)
-            Log.d(TAG, "Accelerometer registered")
-        }
-        gravitySensor?.let { 
-            sensorManager.registerListener(this, it, delay)
-            Log.d(TAG, "Gravity sensor registered")
-        }
-        linearAccelerationSensor?.let { 
-            sensorManager.registerListener(this, it, delay)
-            Log.d(TAG, "Linear acceleration sensor registered")
-        }
-        gyroscopeSensor?.let { 
-            sensorManager.registerListener(this, it, delay)
-            Log.d(TAG, "Gyroscope registered")
-        }
-
+        registerSensors(_uiState.value.settings.fastSensorSpeedEnabled)
         updateSettingsState {
             it.copy(
                 gyroscopeAvailable = gyroscopeSensor != null,
@@ -270,6 +254,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             Log.w(TAG, "No orientation sensors available!")
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
+    }
+
+    private fun registerSensors(fastMode: Boolean) {
+        sensorManager.unregisterListener(this)
+        val delay = if (fastMode) SensorManager.SENSOR_DELAY_FASTEST else SensorManager.SENSOR_DELAY_GAME
+        accelerometerSensor?.let {
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Accelerometer registered")
+        }
+        gravitySensor?.let {
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Gravity sensor registered")
+        }
+        linearAccelerationSensor?.let {
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Linear acceleration sensor registered")
+        }
+        gyroscopeSensor?.let {
+            sensorManager.registerListener(this, it, delay)
+            Log.d(TAG, "Gyroscope registered")
+        }
+    }
+
+    fun setFastSensorSpeedEnabled(enabled: Boolean) {
+        if (_uiState.value.settings.fastSensorSpeedEnabled == enabled) return
+        updateSettingsState { it.copy(fastSensorSpeedEnabled = enabled) }
+        registerSensors(enabled)
+        persistSettings()
     }
 
     private fun checkForUnfinishedRides() {
@@ -338,7 +350,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 recorderIntervalMs = persistedSettings.recorderIntervalMs,
                 gpsTrackingEnabled = persistedSettings.gpsTrackingEnabled && it.locationPermissionGranted,
                 autoResumeEnabled = persistedSettings.autoResumeEnabled,
-                isAutoResumePurchased = persistedSettings.isAutoResumePurchased
+                isAutoResumePurchased = persistedSettings.isAutoResumePurchased,
+                fastSensorSpeedEnabled = persistedSettings.fastSensorSpeedEnabled
             )
         }
         updateTrackingState {

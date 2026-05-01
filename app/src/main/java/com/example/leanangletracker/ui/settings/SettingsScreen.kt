@@ -37,6 +37,7 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onToggleInvertLean: (Boolean) -> Unit,
     onToggleGpsTracking: (Boolean) -> Unit,
+    onToggleFastSensorSpeed: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onSetRecorderIntervalMs: (Int) -> Unit,
     onResetExtrema: () -> Unit,
@@ -99,6 +100,15 @@ internal fun SettingsScreen(
                     subtitle = if (state.locationPermissionGranted) stringResource(R.string.settings_gps_tracking_subtitle_granted) else stringResource(R.string.settings_gps_tracking_subtitle_missing),
                     checked = state.gpsTrackingEnabled,
                     onCheckedChange = onToggleGpsTracking
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+
+                SettingsSwitchItem(
+                    title = stringResource(R.string.settings_sensor_speed_title),
+                    subtitle = if (state.fastSensorSpeedEnabled) stringResource(R.string.settings_sensor_speed_subtitle_fast) else stringResource(R.string.settings_sensor_speed_subtitle_normal),
+                    checked = state.fastSensorSpeedEnabled,
+                    onCheckedChange = onToggleFastSensorSpeed
                 )
 
                 Row(
