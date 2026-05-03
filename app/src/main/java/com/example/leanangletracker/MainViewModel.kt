@@ -643,6 +643,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         } else {
             accumulatedTimeMs += (now - lastResumeMs)
             pausedPointsBuffer.clear()
+            activeRideId?.let { id ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    rideRepository.flushRidePoints(id)
+                }
+            }
             autoResumeTimerStartMs = null
             updateTrackingState { it.copy(isPaused = true) }
         }
@@ -683,6 +688,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 ) }
 
                 viewModelScope.launch(Dispatchers.IO) {
+                    rideRepository.flushRidePoints(currentRideId)
                     delay(2000) 
                     // Load points once from DB to finalize the session (route description etc)
                     val allPoints = rideRepository.loadFullSession(currentRideId)?.points ?: emptyList()
@@ -1565,6 +1571,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         sensorManager.unregisterListener(this)
         stopLocationUpdates()
         stopRecorder()
+        activeRideId?.let { id ->
+            viewModelScope.launch(Dispatchers.IO) {
+                rideRepository.flushRidePoints(id)
+            }
+        }
         super.onCleared()
     }
 }

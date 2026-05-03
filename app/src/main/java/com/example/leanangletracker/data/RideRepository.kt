@@ -4,10 +4,20 @@ import android.content.Context
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.RideSummary
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class RideRepository(context: Context) {
+    companion object {
+        private const val POINT_BATCH_SIZE = 20
+        private const val POINT_BATCH_INTERVAL_MS = 2_000L
+    }
+
     private val db = RideDatabase.getDatabase(context)
     private val rideDao = db.rideDao()
+    private val pointBufferLock = Mutex()
+    private val pointBuffersByRideId = mutableMapOf<Long, MutableList<TrackPointEntity>>()
+    private val lastFlushAtMsByRideId = mutableMapOf<Long, Long>()
 
     /**
      * Creates a new ride record and returns its unique database ID.
@@ -23,7 +33,7 @@ class RideRepository(context: Context) {
     }
 
     /**
-     * Persists a single track point to the database immediately.
+     * Buffers track points and writes in batches to reduce write frequency.
      */
     suspend fun recordPoint(point: TrackPoint, rideId: Long) {
         val entity = TrackPointEntity(
@@ -34,13 +44,49 @@ class RideRepository(context: Context) {
             leanAngle = point.leanAngleDeg,
             timestamp = point.timestampMs
         )
-        rideDao.insertPoint(entity)
+
+        val pointsToFlush: List<TrackPointEntity>? = pointBufferLock.withLock {
+            val buffer = pointBuffersByRideId.getOrPut(rideId) { mutableListOf() }
+            buffer.add(entity)
+            val nowMs = System.currentTimeMillis()
+            val lastFlushAtMs = lastFlushAtMsByRideId[rideId] ?: nowMs
+            val shouldFlush = buffer.size >= POINT_BATCH_SIZE || (nowMs - lastFlushAtMs) >= POINT_BATCH_INTERVAL_MS
+
+            if (shouldFlush) {
+                lastFlushAtMsByRideId[rideId] = nowMs
+                val snapshot = buffer.toList()
+                buffer.clear()
+                snapshot
+            } else {
+                null
+            }
+        }
+
+        if (!pointsToFlush.isNullOrEmpty()) {
+            rideDao.insertPoints(pointsToFlush)
+        }
+    }
+
+    /**
+     * Flushes any buffered points for the given ride.
+     */
+    suspend fun flushRidePoints(rideId: Long) {
+        val pointsToFlush = pointBufferLock.withLock {
+            val snapshot = pointBuffersByRideId[rideId]?.toList().orEmpty()
+            pointBuffersByRideId[rideId]?.clear()
+            lastFlushAtMsByRideId[rideId] = System.currentTimeMillis()
+            snapshot
+        }
+        if (pointsToFlush.isNotEmpty()) {
+            rideDao.insertPoints(pointsToFlush)
+        }
     }
 
     /**
      * Updates the ride metadata when tracking is finished.
      */
     suspend fun finishRide(rideId: Long, endTimeMs: Long, routeDescription: String? = null) {
+        flushRidePoints(rideId)
         val ride = rideDao.getRideById(rideId)
         if (ride != null) {
             rideDao.updateRide(ride.copy(
