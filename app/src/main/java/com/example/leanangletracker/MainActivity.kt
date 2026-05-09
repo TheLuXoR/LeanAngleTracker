@@ -44,6 +44,7 @@ import com.example.leanangletracker.ui.tracking.RideDetailScreen
 import com.example.leanangletracker.ui.calibration.CalibrationScreen
 import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
+import org.osmdroid.config.Configuration
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -51,6 +52,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // Set osmdroid user agent to avoid being blocked by tile servers
+        Configuration.getInstance().userAgentValue = packageName
+
         enableEdgeToEdge()
         setContent {
             LeanAngleTrackerTheme {

@@ -9,11 +9,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.TrackPoint
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
@@ -31,14 +33,8 @@ internal fun OSMTrackMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val points = remember(rideSession.points) {
-        rideSession.points.map { GeoPoint(it.latitude, it.longitude) }
-    }
-    val leans = remember(rideSession.points) {
-        rideSession.points.map { it.leanAngleDeg }
-    }
+    val points = rideSession.points
 
-    // Re-center only once when a new session is shown.
     var isFirstPositioning by remember(rideSession.startedAtMs) {
         mutableStateOf(true)
     }
@@ -51,7 +47,6 @@ internal fun OSMTrackMap(
 
             addMapListener(object : MapListener {
                 override fun onScroll(event: ScrollEvent?): Boolean = false
-
                 override fun onZoom(event: ZoomEvent?): Boolean {
                     event?.let { onZoomChanged(it.zoomLevel) }
                     return false
@@ -60,9 +55,8 @@ internal fun OSMTrackMap(
         }
     }
 
-    // Custom overlay that colors segments by lean angle
-    val routeOverlay = remember(rideSession.startedAtMs) {
-        LeanAngleOverlay(points, leans)
+    val routeOverlay = remember(rideSession.startedAtMs, points) {
+        LeanAngleOverlay(points)
     }
 
     val marker = remember(mapView) {
@@ -75,144 +69,215 @@ internal fun OSMTrackMap(
     val tapOverlay = remember {
         MapEventsOverlay(object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                if (points.isEmpty()) return false
                 val closest = points.withIndex().minByOrNull { (_, point) ->
                     val dx = point.latitude - p.latitude
                     val dy = point.longitude - p.longitude
                     dx * dx + dy * dy
                 }?.index ?: selectedIndex
-
                 onMapPointSelected(closest)
                 return true
             }
-
             override fun longPressHelper(p: GeoPoint?): Boolean = false
         })
     }
 
-    // Rebuild overlays only when the session changes.
-    DisposableEffect(mapView, rideSession.startedAtMs) {
+    DisposableEffect(mapView, rideSession.startedAtMs, routeOverlay) {
         mapView.overlays.clear()
         mapView.overlays.add(routeOverlay)
         mapView.overlays.add(marker)
         mapView.overlays.add(tapOverlay)
-
         mapView.onResume()
-        onDispose {
-            mapView.onPause()
-        }
+        onDispose { mapView.onPause() }
     }
 
-    // Handle external centering requests (e.g. from clicking stats)
     LaunchedEffect(forceCenterKey) {
         if (forceCenterKey != null) {
-            val selectedGeoPoint = points.getOrNull(selectedIndex) ?: points.lastOrNull()
-            if (selectedGeoPoint != null) {
-                mapView.controller.animateTo(selectedGeoPoint)
+            points.getOrNull(selectedIndex)?.let {
+                mapView.controller.animateTo(GeoPoint(it.latitude, it.longitude))
             }
         }
     }
+
+    val lastSelectedIndex = remember { mutableIntStateOf(-1) }
 
     AndroidView(
         factory = { mapView },
         modifier = modifier,
         update = { map ->
-            if (points.isEmpty()) {
-                return@AndroidView
+            if (points.isEmpty()) return@AndroidView
+            val p = points.getOrNull(selectedIndex) ?: points.last()
+            val geoPoint = GeoPoint(p.latitude, p.longitude)
+            
+            if (marker.position?.latitude != geoPoint.latitude || marker.position?.longitude != geoPoint.longitude) {
+                marker.position = geoPoint
+                if (lastSelectedIndex.intValue != selectedIndex) {
+                    map.invalidate()
+                    lastSelectedIndex.intValue = selectedIndex
+                }
             }
 
-            val selectedGeoPoint = points.getOrNull(selectedIndex) ?: points.last()
-            marker.position = selectedGeoPoint
-
             if (isFirstPositioning) {
-                map.controller.setCenter(selectedGeoPoint)
+                map.controller.setCenter(geoPoint)
                 isFirstPositioning = false
                 onZoomChanged(map.zoomLevelDouble)
             } else {
-                keepPointAwayFromBorder(
-                    map = map,
-                    point = selectedGeoPoint
-                )
+                keepPointAwayFromBorder(map, geoPoint)
             }
-
-            map.invalidate()
         }
     )
 }
 
-/**
- * Custom Overlay to draw path segments with colors based on lean angle.
- * Efficiently draws line segments using standard Canvas operations.
- */
-private class LeanAngleOverlay(
-    private val points: List<GeoPoint>,
-    private val leanAngles: List<Float>
-) : Overlay() {
+private class LeanAngleOverlay(private val points: List<TrackPoint>) : Overlay() {
     private val paint = Paint().apply {
-        strokeWidth = 14f
+        strokeWidth = 10f
         strokeCap = Paint.Cap.ROUND
+        style = Paint.Style.STROKE
         isAntiAlias = true
     }
+
+    private val numBins = 16
+    private val binColors = IntArray(numBins) { i ->
+        getInterpolatedColor((i.toFloat() / (numBins - 1)) * 50f)
+    }
     
-    private val p1 = Point()
-    private val p2 = Point()
+    private val pointBins = IntArray(points.size) { i ->
+        val absLean = abs(points[i].leanAngleDeg)
+        (absLean / (50f / (numBins - 1))).toInt().coerceIn(0, numBins - 1)
+    }
+
+    private data class TrackChunk(
+        val startIdx: Int,
+        val endIdx: Int,
+        val minLat: Double, val maxLat: Double,
+        val minLon: Double, val maxLon: Double
+    ) {
+        fun intersects(b: BoundingBox): Boolean {
+            return !(minLat > b.latNorth || maxLat < b.latSouth || minLon > b.lonEast || maxLon < b.lonWest)
+        }
+    }
+
+    private val chunks = mutableListOf<TrackChunk>()
+    private val tempPoint = Point()
+    private val tempGeoPoint = GeoPoint(0.0, 0.0)
+    
+    private val lineBuffers = Array(numBins) { FloatArray(4000) } 
+    private val lineBufferIndices = IntArray(numBins)
+
+    init {
+        val chunkSize = 500
+        for (i in points.indices step chunkSize) {
+            val end = (i + chunkSize + 1).coerceAtMost(points.size)
+            if (end - i < 2) continue
+            var minLat = Double.MAX_VALUE; var maxLat = -Double.MAX_VALUE
+            var minLon = Double.MAX_VALUE; var maxLon = -Double.MAX_VALUE
+            for (j in i until end) {
+                val p = points[j]
+                if (p.latitude < minLat) minLat = p.latitude
+                if (p.latitude > maxLat) maxLat = p.latitude
+                if (p.longitude < minLon) minLon = p.longitude
+                if (p.longitude > maxLon) maxLon = p.longitude
+            }
+            chunks.add(TrackChunk(i, end, minLat, maxLat, minLon, maxLon))
+        }
+    }
 
     override fun draw(canvas: Canvas, map: MapView, shadow: Boolean) {
-        if (shadow) return
-        if (points.size < 2) return
+        if (shadow || points.isEmpty()) return
 
         val projection = map.projection
-        val width = canvas.width
-        val height = canvas.height
+        val viewBounds = map.boundingBox
+        val zoom = map.zoomLevelDouble
 
-        for (i in 0 until points.size - 1) {
-            projection.toPixels(points[i], p1)
-            projection.toPixels(points[i + 1], p2)
+        // Logarithmic adaptive skip
+        val skip = when {
+            zoom >= 16.5 -> 1
+            zoom >= 15.0 -> 2
+            zoom >= 13.5 -> 4
+            zoom >= 12.0 -> 8
+            zoom >= 10.5 -> 16
+            zoom >= 9.0  -> 32
+            zoom >= 7.5  -> 64
+            zoom >= 6.0  -> 128
+            zoom >= 4.5  -> 256
+            else -> 512
+        }
+
+        lineBufferIndices.fill(0)
+
+        for (chunk in chunks) {
+            if (!chunk.intersects(viewBounds)) continue
+
+            var lastX = Float.NaN; var lastY = Float.NaN
             
-            // Basic viewport clipping for performance
-            if ((p1.x < 0 && p2.x < 0) || (p1.x > width && p2.x > width) ||
-                (p1.y < 0 && p2.y < 0) || (p1.y > height && p2.y > height)) continue
+            var i = chunk.startIdx
+            while (i < chunk.endIdx) {
+                val p = points[i]
+                
+                tempGeoPoint.setCoords(p.latitude, p.longitude)
+                projection.toPixels(tempGeoPoint, tempPoint)
+                val currX = tempPoint.x.toFloat()
+                val currY = tempPoint.y.toFloat()
 
-            paint.color = getInterpolatedColor(leanAngles[i])
-            canvas.drawLine(p1.x.toFloat(), p1.y.toFloat(), p2.x.toFloat(), p2.y.toFloat(), paint)
+                if (!lastX.isNaN()) {
+                    val bin = pointBins[i]
+                    var idx = lineBufferIndices[bin]
+                    
+                    if (idx + 4 > lineBuffers[bin].size) {
+                        paint.color = binColors[bin]
+                        canvas.drawLines(lineBuffers[bin], 0, idx, paint)
+                        idx = 0
+                    }
+                    
+                    lineBuffers[bin][idx++] = lastX
+                    lineBuffers[bin][idx++] = lastY
+                    lineBuffers[bin][idx++] = currX
+                    lineBuffers[bin][idx++] = currY
+                    lineBufferIndices[bin] = idx
+                }
+                
+                lastX = currX; lastY = currY
+                
+                if (i == chunk.endIdx - 1) break
+                i += skip
+                if (i >= chunk.endIdx) i = chunk.endIdx - 1
+            }
         }
-    }
 
-    private fun getInterpolatedColor(lean: Float): Int {
-        val absLean = abs(lean).coerceIn(0f, 50f)
-        // Matching colors from LeanHistoryGraph: Green (0), Orange (Mid), Red (Extreme)
-        return if (absLean < 25f) {
-            val ratio = absLean / 25f
-            interpolateColor(0xFF00E676.toInt(), 0xFFFF8C00.toInt(), ratio)
-        } else {
-            val ratio = (absLean - 25f) / 25f
-            interpolateColor(0xFFFF8C00.toInt(), 0xFFFF5252.toInt(), ratio)
+        for (b in 0 until numBins) {
+            val idx = lineBufferIndices[b]
+            if (idx > 0) {
+                paint.color = binColors[b]
+                canvas.drawLines(lineBuffers[b], 0, idx, paint)
+            }
         }
-    }
-
-    private fun interpolateColor(color1: Int, color2: Int, ratio: Float): Int {
-        val r = (Color.red(color1) * (1 - ratio) + Color.red(color2) * ratio).toInt()
-        val g = (Color.green(color1) * (1 - ratio) + Color.green(color2) * ratio).toInt()
-        val b = (Color.blue(color1) * (1 - ratio) + Color.blue(color2) * ratio).toInt()
-        return Color.rgb(r, g, b)
     }
 }
 
-private fun keepPointAwayFromBorder(
-    map: MapView,
-    point: GeoPoint,
-    paddingFraction: Double = 0.15
-) {
-    val width = map.width
-    val height = map.height
+private fun getInterpolatedColor(lean: Float): Int {
+    val absLean = abs(lean).coerceIn(0f, 50f)
+    return if (absLean < 25f) {
+        val ratio = absLean / 25f
+        interpolateColor(0xFF00E676.toInt(), 0xFFFF8C00.toInt(), ratio)
+    } else {
+        val ratio = (absLean - 25f) / 25f
+        interpolateColor(0xFFFF8C00.toInt(), 0xFFFF5252.toInt(), ratio)
+    }
+}
 
+private fun interpolateColor(color1: Int, color2: Int, ratio: Float): Int {
+    val r = (Color.red(color1) * (1 - ratio) + Color.red(color2) * ratio).toInt()
+    val g = (Color.green(color1) * (1 - ratio) + Color.green(color2) * ratio).toInt()
+    val b = (Color.blue(color1) * (1 - ratio) + Color.blue(color2) * ratio).toInt()
+    return Color.rgb(r, g, b)
+}
+
+private fun keepPointAwayFromBorder(map: MapView, point: GeoPoint, paddingFraction: Double = 0.15) {
+    val width = map.width; val height = map.height
     if (width <= 0 || height <= 0) return
-
     val projection = map.projection ?: return
     val screenPoint = projection.toPixels(point, null) ?: return
-
-    val marginX = width * paddingFraction
-    val marginY = height * paddingFraction
-
+    val marginX = width * paddingFraction; val marginY = height * paddingFraction
     if (screenPoint.x < marginX || screenPoint.x > width - marginX ||
         screenPoint.y < marginY || screenPoint.y > height - marginY) {
         map.controller.animateTo(point)

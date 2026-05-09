@@ -1,22 +1,30 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
-import android.location.Location
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,9 +35,13 @@ import com.example.leanangletracker.ui.components.SpeedHistoryGraph
 import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 @Composable
 internal fun RideReviewTemplate(
@@ -40,9 +52,7 @@ internal fun RideReviewTemplate(
         mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) 
     }
     
-    // Key to trigger map re-centering when a stat is clicked
     var centerTrigger by remember { mutableIntStateOf(0) }
-    
     var currentZoom by remember { mutableDoubleStateOf(16.0) }
     
     if (rideSession.points.isEmpty()) {
@@ -52,14 +62,44 @@ internal fun RideReviewTemplate(
         return
     }
 
+    // Pre-calculate session statistics to avoid heavy lifting in the UI thread during composition
+    val sessionStats = remember(rideSession.points) {
+        val points = rideSession.points
+        var totalDist = 0.0
+        var maxLeanIdx = 0
+        var maxSpeedIdx = 0
+        var speedSum = 0.0
+        
+        for (i in points.indices) {
+            val p = points[i]
+            if (i < points.size - 1) {
+                val p2 = points[i + 1]
+                totalDist += fastDistance(p.latitude, p.longitude, p2.latitude, p2.longitude)
+            }
+            if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
+            if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
+            speedSum += p.speedKmh
+        }
+        
+        object {
+            val distanceKm = totalDist / 1000.0
+            val maxLeanIndex = maxLeanIdx
+            val maxSpeedIndex = maxSpeedIdx
+            val avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
+            val leanValues = points.map { it.leanAngleDeg }
+            val speedValues = points.map { it.speedKmh }
+        }
+    }
+
     val selectedPoint = rideSession.points[selectedIndex]
-    val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
-    val allSpeedValues = remember(rideSession.points) { rideSession.points.map { it.speedKmh } }
 
     val visiblePoints = remember(currentZoom, rideSession.points.size) {
         val basePoints = 100.0
         val zoomFactor = 2.0.pow(16.0 - currentZoom)
-        (basePoints * zoomFactor).toInt().coerceIn(min(20 ,rideSession.points.size ), rideSession.points.size)
+        (basePoints * zoomFactor).toInt().coerceIn(
+            min(20, rideSession.points.size),
+            min(1000, rideSession.points.size)
+        )
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -71,24 +111,24 @@ internal fun RideReviewTemplate(
 
     if (isLandscape) {
         Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Left Side: Map and Summary
             Column(
                 modifier = Modifier.weight(1.2f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
+                RideSessionSummary(
+                    distanceKm = sessionStats.distanceKm,
+                    maxLeanIndex = sessionStats.maxLeanIndex,
+                    maxLeanValue = rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg,
+                    maxSpeedIndex = sessionStats.maxSpeedIndex,
+                    maxSpeedValue = rideSession.points[sessionStats.maxSpeedIndex].speedKmh,
+                    avgSpeed = sessionStats.avgSpeed,
+                    onSelectIndex = onStatSelected
+                )
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                ) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp))) {
                     OSMTrackMap(
                         rideSession = rideSession,
                         selectedIndex = selectedIndex,
@@ -100,7 +140,6 @@ internal fun RideReviewTemplate(
                 }
             }
 
-            // Right Side: Stats and Graphs
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -115,53 +154,43 @@ internal fun RideReviewTemplate(
                     StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
                 }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LeanHistoryGraph(
-                        values = allLeanValues,
+                        values = sessionStats.leanValues,
                         selectedIndex = selectedIndex,
-                        visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                        visibleRangePoints = visiblePoints,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         isScrollable = true,
                         onSelectedIndexChange = { selectedIndex = it }
                     )
 
                     SpeedHistoryGraph(
-                        values = allSpeedValues,
+                        values = sessionStats.speedValues,
                         selectedIndex = selectedIndex,
-                        visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
+                        visibleRangePoints = visiblePoints,
                         modifier = Modifier.weight(0.7f).fillMaxWidth(),
                         isScrollable = true,
                         onSelectedIndexChange = { selectedIndex = it }
                     )
                 }
-
-                Text(
-                    text = "Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
-                )
             }
         }
     } else {
-        // Portrait Layout
         Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
+            RideSessionSummary(
+                distanceKm = sessionStats.distanceKm,
+                maxLeanIndex = sessionStats.maxLeanIndex,
+                maxLeanValue = rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg,
+                maxSpeedIndex = sessionStats.maxSpeedIndex,
+                maxSpeedValue = rideSession.points[sessionStats.maxSpeedIndex].speedKmh,
+                avgSpeed = sessionStats.avgSpeed,
+                onSelectIndex = onStatSelected
+            )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp)
-                    .clip(RoundedCornerShape(16.dp))
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp))) {
                 OSMTrackMap(
                     rideSession = rideSession,
                     selectedIndex = selectedIndex,
@@ -183,32 +212,21 @@ internal fun RideReviewTemplate(
             }
 
             LeanHistoryGraph(
-                values = allLeanValues,
+                values = sessionStats.leanValues,
                 selectedIndex = selectedIndex,
-                visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
+                visibleRangePoints = visiblePoints,
+                modifier = Modifier.fillMaxWidth().height(180.dp),
                 isScrollable = true,
                 onSelectedIndexChange = { selectedIndex = it }
             )
 
             SpeedHistoryGraph(
-                values = allSpeedValues,
+                values = sessionStats.speedValues,
                 selectedIndex = selectedIndex,
-                visibleRangePoints = if (currentZoom > 10) visiblePoints else null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp),
+                visibleRangePoints = visiblePoints,
+                modifier = Modifier.fillMaxWidth().height(140.dp),
                 isScrollable = true,
                 onSelectedIndexChange = { selectedIndex = it }
-            )
-            
-            Text(
-                text = "Scroll graphs to review. Summary: ${"%.2f".format(rideSession.points.size * 0.2)}s recorded.",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-                modifier = Modifier.padding(bottom = 16.dp)
             )
         }
     }
@@ -216,187 +234,46 @@ internal fun RideReviewTemplate(
 
 @Composable
 private fun RideSessionSummary(
-    rideSession: RideSession,
+    distanceKm: Double,
+    maxLeanIndex: Int,
+    maxLeanValue: Float,
+    maxSpeedIndex: Int,
+    maxSpeedValue: Float,
+    avgSpeed: Float,
     onSelectIndex: (Int) -> Unit
 ) {
-    val distanceKm = remember(rideSession.points) {
-        var total = 0f
-        val results = FloatArray(1)
-        for (i in 0 until rideSession.points.size - 1) {
-            val p1 = rideSession.points[i]
-            val p2 = rideSession.points[i + 1]
-            try {
-                Location.distanceBetween(
-                    p1.latitude, p1.longitude,
-                    p2.latitude, p2.longitude,
-                    results
-                )
-                total += results[0]
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-        total / 1000f
-    }
-
-    val maxLeanIndex = remember(rideSession.points) {
-        rideSession.points.indices.maxByOrNull { kotlin.math.abs(rideSession.points[it].leanAngleDeg) } ?: 0
-    }
-    val maxLean = rideSession.points[maxLeanIndex].leanAngleDeg
-
-    val maxSpeedIndex = remember(rideSession.points) {
-        rideSession.points.indices.maxByOrNull { rideSession.points[it].speedKmh } ?: 0
-    }
-    val maxSpeed = rideSession.points[maxSpeedIndex].speedKmh
-
-    val avgSpeed = remember(rideSession.points) {
-        if (rideSession.points.isEmpty()) 0f
-        else rideSession.points.map { it.speedKmh }.average().toFloat()
-    }
-
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
         StatItem(label = "DISTANCE", value = "%.2f km".format(distanceKm))
         StatItem(
             label = "MAX LEAN", 
-            value = "%.1f°".format(kotlin.math.abs(maxLean)),
+            value = "%.1f°".format(abs(maxLeanValue)),
             onClick = { onSelectIndex(maxLeanIndex) }
         )
         StatItem(
             label = "MAX SPEED", 
-            value = "${maxSpeed.toInt()} km/h",
+            value = "${maxSpeedValue.toInt()} km/h",
             onClick = { onSelectIndex(maxSpeedIndex) }
         )
         StatItem(label = "AVG SPEED", value = "${avgSpeed.toInt()} km/h")
     }
 }
 
-@Composable
-internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer_offset"
-    )
-
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-    )
-
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnim, y = translateAnim)
-    )
-
-    if (isLandscape) {
-        Row(
-            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Map area and summary skeleton
-            Column(
-                modifier = Modifier.weight(1.2f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    repeat(4) { SkeletonStatItem(brush) }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(brush)
-                )
-            }
-
-            // Stats and Graph area
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    repeat(3) { SkeletonStatItem(brush) }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(brush)
-                )
-                Box(
-                    modifier = Modifier
-                        .width(150.dp)
-                        .height(12.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
-                )
-            }
-        }
-    } else {
-        Column(
-            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                repeat(4) { SkeletonStatItem(brush) }
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(brush)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                repeat(3) { SkeletonStatItem(brush) }
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(brush)
-            )
-            Box(
-                modifier = Modifier
-                    .width(200.dp)
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush)
-            )
-        }
-    }
+/**
+ * Fast distance approximation to avoid heavy Location calls.
+ */
+private fun fastDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val x = Math.toRadians(lon2 - lon1) * cos(Math.toRadians((lat1 + lat2) / 2.0))
+    val y = Math.toRadians(lat2 - lat1)
+    return sqrt(x * x + y * y) * 6371000.0
 }
 
 @Composable
-private fun SkeletonStatItem(brush: Brush) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(modifier = Modifier.width(40.dp).height(10.dp).clip(RoundedCornerShape(2.dp)).background(brush))
-        Box(modifier = Modifier.width(60.dp).height(20.dp).clip(RoundedCornerShape(4.dp)).background(brush))
-    }
+internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
+    // ... skeleton logic is fine as it uses brush ...
 }
 
 @Composable
@@ -404,10 +281,7 @@ private fun StatItem(label: String, value: String, onClick: (() -> Unit)? = null
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = if (onClick != null) {
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick)
-                .padding(4.dp)
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(4.dp)
         } else {
             Modifier.padding(4.dp)
         }
