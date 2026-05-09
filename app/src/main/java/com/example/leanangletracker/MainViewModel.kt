@@ -11,64 +11,39 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
-import android.os.SystemClock
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.leanangletracker.MainViewModelConfig.AUTO_REWIND_DURATION_MS
+import com.example.leanangletracker.MainViewModelConfig.AUTO_REWIND_SPEED_THRESHOLD_KMH
+import com.example.leanangletracker.MainViewModelConfig.EXTEND_PROXIMITY_METERS
 import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.domain.RideSessionUseCases
+import com.example.leanangletracker.ui.animation.BikeLean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import kotlin.math.acos
-import kotlin.math.abs
-import kotlin.math.atan2
 
-class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener, LocationListener {
+class MainViewModel(application: Application) : AndroidViewModel(application), SensorEventListener,
+    LocationListener {
 
     companion object {
         const val TAG = MainViewModelConfig.TAG
-        const val RECORDER_INTERVAL_MIN_MS = MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
-        const val RECORDER_INTERVAL_MAX_MS = MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
-        const val RECORDER_INTERVAL_STEP_MS = MainViewModelConfig.RECORDER_INTERVAL_STEP_MS
-        const val GPS_FRESHNESS_THRESHOLD_MS = MainViewModelConfig.GPS_FRESHNESS_THRESHOLD_MS
-        const val CALIBRATION_TILT_MAX_RANGE = MainViewModelConfig.CALIBRATION_TILT_MAX_RANGE
-        const val EXTEND_PROXIMITY_METERS = MainViewModelConfig.EXTEND_PROXIMITY_METERS
-        const val MAX_LEAN_DEG = MainViewModelConfig.MAX_LEAN_DEG
-        const val AUTO_PAUSE_LEAN_THRESHOLD = MainViewModelConfig.AUTO_PAUSE_LEAN_THRESHOLD
-        const val MAX_ROLL_RATE_RAD_PER_SEC = MainViewModelConfig.MAX_ROLL_RATE_RAD_PER_SEC
-        const val GYRO_REVERSAL_DAMPING = MainViewModelConfig.GYRO_REVERSAL_DAMPING
-        const val GYRO_BIAS_COLLECTION_DURATION_NS = MainViewModelConfig.GYRO_BIAS_COLLECTION_DURATION_NS
-        const val GYRO_BIAS_LINEAR_ACCEL_MAX = MainViewModelConfig.GYRO_BIAS_LINEAR_ACCEL_MAX
-        const val GYRO_BIAS_ANGULAR_SPEED_MAX = MainViewModelConfig.GYRO_BIAS_ANGULAR_SPEED_MAX
-        const val OBSERVABILITY_LINEAR_ACCEL_MAX = MainViewModelConfig.OBSERVABILITY_LINEAR_ACCEL_MAX
-        const val OBSERVABILITY_INNOVATION_MAX_DEG = MainViewModelConfig.OBSERVABILITY_INNOVATION_MAX_DEG
-        const val OBSERVABILITY_ROLL_RATE_MAX_RAD_PER_SEC = MainViewModelConfig.OBSERVABILITY_ROLL_RATE_MAX_RAD_PER_SEC
-        const val LATERAL_ACCEL_GATING_FULL_MS2 = MainViewModelConfig.LATERAL_ACCEL_GATING_FULL_MS2
-        const val MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC = MainViewModelConfig.MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC
-        const val RECENT_LEAN_BUFFER_SIZE = MainViewModelConfig.RECENT_LEAN_BUFFER_SIZE
-        const val AUTO_REWIND_SPEED_THRESHOLD_KMH = MainViewModelConfig.AUTO_REWIND_SPEED_THRESHOLD_KMH
-        const val AUTO_REWIND_DURATION_MS = MainViewModelConfig.AUTO_REWIND_DURATION_MS
-        const val LIVE_POINTS_UI_LIMIT = MainViewModelConfig.LIVE_POINTS_UI_LIMIT
-
-        val SENSOR_TIMING_POLICY = MainViewModelConfig.SENSOR_TIMING_POLICY
     }
 
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
     private val accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
-    private val linearAccelerationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
-    private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val linearAccelerationSensor =
+        sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+    val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     internal val locationManager = application.getSystemService(LocationManager::class.java)
     internal val rideRepository = RideRepository(application)
     internal val rideSessionUseCases = RideSessionUseCases(application, rideRepository)
@@ -129,16 +104,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     init {
         val delay = SensorManager.SENSOR_DELAY_FASTEST
-        accelerometerSensor?.let { 
+        accelerometerSensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
-        gravitySensor?.let { 
+        gravitySensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
-        linearAccelerationSensor?.let { 
+        linearAccelerationSensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
-        gyroscopeSensor?.let { 
+        gyroscopeSensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
 
@@ -159,24 +134,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -194,6 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     updateLeanAngle(event.timestamp)
                 }
             }
+
             Sensor.TYPE_GRAVITY -> {
                 val raw = Vec3(event.values[0], event.values[1], event.values[2])
                 filteredGravity = filteredGravity * 0.25f + raw * 0.75f
@@ -204,10 +162,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     updateLeanAngle(event.timestamp)
                 }
             }
+
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 val raw = Vec3(event.values[0], event.values[1], event.values[2])
                 filteredLinearAcceleration = filteredLinearAcceleration * 0.6f + raw * 0.4f
             }
+
             Sensor.TYPE_GYROSCOPE -> {
                 collectGyroBiasSample(event)
                 updateGyroLean(event)
@@ -216,18 +176,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     }
 
 
-
-
-
-
-
-
-
-
     internal fun hasLocationPermission(): Boolean {
         val context = getApplication<Application>()
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
@@ -278,7 +236,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     if (lastRide != null) {
                         val lastPoint = lastRide.points.lastOrNull()
                         if (lastPoint != null) {
-                            val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, location.latitude, location.longitude)
+                            val dist = distanceMeters(
+                                lastPoint.latitude,
+                                lastPoint.longitude,
+                                location.latitude,
+                                location.longitude
+                            )
                             if (dist < EXTEND_PROXIMITY_METERS) {
                                 launch(Dispatchers.Main) {
                                     _uiState.update { it.copy(offerExtendSession = lastRide) }
@@ -323,7 +286,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             }
 
             if (!state.tracking.trackingStarted) {
-                updateTrackingState { it.copy(speedKmh = speedKmh, gpsActive = locationUpdatesRunning, currentLatitude = location.latitude, currentLongitude = location.longitude) }
+                updateTrackingState {
+                    it.copy(
+                        speedKmh = speedKmh,
+                        gpsActive = locationUpdatesRunning,
+                        currentLatitude = location.latitude,
+                        currentLongitude = location.longitude
+                    )
+                }
                 return
             }
         }
@@ -341,10 +311,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-
-
-
-
 
 
     override fun onCleared() {

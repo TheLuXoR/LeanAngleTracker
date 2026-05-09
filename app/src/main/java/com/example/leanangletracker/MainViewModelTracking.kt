@@ -3,6 +3,11 @@ package com.example.leanangletracker
 import android.location.Location
 import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
+import com.example.leanangletracker.MainViewModelConfig.EXTEND_PROXIMITY_METERS
+import com.example.leanangletracker.MainViewModelConfig.GPS_FRESHNESS_THRESHOLD_MS
+import com.example.leanangletracker.MainViewModelConfig.LIVE_POINTS_UI_LIMIT
+import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
+import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

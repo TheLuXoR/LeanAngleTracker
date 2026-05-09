@@ -1,10 +1,15 @@
 package com.example.leanangletracker
 
 import androidx.lifecycle.viewModelScope
+import com.example.leanangletracker.MainViewModelConfig.LIVE_POINTS_UI_LIMIT
+import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
+import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
+import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_STEP_MS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import com.example.leanangletracker.data.Vec3
+import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.abs
 
 internal fun MainViewModel.checkForUnfinishedRides() {

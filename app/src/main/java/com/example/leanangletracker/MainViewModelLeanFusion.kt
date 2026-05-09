@@ -1,7 +1,20 @@
 package com.example.leanangletracker
 
 import android.hardware.SensorEvent
+import com.example.leanangletracker.MainViewModelConfig.AUTO_PAUSE_LEAN_THRESHOLD
+import com.example.leanangletracker.MainViewModelConfig.CALIBRATION_TILT_MAX_RANGE
+import com.example.leanangletracker.MainViewModelConfig.GYRO_BIAS_ANGULAR_SPEED_MAX
+import com.example.leanangletracker.MainViewModelConfig.GYRO_BIAS_COLLECTION_DURATION_NS
+import com.example.leanangletracker.MainViewModelConfig.GYRO_BIAS_LINEAR_ACCEL_MAX
+import com.example.leanangletracker.MainViewModelConfig.LATERAL_ACCEL_GATING_FULL_MS2
+import com.example.leanangletracker.MainViewModelConfig.MAX_LEAN_DEG
+import com.example.leanangletracker.MainViewModelConfig.MAX_OUTPUT_SLEW_RATE_DEG_PER_SEC
+import com.example.leanangletracker.MainViewModelConfig.OBSERVABILITY_INNOVATION_MAX_DEG
+import com.example.leanangletracker.MainViewModelConfig.OBSERVABILITY_LINEAR_ACCEL_MAX
+import com.example.leanangletracker.MainViewModelConfig.OBSERVABILITY_ROLL_RATE_MAX_RAD_PER_SEC
+import com.example.leanangletracker.MainViewModelConfig.SENSOR_TIMING_POLICY
 import com.example.leanangletracker.data.Vec3
+import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.acos
 import kotlin.math.abs
 import kotlin.math.atan2
