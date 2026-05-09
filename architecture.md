@@ -22,6 +22,7 @@ The goal is to move towards a decoupled architecture to improve testability and 
 
 ### 3. Presentation Layer
 - **ViewModels**: Should only handle UI state and delegate logic to Use Cases.
+- **UI State Models**: Keep shared UI/ride state models in dedicated files (e.g., `UiStateModels.kt`) instead of inside giant viewmodels.
 - **UI Components**: Purely visual, observing `StateFlow`.
 
 ## Package Structure
