@@ -54,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.MainViewModel
+import com.example.leanangletracker.MainViewModelConfig.AUTO_PAUSE_LEAN_THRESHOLD
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
@@ -129,7 +130,7 @@ internal fun LeanAngleScreen(
                     } else if (trackingState.gpsActive) {
                         var text = ""
                         if (trackingState.isPaused){
-                            if(trackingState.autoPauseEnabled && abs(trackingState.leanAngleDeg) >= MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD){
+                            if(trackingState.autoPauseEnabled && abs(trackingState.leanAngleDeg) >= AUTO_PAUSE_LEAN_THRESHOLD){
                                 text = "Rotation too far — paused."
                             } else {
                                 text = "PAUSED"
@@ -154,7 +155,7 @@ internal fun LeanAngleScreen(
                     PauseButton(onClick = onTogglePause,
                         isPaused = trackingState.isPaused,
                         isVisible = trackingState.gpsTrackingEnabled && trackingState.trackingStarted && trackingState.currentLatitude != null,
-                        enabled = !trackingState.isUpsideDown && (!trackingState.autoPauseEnabled || abs(trackingState.leanAngleDeg) < MainViewModel.AUTO_PAUSE_LEAN_THRESHOLD)
+                        enabled = !trackingState.isUpsideDown && (!trackingState.autoPauseEnabled || abs(trackingState.leanAngleDeg) < AUTO_PAUSE_LEAN_THRESHOLD)
                     )
 
                     RecordButton(
