@@ -69,13 +69,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
     private val linearAccelerationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-    private val locationManager = application.getSystemService(LocationManager::class.java)
-    private val rideRepository = RideRepository(application)
-    private val rideSessionUseCases = RideSessionUseCases(application, rideRepository)
+    internal val locationManager = application.getSystemService(LocationManager::class.java)
+    internal val rideRepository = RideRepository(application)
+    internal val rideSessionUseCases = RideSessionUseCases(application, rideRepository)
 
     internal val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-    private val settingsStore = SettingsStore(application.applicationContext)
+    internal val settingsStore = SettingsStore(application.applicationContext)
 
     internal var filteredGravity = Vec3(0f, 0f, 9.81f)
     internal var filteredLinearAcceleration = Vec3(0f, 0f, 0f)
@@ -98,31 +98,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal var latestRotationLeanDeg: Float? = null
     internal var latestRotationTimestampNs: Long? = null
     internal var lastLeanComputationTimestampNs: Long? = null
-    private var speedKmh = 0f
-    private var activeRideId: Long? = null
-    private var activeRideStartedMs: Long? = null
-    private var accumulatedTimeMs: Long = 0L
-    private var lastResumeMs: Long = 0L
-    private var locationUpdatesRunning = false
+    internal var speedKmh = 0f
+    internal var activeRideId: Long? = null
+    internal var activeRideStartedMs: Long? = null
+    internal var accumulatedTimeMs: Long = 0L
+    internal var lastResumeMs: Long = 0L
+    internal var locationUpdatesRunning = false
     internal var latestLeanDeg = 0f
     internal var peakLeanSinceLastTick = 0f
     internal var latestLeanTimestampNs: Long? = null
-    private var latestGpsLocation: Location? = null
-    private var latestGpsTimestampNs: Long? = null
-    private var recorderJob: Job? = null
-    private var trackLengthMeters = 0f
-    private var isCheckingForExtension = false
+    internal var latestGpsLocation: Location? = null
+    internal var latestGpsTimestampNs: Long? = null
+    internal var recorderJob: Job? = null
+    internal var trackLengthMeters = 0f
+    internal var isCheckingForExtension = false
     internal var latestLinearAccelerationMagnitude = 0f
     internal var fusionConfidence = 1f
-    private var autoResumeTimerStartMs: Long? = null
-    private val pausedPointsBuffer = ArrayDeque<TrackPoint>()
+    internal var autoResumeTimerStartMs: Long? = null
+    internal val pausedPointsBuffer = ArrayDeque<TrackPoint>()
     internal var highRotationStartNs: Long? = null
 
     // Rolling ride statistics to avoid keeping all points in memory
-    private var ridePointCount = 0
-    private var rideSumSpeedKmh = 0f
-    private var rideSumAbsLeanDeg = 0f
-    private val recentRidePoints = ArrayDeque<TrackPoint>()
+    internal var ridePointCount = 0
+    internal var rideSumSpeedKmh = 0f
+    internal var rideSumAbsLeanDeg = 0f
+    internal val recentRidePoints = ArrayDeque<TrackPoint>()
 
     internal val leanHistory = ArrayDeque<TimedLean>()
     internal val recentLeanSamples = ArrayDeque<TimedLean>()
@@ -385,304 +385,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         persistSettings()
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    fun startTracking() {
-        val state = _uiState.value
-        if (!state.settings.gpsTrackingEnabled || !state.settings.locationPermissionGranted) return
 
-        if (!locationUpdatesRunning) {
-            startLocationUpdates()
-        }
 
-        val lastRideSummary = state.rideHistory.firstOrNull()
-        val isSameDayRideAvailable = lastRideSummary != null && isSameDay(lastRideSummary.endedAtMs, System.currentTimeMillis())
 
-        if (isSameDayRideAvailable) {
-            val currentLoc = latestGpsLocation
-            if (currentLoc != null) {
-                viewModelScope.launch(Dispatchers.IO) {
-                    val fullRide = rideSessionUseCases.loadSession(lastRideSummary!!.rideId)
-                    if (fullRide != null) {
-                        val lastPoint = fullRide.points.lastOrNull()
-                        if (lastPoint != null) {
-                            val dist = distanceMeters(lastPoint.latitude, lastPoint.longitude, currentLoc.latitude, currentLoc.longitude)
-                            if (dist < EXTEND_PROXIMITY_METERS) {
-                                launch(Dispatchers.Main) {
-                                    _uiState.update { it.copy(offerExtendSession = fullRide) }
-                                }
-                                return@launch
-                            }
-                        }
-                    }
-                    launch(Dispatchers.Main) {
-                        performStartNewRide()
-                    }
-                }
-            } else {
-                isCheckingForExtension = true
-                updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
-            }
-        } else {
-            viewModelScope.launch {
-                performStartNewRide()
-            }
-        }
-    }
 
-    fun confirmExtendRide(extend: Boolean) {
-        val offer = _uiState.value.offerExtendSession
-        _uiState.update { it.copy(offerExtendSession = null) }
-        if (extend && offer != null) {
-            performExtendRide(offer)
-        } else {
-            viewModelScope.launch { performStartNewRide() }
-        }
-    }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    private suspend fun performStartNewRide() {
-        if (!locationUpdatesRunning) {
-            startLocationUpdates()
-        }
-        val startTime = System.currentTimeMillis()
-        activeRideStartedMs = startTime
-        activeRideId = rideRepository.startNewRide(startTime)
-        settingsStore.savePendingRideId(activeRideId)
-        accumulatedTimeMs = 0L
-        lastResumeMs = startTime
-        trackLengthMeters = 0f
-        ridePointCount = 0
-        rideSumSpeedKmh = 0f
-        rideSumAbsLeanDeg = 0f
-        recentRidePoints.clear()
-        pausedPointsBuffer.clear()
-        peakLeanSinceLastTick = 0f
-        startRecorder()
-        updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = false, recentPoints = emptyList()) }
-    }
 
-    private fun performExtendRide(session: RideSession) {
-        viewModelScope.launch {
-            if (!locationUpdatesRunning) {
-                startLocationUpdates()
-            }
-            activeRideStartedMs = session.startedAtMs
-            activeRideId = rideRepository.startNewRide(session.startedAtMs)
-            settingsStore.savePendingRideId(activeRideId)
-            
-            trackLengthMeters = 0f
-            ridePointCount = session.points.size
-            rideSumSpeedKmh = 0f
-            rideSumAbsLeanDeg = 0f
-            
-            for (i in 0 until session.points.size) {
-                val p = session.points[i]
-                rideSumSpeedKmh += p.speedKmh
-                rideSumAbsLeanDeg += abs(p.leanAngleDeg)
-                if (i > 0) {
-                    trackLengthMeters += distanceMeters(
-                        session.points[i-1].latitude, session.points[i-1].longitude,
-                        p.latitude, p.longitude
-                    )
-                }
-                rideRepository.recordPoint(p, activeRideId!!)
-            }
-            
-            accumulatedTimeMs = session.endedAtMs - session.startedAtMs
-            lastResumeMs = System.currentTimeMillis()
-            
-            recentRidePoints.clear()
-            recentRidePoints.addAll(session.points.takeLast(LIVE_POINTS_UI_LIMIT))
-            pausedPointsBuffer.clear()
-            
-            rideSessionUseCases.deleteRide(session.rideId)
-            _uiState.update { state -> state.copy(rideHistory = state.rideHistory.filter { it.rideId != session.rideId }) }
-
-            peakLeanSinceLastTick = 0f
-            startRecorder()
-            updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = true, recentPoints = recentRidePoints.toList()) }
-        }
-    }
-
-    fun togglePauseTracking() {
-        val currentState = _uiState.value.tracking
-        if (!currentState.trackingStarted) return
-        
-        val now = System.currentTimeMillis()
-        if (currentState.isPaused) {
-            lastResumeMs = now
-            if (pausedPointsBuffer.isNotEmpty()) {
-                pausedPointsBuffer.forEach { point ->
-                    addTrackPoint(point)
-                    activeRideId?.let { id -> viewModelScope.launch(Dispatchers.IO) { rideRepository.recordPoint(point, id) } }
-                }
-                pausedPointsBuffer.clear()
-            }
-            updateTrackingState { it.copy(isPaused = false) }
-        } else {
-            accumulatedTimeMs += (now - lastResumeMs)
-            pausedPointsBuffer.clear()
-            activeRideId?.let { id ->
-                viewModelScope.launch(Dispatchers.IO) {
-                    rideRepository.flushRidePoints(id)
-                }
-            }
-            autoResumeTimerStartMs = null
-            updateTrackingState { it.copy(isPaused = true) }
-        }
-    }
-
-    private fun addTrackPoint(point: TrackPoint) {
-        val prev = recentRidePoints.lastOrNull()
-        if (prev != null) {
-            trackLengthMeters += distanceMeters(prev.latitude, prev.longitude, point.latitude, point.longitude)
-        }
-        ridePointCount++
-        rideSumSpeedKmh += point.speedKmh
-        rideSumAbsLeanDeg += abs(point.leanAngleDeg)
-        
-        recentRidePoints.addLast(point)
-        if (recentRidePoints.size > LIVE_POINTS_UI_LIMIT) {
-            recentRidePoints.removeFirst()
-        }
-    }
-
-    fun finishRide() {
-        isCheckingForExtension = false
-        val currentRideId = activeRideId
-        val started = activeRideStartedMs ?: System.currentTimeMillis()
-        val ended = System.currentTimeMillis()
-        
-        if (currentRideId != null) {
-            if (ridePointCount > 0) {
-                val skeleton = RideSummary(
-                    rideId = currentRideId,
-                    startedAtMs = started,
-                    endedAtMs = ended,
-                    isSkeleton = true
-                )
-                _uiState.update { it.copy(
-                    rideHistory = (listOf(skeleton) + it.rideHistory).sortedByDescending { it.startedAtMs },
-                    lastSavedRideId = currentRideId
-                ) }
-
-                viewModelScope.launch(Dispatchers.IO) {
-                    rideRepository.flushRidePoints(currentRideId)
-                    delay(2000) 
-                    // Load points once from DB to finalize the session (route description etc)
-                    val allPoints = rideRepository.loadFullSession(currentRideId)?.points ?: emptyList()
-                    val newSession = rideSessionUseCases.saveFinishedRide(currentRideId, started, ended, allPoints)
-                    
-                    launch(Dispatchers.Main) {
-                        _uiState.update { state ->
-                            state.copy(
-                                rideHistory = state.rideHistory.map {
-                                    if (it.rideId == currentRideId) newSession.toSummary() else it
-                                },
-                                expandedRides = state.expandedRides + (currentRideId to newSession)
-                            )
-                        }
-                    }
-                }
-            } else {
-                // No points stored, delete the empty ride record
-                viewModelScope.launch(Dispatchers.IO) {
-                    rideRepository.deleteRide(currentRideId)
-                }
-            }
-            settingsStore.savePendingRideId(null)
-        }
-        
-        stopLocationUpdates()
-        stopRecorder()
-        recentRidePoints.clear()
-        pausedPointsBuffer.clear()
-        activeRideId = null
-        activeRideStartedMs = null
-        accumulatedTimeMs = 0L
-        latestGpsLocation = null
-        latestGpsTimestampNs = null
-        speedKmh = 0f
-        trackLengthMeters = 0f
-        ridePointCount = 0
-        rideSumSpeedKmh = 0f
-        rideSumAbsLeanDeg = 0f
-        autoResumeTimerStartMs = null
-        updateTrackingState {
-            it.copy(
-                hasTrackData = false,
-                speedKmh = 0f,
-                gpsActive = false,
-                trackingStarted = false,
-                isPaused = false,
-                currentLatitude = null,
-                currentLongitude = null,
-                elapsedTimeMs = 0L,
-                averageSpeedKmh = 0f,
-                trackLengthKm = 0f,
-                averageLeanAngleDeg = 0f,
-                isUpsideDown = false,
-                showHighRotationWarning = false,
-                recentPoints = emptyList()
-            )
-        }
-    }
-
-    fun deleteRide(summary: RideSummary) {
-        viewModelScope.launch(Dispatchers.IO) {
-            rideSessionUseCases.deleteRide(summary.rideId)
-            launch(Dispatchers.Main) {
-                _uiState.update { it.copy(
-                    rideHistory = it.rideHistory.filter { it.rideId != summary.rideId },
-                    expandedRides = it.expandedRides - summary.rideId
-                ) }
-            }
-        }
-    }
-
-    fun updateRideName(summary: RideSummary, newName: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val updated = rideSessionUseCases.updateRideName(summary.rideId, newName) ?: return@launch
-                launch(Dispatchers.Main) {
-                    _uiState.update { state ->
-                        state.copy(
-                            rideHistory = state.rideHistory.map {
-                                if (it.rideId == summary.rideId) updated.toSummary() else it
-                            },
-                            expandedRides = if (state.expandedRides.containsKey(summary.rideId)) {
-                                state.expandedRides + (summary.rideId to updated)
-                            } else state.expandedRides
-                        )
-                    }
-                }
-        }
-    }
-
-    fun loadFullSession(rideId: Long) {
-        if (_uiState.value.expandedRides.containsKey(rideId)) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val session = rideSessionUseCases.loadSession(rideId) ?: return@launch
-            launch(Dispatchers.Main) {
-                _uiState.update { it.copy(expandedRides = it.expandedRides + (rideId to session)) }
-            }
-        }
-    }
-
-    fun combineRides(summaries: List<RideSummary>) {
-        if (summaries.size < 2) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val newSession = rideSessionUseCases.combineRides(summaries.map { it.rideId }) ?: return@launch
-            
-            val idsToRemove = summaries.map { it.rideId }.toSet()
-            launch(Dispatchers.Main) {
-                _uiState.update { it.copy(
-                    rideHistory = (listOf(newSession.toSummary()) + it.rideHistory.filter { it.rideId !in idsToRemove })
-                        .sortedByDescending { it.startedAtMs },
-                    expandedRides = it.expandedRides.filterKeys { it !in idsToRemove }
-                ) }
-            }
-        }
-    }
 
     fun startCalibration() {
         uprightUp = null
@@ -872,14 +580,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
 
 
-    private fun hasLocationPermission(): Boolean {
+    internal fun hasLocationPermission(): Boolean {
         val context = getApplication<Application>()
         return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    private fun startLocationUpdates() {
+    internal fun startLocationUpdates() {
         if (!hasLocationPermission() || locationUpdatesRunning) return
 
         val provider = when {
@@ -898,7 +606,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         updateTrackingState { it.copy(gpsActive = true) }
     }
 
-    private fun stopLocationUpdates() {
+    internal fun stopLocationUpdates() {
         if (!locationUpdatesRunning) {
             updateTrackingState { it.copy(gpsActive = false) }
             return
@@ -990,108 +698,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
 
-    private fun startRecorder() {
-        if (recorderJob?.isActive == true) return
-        recorderJob = viewModelScope.launch {
-            while (isActive) {
-                val intervalMs = _uiState.value.settings.recorderIntervalMs
-                    .coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
-                delay(intervalMs.toLong())
-                recordFusedSample()
-            }
-        }
-    }
-
-    private fun stopRecorder() {
-        recorderJob?.cancel()
-        recorderJob = null
-    }
-
-    private fun recordFusedSample() {
-        val state = _uiState.value
-        if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted || isCheckingForExtension) return
-
-        val gps = latestGpsLocation ?: return
-        val nowNs = SystemClock.elapsedRealtimeNanos()
-        val leanAgeMs = latestLeanTimestampNs?.let { ((nowNs - it).coerceAtLeast(0L)) / 1_000_000L }
-            ?: Long.MAX_VALUE
-        val gpsAgeMs = latestGpsTimestampNs?.let { ((nowNs - it).coerceAtLeast(0L)) / 1_000_000L }
-            ?: Long.MAX_VALUE
-        val fusedSpeedKmh = (gps.speed * 3.6f).coerceAtLeast(0f)
-        speedKmh = fusedSpeedKmh
-
-        val nowMs = System.currentTimeMillis()
-        
-        val recordedLean = if (peakLeanSinceLastTick != 0f) peakLeanSinceLastTick else latestLeanDeg
-        
-        val point = TrackPoint(
-            timestampMs = nowMs,
-            latitude = gps.latitude,
-            longitude = gps.longitude,
-            speedKmh = fusedSpeedKmh,
-            leanAngleDeg = recordedLean,
-            leanFreshnessMs = leanAgeMs,
-            gpsFreshnessMs = gpsAgeMs,
-            hasFreshGps = gpsAgeMs <= GPS_FRESHNESS_THRESHOLD_MS,
-            lapIndex = 0
-        )
-
-        if (state.tracking.isPaused) {
-            if (state.settings.autoResumeEnabled) {
-                pausedPointsBuffer.addLast(point)
-                val cutoff = nowMs - 30_000L
-                while (pausedPointsBuffer.isNotEmpty() && pausedPointsBuffer.first().timestampMs < cutoff) {
-                    pausedPointsBuffer.removeFirst()
-                }
-            }
-            return
-        }
-
-        // Live stats update & Local buffer update
-        addTrackPoint(point)
-        
-        // Immediate persistence
-        activeRideId?.let { id ->
-            viewModelScope.launch(Dispatchers.IO) {
-                rideRepository.recordPoint(point, id)
-            }
-        }
-        
-        peakLeanSinceLastTick = latestLeanDeg
-
-        val elapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
-        val avgSpeed = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f
-        val avgLean = if (ridePointCount > 0) rideSumAbsLeanDeg / ridePointCount else 0f
-
-        updateTrackingState {
-            it.copy(
-                speedKmh = fusedSpeedKmh,
-                gpsActive = locationUpdatesRunning,
-                hasTrackData = true,
-                currentLatitude = gps.latitude,
-                currentLongitude = gps.longitude,
-                elapsedTimeMs = elapsedMs,
-                averageSpeedKmh = avgSpeed,
-                trackLengthKm = trackLengthMeters / 1000f,
-                averageLeanAngleDeg = avgLean,
-                recentPoints = recentRidePoints.toList()
-            )
-        }
-    }
 
 
-    private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-        val results = FloatArray(1)
-        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
-        return results[0].coerceAtLeast(0f)
-    }
 
-    private fun isSameDay(ms1: Long, ms2: Long): Boolean {
-        val cal1 = Calendar.getInstance().apply { timeInMillis = ms1 }
-        val cal2 = Calendar.getInstance().apply { timeInMillis = ms2 }
-        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-               cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-    }
+
 
     override fun onCleared() {
         sensorManager.unregisterListener(this)
