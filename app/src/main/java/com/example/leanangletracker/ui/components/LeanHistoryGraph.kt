@@ -38,6 +38,7 @@ internal fun LeanHistoryGraph(
     visibleRangePoints: Int? = null,
     isScrollable: Boolean = false,
     showCursorLine: Boolean = true,
+    scrollSensitivity: Float = 0.2f, // Added parameter
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -56,6 +57,8 @@ internal fun LeanHistoryGraph(
         label = "amplitude"
     )
 
+    val graphPath = remember { Path() }
+
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
             scrollOffset.snapTo(selectedIndex.toFloat())
@@ -71,7 +74,6 @@ internal fun LeanHistoryGraph(
         }
     }
 
-    // Interpolate current lean for the header
     val currentLean = remember(values, scrollOffset.value) {
         val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
         val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
@@ -132,8 +134,7 @@ internal fun LeanHistoryGraph(
                                 orientation = Orientation.Horizontal,
                                 state = rememberDraggableState { delta ->
                                     showScrollHint = false
-                                    val sensitivity = 0.2f 
-                                    var effectiveDelta = -delta * sensitivity
+                                    var effectiveDelta = -delta * scrollSensitivity
 
                                     val current = scrollOffset.value
                                     if (current < minBound && effectiveDelta < 0) {
@@ -143,10 +144,7 @@ internal fun LeanHistoryGraph(
                                         val resistance = (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
                                         effectiveDelta *= resistance
                                     }
-
-                                    val newOffset = (current + effectiveDelta)
-                                        .coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
-                                    
+                                    val newOffset = (current + effectiveDelta).coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
                                     scope.launch {
                                         scrollOffset.snapTo(newOffset)
                                         onSelectedIndexChange(newOffset.roundToInt().coerceIn(0, values.lastIndex))
@@ -161,7 +159,7 @@ internal fun LeanHistoryGraph(
                                             )
                                         } else {
                                             val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
-                                            scrollOffset.animateDecay(-velocity * 0.05f, decay) {
+                                            scrollOffset.animateDecay(-velocity * scrollSensitivity * 1.25f, decay) {
                                                 if (value !in minBound..maxBound) {
                                                     this@launch.launch {
                                                         scrollOffset.animateTo(
@@ -187,30 +185,18 @@ internal fun LeanHistoryGraph(
 
                     val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
-                    // Overscroll feedback with deadzone - only show when scrollable
-                    if (isScrollable) {
-                        if (scrollOffset.value < minBound - 0.05f) {
-                            val alpha = ((abs(scrollOffset.value - minBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
-                            if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
-                        } else if (scrollOffset.value > maxBound + 0.05f) {
-                            val alpha = ((abs(scrollOffset.value - maxBound) - 0.05f) / overscrollLimit).coerceIn(0f, 0.2f)
-                            if (alpha > 0.01f) drawRect(color = Color.Red.copy(alpha = alpha), size = size)
-                        }
-                    }
-
-                    // Grid lines
                     drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
                     drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
 
                     if (displayValues.size >= 2) {
-                        val path = Path()
+                        graphPath.reset()
                         displayValues.forEachIndexed { index, value ->
                             val x = index * stepX
                             val y = yFor(value.coerceIn(-animatedAmplitude, animatedAmplitude))
-                            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            if (index == 0) graphPath.moveTo(x, y) else graphPath.lineTo(x, y)
                         }
                         drawPath(
-                            path = path,
+                            path = graphPath,
                             brush = Brush.verticalGradient(
                                 colors = listOf(Color.Red, PrimaryOrange, AccentGreen, PrimaryOrange, Color.Red),
                                 startY = 0f,

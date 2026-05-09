@@ -1,30 +1,21 @@
 package com.example.leanangletracker.ui.tracking
 
 import android.content.res.Configuration
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,13 +26,8 @@ import com.example.leanangletracker.ui.components.SpeedHistoryGraph
 import com.example.leanangletracker.ui.theme.TextPrimary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sqrt
+import java.util.*
+import kotlin.math.*
 
 @Composable
 internal fun RideReviewTemplate(
@@ -62,46 +48,26 @@ internal fun RideReviewTemplate(
         return
     }
 
-    // Pre-calculate session statistics to avoid heavy lifting in the UI thread during composition
-    val sessionStats = remember(rideSession.points) {
-        val points = rideSession.points
-        var totalDist = 0.0
-        var maxLeanIdx = 0
-        var maxSpeedIdx = 0
-        var speedSum = 0.0
+    // Performance: Pre-calculate values lists only when points change
+    val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
+    val allSpeedValues = remember(rideSession.points) { rideSession.points.map { it.speedKmh } }
+
+    // Adaptive viewport size based on zoom level.
+    // Capped at 1500 points (~5 mins at 5Hz) to keep a readable summary window 
+    // even when the map is zoomed out to the max.
+    val visibleRangeCount = remember(currentZoom, rideSession.points.size) {
+        val basePoints = 200.0
+        val zoomFactor = 2.0.pow(16.0 - currentZoom)
+        val desired = (basePoints * zoomFactor).toInt()
         
-        for (i in points.indices) {
-            val p = points[i]
-            if (i < points.size - 1) {
-                val p2 = points[i + 1]
-                totalDist += fastDistance(p.latitude, p.longitude, p2.latitude, p2.longitude)
-            }
-            if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
-            if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
-            speedSum += p.speedKmh
-        }
+        val minP = min(60, rideSession.points.size)
+        val maxP = min(500, rideSession.points.size)
         
-        object {
-            val distanceKm = totalDist / 1000.0
-            val maxLeanIndex = maxLeanIdx
-            val maxSpeedIndex = maxSpeedIdx
-            val avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
-            val leanValues = points.map { it.leanAngleDeg }
-            val speedValues = points.map { it.speedKmh }
-        }
+        if (minP >= maxP) rideSession.points.size
+        else desired.coerceIn(minP, maxP)
     }
 
     val selectedPoint = rideSession.points[selectedIndex]
-
-    val visiblePoints = remember(currentZoom, rideSession.points.size) {
-        val basePoints = 100.0
-        val zoomFactor = 2.0.pow(16.0 - currentZoom)
-        (basePoints * zoomFactor).toInt().coerceIn(
-            min(20, rideSession.points.size),
-            min(1000, rideSession.points.size)
-        )
-    }
-
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val onStatSelected: (Int) -> Unit = { index ->
@@ -118,15 +84,7 @@ internal fun RideReviewTemplate(
                 modifier = Modifier.weight(1.2f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                RideSessionSummary(
-                    distanceKm = sessionStats.distanceKm,
-                    maxLeanIndex = sessionStats.maxLeanIndex,
-                    maxLeanValue = rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg,
-                    maxSpeedIndex = sessionStats.maxSpeedIndex,
-                    maxSpeedValue = rideSession.points[sessionStats.maxSpeedIndex].speedKmh,
-                    avgSpeed = sessionStats.avgSpeed,
-                    onSelectIndex = onStatSelected
-                )
+                RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
 
                 Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp))) {
                     OSMTrackMap(
@@ -156,18 +114,18 @@ internal fun RideReviewTemplate(
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LeanHistoryGraph(
-                        values = sessionStats.leanValues,
+                        values = allLeanValues,
                         selectedIndex = selectedIndex,
-                        visibleRangePoints = visiblePoints,
+                        visibleRangePoints = visibleRangeCount,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         isScrollable = true,
                         onSelectedIndexChange = { selectedIndex = it }
                     )
 
                     SpeedHistoryGraph(
-                        values = sessionStats.speedValues,
+                        values = allSpeedValues,
                         selectedIndex = selectedIndex,
-                        visibleRangePoints = visiblePoints,
+                        visibleRangePoints = visibleRangeCount,
                         modifier = Modifier.weight(0.7f).fillMaxWidth(),
                         isScrollable = true,
                         onSelectedIndexChange = { selectedIndex = it }
@@ -180,15 +138,7 @@ internal fun RideReviewTemplate(
             modifier = modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            RideSessionSummary(
-                distanceKm = sessionStats.distanceKm,
-                maxLeanIndex = sessionStats.maxLeanIndex,
-                maxLeanValue = rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg,
-                maxSpeedIndex = sessionStats.maxSpeedIndex,
-                maxSpeedValue = rideSession.points[sessionStats.maxSpeedIndex].speedKmh,
-                avgSpeed = sessionStats.avgSpeed,
-                onSelectIndex = onStatSelected
-            )
+            RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
 
             Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp))) {
                 OSMTrackMap(
@@ -212,18 +162,18 @@ internal fun RideReviewTemplate(
             }
 
             LeanHistoryGraph(
-                values = sessionStats.leanValues,
+                values = allLeanValues,
                 selectedIndex = selectedIndex,
-                visibleRangePoints = visiblePoints,
+                visibleRangePoints = visibleRangeCount,
                 modifier = Modifier.fillMaxWidth().height(180.dp),
                 isScrollable = true,
                 onSelectedIndexChange = { selectedIndex = it }
             )
 
             SpeedHistoryGraph(
-                values = sessionStats.speedValues,
+                values = allSpeedValues,
                 selectedIndex = selectedIndex,
-                visibleRangePoints = visiblePoints,
+                visibleRangePoints = visibleRangeCount,
                 modifier = Modifier.fillMaxWidth().height(140.dp),
                 isScrollable = true,
                 onSelectedIndexChange = { selectedIndex = it }
@@ -233,47 +183,131 @@ internal fun RideReviewTemplate(
 }
 
 @Composable
-private fun RideSessionSummary(
-    distanceKm: Double,
-    maxLeanIndex: Int,
-    maxLeanValue: Float,
-    maxSpeedIndex: Int,
-    maxSpeedValue: Float,
-    avgSpeed: Float,
-    onSelectIndex: (Int) -> Unit
-) {
+internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_offset"
+    )
+
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+    )
+
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset.Zero,
+        end = Offset(x = translateAnim, y = translateAnim)
+    )
+
+    if (isLandscape) {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1.2f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    repeat(4) { SkeletonStatItem(brush) }
+                }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+            }
+
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    repeat(3) { SkeletonStatItem(brush) }
+                }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                repeat(4) { SkeletonStatItem(brush) }
+            }
+            Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp)).background(brush))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                repeat(3) { SkeletonStatItem(brush) }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1.3f).clip(RoundedCornerShape(16.dp)).background(brush))
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+        }
+    }
+}
+
+@Composable
+private fun SkeletonStatItem(brush: Brush) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(modifier = Modifier.width(40.dp).height(10.dp).clip(RoundedCornerShape(2.dp)).background(brush))
+        Box(modifier = Modifier.width(60.dp).height(20.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+    }
+}
+
+@Composable
+private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) -> Unit) {
+    val sessionStats = remember(rideSession.points) {
+        val points = rideSession.points
+        var totalDist = 0.0
+        var maxLeanIdx = 0
+        var maxSpeedIdx = 0
+        var speedSum = 0.0
+        
+        for (i in points.indices) {
+            val p = points[i]
+            if (i < points.size - 1) {
+                val p2 = points[i + 1]
+                val x = Math.toRadians(p2.longitude - p.longitude) * cos(Math.toRadians((p.latitude + p2.latitude) / 2.0))
+                val y = Math.toRadians(p2.latitude - p.latitude)
+                totalDist += sqrt(x * x + y * y) * 6371000.0
+            }
+            if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
+            if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
+            speedSum += p.speedKmh
+        }
+        
+        object {
+            val distanceKm = totalDist / 1000.0
+            val maxLeanIndex = maxLeanIdx
+            val maxSpeedIndex = maxSpeedIdx
+            val avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StatItem(label = "DISTANCE", value = "%.2f km".format(distanceKm))
+        StatItem(label = "DISTANCE", value = "%.2f km".format(sessionStats.distanceKm))
         StatItem(
             label = "MAX LEAN", 
-            value = "%.1f°".format(abs(maxLeanValue)),
-            onClick = { onSelectIndex(maxLeanIndex) }
+            value = "%.1f°".format(abs(rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg)),
+            onClick = { onSelectIndex(sessionStats.maxLeanIndex) }
         )
         StatItem(
             label = "MAX SPEED", 
-            value = "${maxSpeedValue.toInt()} km/h",
-            onClick = { onSelectIndex(maxSpeedIndex) }
+            value = "${rideSession.points[sessionStats.maxSpeedIndex].speedKmh.toInt()} km/h",
+            onClick = { onSelectIndex(sessionStats.maxSpeedIndex) }
         )
-        StatItem(label = "AVG SPEED", value = "${avgSpeed.toInt()} km/h")
+        StatItem(label = "AVG SPEED", value = "${sessionStats.avgSpeed.toInt()} km/h")
     }
-}
-
-/**
- * Fast distance approximation to avoid heavy Location calls.
- */
-private fun fastDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val x = Math.toRadians(lon2 - lon1) * cos(Math.toRadians((lat1 + lat2) / 2.0))
-    val y = Math.toRadians(lat2 - lat1)
-    return sqrt(x * x + y * y) * 6371000.0
-}
-
-@Composable
-internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
-    // ... skeleton logic is fine as it uses brush ...
 }
 
 @Composable

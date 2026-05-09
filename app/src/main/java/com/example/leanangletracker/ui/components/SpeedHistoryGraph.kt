@@ -31,6 +31,7 @@ internal fun SpeedHistoryGraph(
     selectedIndex: Int? = null,
     visibleRangePoints: Int? = null,
     isScrollable: Boolean = false,
+    scrollSensitivity: Float = 0.2f,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -40,7 +41,10 @@ internal fun SpeedHistoryGraph(
     val maxBound = values.lastIndex.toFloat().coerceAtLeast(0f)
     val overscrollLimit = 2.5f
 
-    // Use global max for color scaling and stable Y-axis to prevent vertical jumping
+    // Reusable paths to avoid allocations in draw loop
+    val graphPath = remember { Path() }
+    val fillPath = remember { Path() }
+
     val globalMax = remember(values) { values.maxOfOrNull { it } ?: 0f }
     val animatedAmplitude by animateFloatAsState(
         targetValue = maxOf(45f, globalMax * 1.1f),
@@ -54,7 +58,6 @@ internal fun SpeedHistoryGraph(
         }
     }
 
-    // Interpolate current speed for the header based on scroll position/cursor
     val currentSpeed = remember(values, scrollOffset.value) {
         val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
         val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
@@ -116,9 +119,7 @@ internal fun SpeedHistoryGraph(
                         Modifier.draggable(
                             orientation = Orientation.Horizontal,
                             state = rememberDraggableState { delta ->
-                                val sensitivity = 0.2f 
-                                var effectiveDelta = -delta * sensitivity
-
+                                var effectiveDelta = -delta * scrollSensitivity
                                 val current = scrollOffset.value
                                 if (current < minBound && effectiveDelta < 0) {
                                     val resistance = (1f - (abs(minBound - current) / overscrollLimit)).coerceIn(0.1f, 1f)
@@ -127,10 +128,7 @@ internal fun SpeedHistoryGraph(
                                     val resistance = (1f - (abs(current - maxBound) / overscrollLimit)).coerceIn(0.1f, 1f)
                                     effectiveDelta *= resistance
                                 }
-
-                                val newOffset = (current + effectiveDelta)
-                                    .coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
-                                
+                                val newOffset = (current + effectiveDelta).coerceIn(minBound - overscrollLimit, maxBound + overscrollLimit)
                                 scope.launch {
                                     scrollOffset.snapTo(newOffset)
                                     onSelectedIndexChange(newOffset.roundToInt().coerceIn(0, values.lastIndex))
@@ -145,7 +143,7 @@ internal fun SpeedHistoryGraph(
                                         )
                                     } else {
                                         val decay = exponentialDecay<Float>(frictionMultiplier = 2f)
-                                        scrollOffset.animateDecay(-velocity * 0.05f, decay) {
+                                        scrollOffset.animateDecay(-velocity * scrollSensitivity * 1.25f, decay) {
                                             if (value !in minBound..maxBound) {
                                                 this@launch.launch {
                                                     scrollOffset.animateTo(
@@ -165,82 +163,54 @@ internal fun SpeedHistoryGraph(
             ) {
                 val width = size.width
                 val height = size.height
-                
-                // Bottom is 0, Top is amplitude
                 fun yFor(speed: Float): Float = height - (speed / animatedAmplitude) * height
-
                 val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
-                // Horizontal reference lines (50, 100, 150...)
+                // Horizontal reference lines
                 listOf(50f, 100f, 150f, 200f).forEach { speed ->
                     if (speed < animatedAmplitude) {
                         val y = yFor(speed)
-                        drawLine(
-                            color = Color.White.copy(alpha = 0.05f),
-                            start = Offset(0f, y),
-                            end = Offset(width, y),
-                            strokeWidth = 1f
-                        )
+                        drawLine(Color.White.copy(alpha = 0.05f), Offset(0f, y), Offset(width, y), 1f)
                     }
                 }
-
-                // Reference line at the bottom
                 drawLine(Color.White.copy(alpha = 0.1f), Offset(0f, height), Offset(width, height), 2f)
 
                 if (displayValues.size >= 2) {
-                    val path = Path()
+                    graphPath.reset()
                     displayValues.forEachIndexed { index, value ->
                         val x = index * stepX
                         val y = yFor(value.coerceIn(0f, animatedAmplitude))
-                        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        if (index == 0) graphPath.moveTo(x, y) else graphPath.lineTo(x, y)
                     }
                     
-                    val fillPath = Path().apply {
-                        addPath(path)
-                        lineTo(width, height)
-                        lineTo(0f, height)
-                        close()
-                    }
+                    fillPath.reset()
+                    fillPath.addPath(graphPath)
+                    fillPath.lineTo(width, height)
+                    fillPath.lineTo(0f, height)
+                    fillPath.close()
                     
-                    // Gradient mapping: Green at 0 speed (bottom), Red at Global Max speed
                     val speedGradient = Brush.verticalGradient(
                         colors = listOf(Color.Red, PrimaryOrange, AccentGreen),
                         startY = yFor(globalMax),
                         endY = yFor(0f)
                     )
                     
-                    // Subtle fill matching the speed color intensity
                     drawPath(
                         path = fillPath,
                         brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Red.copy(alpha = 0.25f), 
-                                PrimaryOrange.copy(alpha = 0.15f), 
-                                AccentGreen.copy(alpha = 0.05f), 
-                                Color.Transparent
-                            ),
+                            colors = listOf(Color.Red.copy(alpha = 0.25f), PrimaryOrange.copy(alpha = 0.15f), AccentGreen.copy(alpha = 0.05f), Color.Transparent),
                             startY = yFor(globalMax),
                             endY = height
                         )
                     )
 
-                    drawPath(
-                        path = path,
-                        brush = speedGradient,
-                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                    )
+                    drawPath(path = graphPath, brush = speedGradient, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
 
-                    // Vertical Cursor
                     val relativeCursorOffset = scrollOffset.value - displayStartIndex
                     if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
                         val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
                         val selY = yFor(currentSpeed.coerceIn(0f, animatedAmplitude))
-
-                        drawCircle(
-                            color = Color.White,
-                            radius = 4.dp.toPx(),
-                            center = Offset(selX, selY)
-                        )
+                        drawCircle(color = Color.White, radius = 4.dp.toPx(), center = Offset(selX, selY))
                     }
                 }
             }

@@ -55,6 +55,7 @@ internal fun OSMTrackMap(
         }
     }
 
+    // High-performance overlay with pre-calculated color bins and spatial chunking
     val routeOverlay = remember(rideSession.startedAtMs, points) {
         LeanAngleOverlay(points)
     }
@@ -111,6 +112,7 @@ internal fun OSMTrackMap(
             
             if (marker.position?.latitude != geoPoint.latitude || marker.position?.longitude != geoPoint.longitude) {
                 marker.position = geoPoint
+                // Performance: Only invalidate if the index changed ( scrubbing )
                 if (lastSelectedIndex.intValue != selectedIndex) {
                     map.invalidate()
                     lastSelectedIndex.intValue = selectedIndex
@@ -128,6 +130,10 @@ internal fun OSMTrackMap(
     )
 }
 
+/**
+ * Performance-optimized Overlay for ride paths.
+ * Combines spatial chunking, color binning, and adaptive geographical pruning.
+ */
 private class LeanAngleOverlay(private val points: List<TrackPoint>) : Overlay() {
     private val paint = Paint().apply {
         strokeWidth = 10f
@@ -141,6 +147,7 @@ private class LeanAngleOverlay(private val points: List<TrackPoint>) : Overlay()
         getInterpolatedColor((i.toFloat() / (numBins - 1)) * 50f)
     }
     
+    // Pre-calculate color bins once per session
     private val pointBins = IntArray(points.size) { i ->
         val absLean = abs(points[i].leanAngleDeg)
         (absLean / (50f / (numBins - 1))).toInt().coerceIn(0, numBins - 1)
@@ -188,8 +195,10 @@ private class LeanAngleOverlay(private val points: List<TrackPoint>) : Overlay()
         val projection = map.projection
         val viewBounds = map.boundingBox
         val zoom = map.zoomLevelDouble
+        val width = canvas.width.toFloat()
+        val height = canvas.height.toFloat()
 
-        // Logarithmic adaptive skip
+        // Adaptive skip factor based on zoom
         val skip = when {
             zoom >= 16.5 -> 1
             zoom >= 15.0 -> 2
@@ -198,52 +207,72 @@ private class LeanAngleOverlay(private val points: List<TrackPoint>) : Overlay()
             zoom >= 10.5 -> 16
             zoom >= 9.0  -> 32
             zoom >= 7.5  -> 64
-            zoom >= 6.0  -> 128
-            zoom >= 4.5  -> 256
-            else -> 512
+            else -> 128
         }
+
+        // Calculate world-coordinate tolerance for current zoom (~2.5 pixels)
+        val latTolerance = (viewBounds.latNorth - viewBounds.latSouth) / height * 2.5
+        val lonTolerance = (viewBounds.lonEast - viewBounds.lonWest) / width * 2.5
 
         lineBufferIndices.fill(0)
 
         for (chunk in chunks) {
+            // Frustum Culling: Skip chunks entirely outside the view
             if (!chunk.intersects(viewBounds)) continue
 
             var lastX = Float.NaN; var lastY = Float.NaN
+            var lastLat = Double.NaN; var lastLon = Double.NaN
+            var lastBin = -1
             
             var i = chunk.startIdx
             while (i < chunk.endIdx) {
                 val p = points[i]
-                
+                val currentBin = pointBins[i]
+
+                // PERFORMANCE CRITICAL: Skip projection and draw if movement is sub-pixel 
+                // AND color remains the same.
+                if (!lastLat.isNaN() && 
+                    abs(p.latitude - lastLat) < latTolerance && 
+                    abs(p.longitude - lastLon) < lonTolerance &&
+                    currentBin == lastBin &&
+                    i < chunk.endIdx - 1) {
+                    i += skip
+                    continue
+                }
+
                 tempGeoPoint.setCoords(p.latitude, p.longitude)
                 projection.toPixels(tempGeoPoint, tempPoint)
                 val currX = tempPoint.x.toFloat()
                 val currY = tempPoint.y.toFloat()
 
                 if (!lastX.isNaN()) {
-                    val bin = pointBins[i]
-                    var idx = lineBufferIndices[bin]
+                    val bin = if (currentBin != lastBin) currentBin else lastBin
+                    var bufferIdx = lineBufferIndices[bin]
                     
-                    if (idx + 4 > lineBuffers[bin].size) {
+                    if (bufferIdx + 4 > lineBuffers[bin].size) {
                         paint.color = binColors[bin]
-                        canvas.drawLines(lineBuffers[bin], 0, idx, paint)
-                        idx = 0
+                        canvas.drawLines(lineBuffers[bin], 0, bufferIdx, paint)
+                        bufferIdx = 0
                     }
                     
-                    lineBuffers[bin][idx++] = lastX
-                    lineBuffers[bin][idx++] = lastY
-                    lineBuffers[bin][idx++] = currX
-                    lineBuffers[bin][idx++] = currY
-                    lineBufferIndices[bin] = idx
+                    lineBuffers[bin][bufferIdx++] = lastX
+                    lineBuffers[bin][bufferIdx++] = lastY
+                    lineBuffers[bin][bufferIdx++] = currX
+                    lineBuffers[bin][bufferIdx++] = currY
+                    lineBufferIndices[bin] = bufferIdx
                 }
                 
                 lastX = currX; lastY = currY
-                
+                lastLat = p.latitude; lastLon = p.longitude
+                lastBin = currentBin
+
                 if (i == chunk.endIdx - 1) break
                 i += skip
                 if (i >= chunk.endIdx) i = chunk.endIdx - 1
             }
         }
 
+        // Draw remaining lines in buffers
         for (b in 0 until numBins) {
             val idx = lineBufferIndices[b]
             if (idx > 0) {
