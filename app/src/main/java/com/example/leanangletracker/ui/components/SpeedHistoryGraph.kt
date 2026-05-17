@@ -95,6 +95,8 @@ internal fun SpeedHistoryGraph(
                 }
             }
 
+            val windowMaxSpeed = remember(displayValues) { displayValues.maxOrNull() ?: 0f }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.history_speed_title).uppercase(),
@@ -103,6 +105,15 @@ internal fun SpeedHistoryGraph(
                     letterSpacing = 1.sp
                 )
                 Spacer(Modifier.weight(1f))
+                if (windowMaxSpeed > 1f) {
+                    Text(
+                        stringResource(R.string.history_max_speed, windowMaxSpeed.roundToInt()),
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
                 Text(
                     "${currentSpeed.roundToInt()} KM/H",
                     color = speedColor,

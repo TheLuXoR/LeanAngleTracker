@@ -108,6 +108,9 @@ internal fun LeanHistoryGraph(
                     }
                 }
 
+                val lowerBound = displayValues.maxOrNull()?.coerceAtLeast(0f) ?: 0f
+                val upperBound = displayValues.minOrNull()?.coerceAtMost(-0f) ?: -0f
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         stringResource(R.string.history_title).uppercase(),
@@ -116,12 +119,13 @@ internal fun LeanHistoryGraph(
                         letterSpacing = 1.sp
                     )
                     Spacer(Modifier.weight(1f))
-                    val roundedLean = abs(currentLean).roundToInt()
+
                     Text(
-                        "$roundedLean° ${if (roundedLean == 0) "" else if (currentLean < 0) "LEFT" else "RIGHT"}",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        stringResource(R.string.history_max_left, if(upperBound < -0.1f) -upperBound else  0f),
+                        color = PrimaryOrange,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 12.dp)
                     )
                 }
 
@@ -185,8 +189,37 @@ internal fun LeanHistoryGraph(
 
                     val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
 
+                    // Grid Lines (Current peaks in window)
+                    if (upperBound < -0.1f) {
+                        val minVal = displayValues.minOrNull()
+                        val minIndex = displayValues.indexOf(minVal)
+                        val startX = minIndex * stepX
+                        drawLine(
+                            color = PrimaryOrange,
+                            start = Offset(startX, yFor(upperBound)),
+                            end = Offset(width, yFor(upperBound)),
+                            strokeWidth = 2f,
+                            cap = StrokeCap.Round,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                        )
+                    }
+
                     drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
                     drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
+
+                    if (lowerBound > 0.1f) {
+                        val maxVal = displayValues.maxOrNull()
+                        val maxIndex = displayValues.indexOf(maxVal)
+                        val startX = maxIndex * stepX
+                        drawLine(
+                            color = PrimaryOrange,
+                            start = Offset(startX, yFor(lowerBound)),
+                            end = Offset(width, yFor(lowerBound)),
+                            strokeWidth = 2f,
+                            cap = StrokeCap.Round,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                        )
+                    }
 
                     if (displayValues.size >= 2) {
                         graphPath.reset()
@@ -226,6 +259,15 @@ internal fun LeanHistoryGraph(
                         }
                     }
                 }
+
+                Text(
+                    stringResource(R.string.history_max_right, if(lowerBound > 0.1f)lowerBound else 0f),
+                    modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
+                    color = PrimaryOrange,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
             }
 
             if (showScrollHint) {
