@@ -3,10 +3,8 @@ package com.example.leanangletracker.ui.components.admob
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -14,8 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.leanangletracker.BuildConfig
@@ -61,12 +59,18 @@ fun AdMobBanner(
         }
     }
 
-    AnimatedVisibility(
-        visible = isAdLoaded,
-        enter = fadeIn() + slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Bottom)
-    ) {
+    // Use graphicsLayer for alpha animation to avoid expensive layout passes and bitmap caching
+    // that often cause lag with AndroidView (WebView) in Compose.
+    // We avoid expandVertically/slideIn as they force relayout of the whole screen every frame.
+    val alpha by animateFloatAsState(
+        targetValue = if (isAdLoaded) 1f else 0f,
+        animationSpec = tween(durationMillis = 600),
+        label = "AdAlpha"
+    )
+
+    if (isAdLoaded || alpha > 0f) {
         AndroidView(
-            modifier = modifier,
+            modifier = modifier.graphicsLayer { this.alpha = alpha },
             factory = { adView },
             update = { }
         )
