@@ -101,6 +101,7 @@ internal fun RideHistoryScreen(
                         summary = summary,
                         isSelected = isSelected,
                         onClick = { 
+                            if (!summary.isFinished) return@RideHistoryItem
                             if (isSelectionMode) {
                                 selectedSessionIds = if (isSelected) selectedSessionIds - summary.rideId else selectedSessionIds + summary.rideId
                             } else {
@@ -108,6 +109,7 @@ internal fun RideHistoryScreen(
                             }
                         },
                         onLongClick = {
+                            if (!summary.isFinished) return@RideHistoryItem
                             if (!isSelectionMode) {
                                 selectedSessionIds = setOf(summary.rideId)
                             }
@@ -129,17 +131,22 @@ private fun RideHistoryItem(
     onLongClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val containerColor = when {
+        isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+        !summary.isFinished -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                enabled = true // Click handling checks isFinished inside the lambda
             ),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         border = if (isSelected) CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)) else null
     ) {
         Row(
@@ -154,6 +161,13 @@ private fun RideHistoryItem(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(end = 12.dp)
                 )
+            } else if (!summary.isFinished) {
+                Icon(
+                    Icons.Default.RadioButtonChecked, 
+                    contentDescription = "Recording", 
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
             }
 
             Column(modifier = Modifier.weight(1f)) {
@@ -166,9 +180,17 @@ private fun RideHistoryItem(
                 Text(
                     text = titleText,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = if (summary.isFinished) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                if (!summary.routeDescription.isNullOrBlank()) {
+                if (!summary.isFinished) {
+                    Text(
+                        text = "Recording in progress...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else if (!summary.routeDescription.isNullOrBlank()) {
                     Text(
                         text = summary.routeDescription,
                         style = MaterialTheme.typography.bodySmall,

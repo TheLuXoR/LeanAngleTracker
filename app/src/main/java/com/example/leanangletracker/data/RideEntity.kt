@@ -10,5 +10,6 @@ data class RideEntity(
     val startTime: Long,
     val endTime: Long,
     val name: String? = null,
-    val routeDescription: String? = null
+    val routeDescription: String? = null,
+    val isFinished: Boolean = false
 )

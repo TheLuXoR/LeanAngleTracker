@@ -35,6 +35,9 @@ interface RideDao {
     @Query("SELECT * FROM rides ORDER BY startTime DESC")
     suspend fun getAllRides(): List<RideEntity>
 
+    @Query("SELECT * FROM rides WHERE isFinished = 0 ORDER BY startTime DESC LIMIT 1")
+    suspend fun getLatestUnfinishedRide(): RideEntity?
+
     @Query("DELETE FROM rides WHERE id = :rideId")
     suspend fun deleteRide(rideId: Long)
     

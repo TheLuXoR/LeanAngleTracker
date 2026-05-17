@@ -266,7 +266,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     val startTime = System.currentTimeMillis()
                     activeRideStartedMs = startTime
                     activeRideId = rideRepository.startNewRide(startTime)
-                    settingsStore.savePendingRideId(activeRideId)
                     lastResumeMs = startTime
                 }
             }

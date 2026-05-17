@@ -21,7 +21,7 @@
     <string name="settings_gps_tracking_subtitle_granted">Speed + route recording</string>
     <string name="settings_gps_tracking_subtitle_missing">Location permission required</string>
     <string name="settings_auto_pause_title">Extreme Lean Auto-Pause</string>
-    <string name="settings_auto_pause_subtitle">Pause recording if lean exceeds 60° (likely crash)</string>
+    <string name="settings_auto_pause_subtitle">Pause recording if lean exceeds 60° (likely crash or unmounting)</string>
     <string name="settings_group_visuals">VISUALS</string>
     <string name="settings_history_window_title">History Window</string>
     <string name="settings_history_window_subtitle">Time shown in history graph</string>

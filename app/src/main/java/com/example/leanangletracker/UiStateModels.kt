@@ -32,7 +32,8 @@ data class RideSession(
     val endedAtMs: Long,
     val points: List<TrackPoint>,
     val name: String? = null,
-    val routeDescription: String? = null
+    val routeDescription: String? = null,
+    val isFinished: Boolean = true
 )
 
 data class RideSummary(
@@ -42,7 +43,8 @@ data class RideSummary(
     val name: String? = null,
     val routeDescription: String? = null,
     val pointCount: Int = 0,
-    val isSkeleton: Boolean = false
+    val isSkeleton: Boolean = false,
+    val isFinished: Boolean = true
 )
 
 fun RideSession.toSummary() = RideSummary(
@@ -51,7 +53,8 @@ fun RideSession.toSummary() = RideSummary(
     endedAtMs = endedAtMs,
     name = name,
     routeDescription = routeDescription,
-    pointCount = points.size
+    pointCount = points.size,
+    isFinished = isFinished
 )
 
 data class TrackingUiState(
@@ -99,4 +102,3 @@ data class UiState(
     val offerExtendSession: RideSession? = null,
     val pendingRecovery: RideSession? = null
 )
-

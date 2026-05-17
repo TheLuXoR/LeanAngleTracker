@@ -27,7 +27,8 @@ class RideRepository(context: Context) {
             startTime = startTimeMs,
             endTime = startTimeMs,
             name = null,
-            routeDescription = null
+            routeDescription = null,
+            isFinished = false
         )
         return rideDao.insertRide(ride)
     }
@@ -91,9 +92,15 @@ class RideRepository(context: Context) {
         if (ride != null) {
             rideDao.updateRide(ride.copy(
                 endTime = endTimeMs,
-                routeDescription = routeDescription ?: ride.routeDescription
+                routeDescription = routeDescription ?: ride.routeDescription,
+                isFinished = true
             ))
         }
+    }
+
+    suspend fun getLatestUnfinishedRide(): RideSummary? {
+        val entity = rideDao.getLatestUnfinishedRide() ?: return null
+        return getRideSummary(entity.id)
     }
 
     /**
@@ -108,7 +115,8 @@ class RideRepository(context: Context) {
             endedAtMs = entity.endTime,
             name = entity.name,
             routeDescription = entity.routeDescription,
-            pointCount = pointCount
+            pointCount = pointCount,
+            isFinished = entity.isFinished
         )
     }
 
@@ -120,7 +128,8 @@ class RideRepository(context: Context) {
                 endedAtMs = entity.endTime,
                 name = entity.name,
                 routeDescription = entity.routeDescription,
-                pointCount = rideDao.getPointCountForRide(entity.id)
+                pointCount = rideDao.getPointCountForRide(entity.id),
+                isFinished = entity.isFinished
             )
         }
     }
@@ -145,7 +154,8 @@ class RideRepository(context: Context) {
             endedAtMs = ride.endTime,
             points = points,
             name = ride.name,
-            routeDescription = ride.routeDescription
+            routeDescription = ride.routeDescription,
+            isFinished = ride.isFinished
         )
     }
 

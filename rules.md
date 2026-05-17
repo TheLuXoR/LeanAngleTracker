@@ -11,6 +11,7 @@ These rules are designed to make development cost-effective, minimize errors, an
 - **The "God Class" Lock**: `MainViewModel.kt` is locked for new logic. Any new feature must be implemented in a UseCase or Manager and then injected/called.
 - **Sensor Safety**: Any change to `onSensorChanged` or math in `Vec3` must be verified against current physical logic. Do not guess math formulas.
 - **State Immutability**: UI state must always be updated via `.update { it.copy(...) }` to ensure thread safety and predictable recomposition.
+- **Database Migration Integrity**: Never use `fallbackToDestructiveMigration()` in production-ready features. Every schema change must include a manual `Migration` object that preserves user data. Default values for new columns should reflect the "safest" assumption for legacy data.
 
 ## 3. Communication Rules
 - **Pre-flight Check**: Before writing code, summarize the planned changes in 3-5 bullet points for the user.
