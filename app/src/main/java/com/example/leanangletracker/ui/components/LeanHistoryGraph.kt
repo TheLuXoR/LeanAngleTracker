@@ -1,7 +1,6 @@
 package com.example.leanangletracker.ui.components
 
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -16,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -38,7 +38,7 @@ internal fun LeanHistoryGraph(
     visibleRangePoints: Int? = null,
     isScrollable: Boolean = false,
     showCursorLine: Boolean = true,
-    scrollSensitivity: Float = 0.2f, // Added parameter
+    scrollSensitivity: Float = 0.2f,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -57,8 +57,6 @@ internal fun LeanHistoryGraph(
         label = "amplitude"
     )
 
-    val graphPath = remember { Path() }
-
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
             scrollOffset.snapTo(selectedIndex.toFloat())
@@ -74,12 +72,14 @@ internal fun LeanHistoryGraph(
         }
     }
 
-    val currentLean = remember(values, scrollOffset.value) {
-        val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
-        val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
-        val nextIdx = (idx + 1).coerceIn(0, values.lastIndex)
-        val fraction = clampedIdx - idx
-        if (idx == nextIdx) values[idx] else values[idx] * (1 - fraction) + values[nextIdx] * fraction
+    val currentLean by remember(values, scrollOffset.value) {
+        derivedStateOf {
+            val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
+            val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
+            val nextIdx = (idx + 1).coerceIn(0, values.lastIndex)
+            val fraction = clampedIdx - idx
+            if (idx == nextIdx) values[idx] else values[idx] * (1 - fraction) + values[nextIdx] * fraction
+        }
     }
 
     Card(
@@ -91,7 +91,7 @@ internal fun LeanHistoryGraph(
             Column(modifier = Modifier.padding(16.dp)) {
                 val currentScrollVal = scrollOffset.value
                 val displayStartIndex = remember(values.size, currentScrollVal, visibleRangePoints) {
-                    if (visibleRangePoints == null || values.size <= visibleRangePoints) {
+                    if (visibleRangePoints == null || values.size <= (visibleRangePoints ?: 0)) {
                         0
                     } else {
                         val halfRange = (visibleRangePoints ?: 0) / 2
@@ -129,7 +129,9 @@ internal fun LeanHistoryGraph(
                     )
                 }
 
-                Canvas(modifier = Modifier
+                val graphPath = remember { Path() }
+
+                Spacer(modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .then(
@@ -180,88 +182,94 @@ internal fun LeanHistoryGraph(
                             )
                         } else Modifier
                     )
-                ) {
-                    val width = size.width
-                    val height = size.height
-                    val centerY = height / 2f
+                    .drawWithCache {
+                        val width = size.width
+                        val height = size.height
+                        val centerY = height / 2f
+                        val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
+                        
+                        val dashEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
 
-                    fun yFor(deg: Float): Float = centerY + (deg / animatedAmplitude) * (height * 0.45f)
+                        onDrawWithContent {
+                            fun yFor(deg: Float): Float = centerY + (deg / animatedAmplitude) * (height * 0.45f)
 
-                    val stepX = if (displayValues.size >= 2) width / (displayValues.size - 1) else 0f
-
-                    // Grid Lines (Current peaks in window)
-                    if (upperBound < -0.1f) {
-                        val minVal = displayValues.minOrNull()
-                        val minIndex = displayValues.indexOf(minVal)
-                        val startX = minIndex * stepX
-                        drawLine(
-                            color = PrimaryOrange,
-                            start = Offset(startX, yFor(upperBound)),
-                            end = Offset(width, yFor(upperBound)),
-                            strokeWidth = 2f,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-                        )
-                    }
-
-                    drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
-                    drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
-
-                    if (lowerBound > 0.1f) {
-                        val maxVal = displayValues.maxOrNull()
-                        val maxIndex = displayValues.indexOf(maxVal)
-                        val startX = maxIndex * stepX
-                        drawLine(
-                            color = PrimaryOrange,
-                            start = Offset(startX, yFor(lowerBound)),
-                            end = Offset(width, yFor(lowerBound)),
-                            strokeWidth = 2f,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-                        )
-                    }
-
-                    if (displayValues.size >= 2) {
-                        graphPath.reset()
-                        displayValues.forEachIndexed { index, value ->
-                            val x = index * stepX
-                            val y = yFor(value.coerceIn(-animatedAmplitude, animatedAmplitude))
-                            if (index == 0) graphPath.moveTo(x, y) else graphPath.lineTo(x, y)
-                        }
-                        drawPath(
-                            path = graphPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.Red, PrimaryOrange, AccentGreen, PrimaryOrange, Color.Red),
-                                startY = 0f,
-                                endY = height
-                            ),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        val relativeCursorOffset = scrollOffset.value - displayStartIndex
-                        if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
-                            val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
-                            val selY = yFor(currentLean.coerceIn(-animatedAmplitude, animatedAmplitude))
-
-                            if (showCursorLine) {
+                            // 1. Grid Lines
+                            if (upperBound < -0.1f) {
+                                val minVal = displayValues.minOrNull()
+                                val minIndex = displayValues.indexOf(minVal)
+                                val startX = minIndex * stepX
                                 drawLine(
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    start = Offset(selX, 0f),
-                                    end = Offset(selX, height),
-                                    strokeWidth = 1.dp.toPx()
+                                    color = PrimaryOrange,
+                                    start = Offset(startX, yFor(upperBound)),
+                                    end = Offset(width, yFor(upperBound)),
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
+                                    pathEffect = dashEffect
                                 )
                             }
-                            drawCircle(
-                                color = Color.White,
-                                radius = 4.dp.toPx(),
-                                center = Offset(selX, selY)
-                            )
+
+                            drawLine(Color(0xCCFFFFFF).copy(0.2f), Offset(0f, centerY), Offset(width, centerY), 25f)
+                            drawLine(Color(0xCCFFFFFF), Offset(0f, centerY), Offset(width, centerY), 1f)
+
+                            if (lowerBound > 0.1f) {
+                                val maxVal = displayValues.maxOrNull()
+                                val maxIndex = displayValues.indexOf(maxVal)
+                                val startX = maxIndex * stepX
+                                drawLine(
+                                    color = PrimaryOrange,
+                                    start = Offset(startX, yFor(lowerBound)),
+                                    end = Offset(width, yFor(lowerBound)),
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
+                                    pathEffect = dashEffect
+                                )
+                            }
+
+                            // 2. Main Graph
+                            if (displayValues.size >= 2) {
+                                graphPath.reset()
+                                displayValues.forEachIndexed { index, value ->
+                                    val x = index * stepX
+                                    val y = yFor(value.coerceIn(-animatedAmplitude, animatedAmplitude))
+                                    if (index == 0) graphPath.moveTo(x, y) else graphPath.lineTo(x, y)
+                                }
+                                drawPath(
+                                    path = graphPath,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color.Red, PrimaryOrange, AccentGreen, PrimaryOrange, Color.Red),
+                                        startY = 0f,
+                                        endY = height
+                                    ),
+                                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                )
+
+                                // 3. Cursor
+                                val relativeCursorOffset = scrollOffset.value - displayStartIndex
+                                if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
+                                    val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
+                                    val selY = yFor(currentLean.coerceIn(-animatedAmplitude, animatedAmplitude))
+
+                                    if (showCursorLine) {
+                                        drawLine(
+                                            color = Color.White.copy(alpha = 0.4f),
+                                            start = Offset(selX, 0f),
+                                            end = Offset(selX, height),
+                                            strokeWidth = 1.dp.toPx()
+                                        )
+                                    }
+                                    drawCircle(
+                                        color = Color.White,
+                                        radius = 4.dp.toPx(),
+                                        center = Offset(selX, selY)
+                                    )
+                                }
+                            }
                         }
                     }
-                }
+                )
 
                 Text(
-                    stringResource(R.string.history_max_right, if(lowerBound > 0.1f)lowerBound else 0f),
+                    stringResource(R.string.history_max_right, if(lowerBound > 0.1f) lowerBound else 0f),
                     modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
                     color = PrimaryOrange,
                     fontSize = 12.sp,

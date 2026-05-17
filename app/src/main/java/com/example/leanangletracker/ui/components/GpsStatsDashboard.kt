@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -33,6 +34,14 @@ fun GpsStatsDashboard(
     modifier: Modifier = Modifier,
     isLandscape: Boolean = false
 ) {
+    // Optimization: String formatting is moved to remembered blocks to avoid re-allocation 
+    // and heavy string operations during the composition phase if the values haven't changed.
+    val speedText = remember(speedKmh) { String.format(Locale.US, "%.0f", speedKmh) }
+    val distanceTextShort = remember(distanceKm) { String.format(Locale.US, "%.1f", distanceKm) }
+    val distanceTextFull = remember(distanceKm) { String.format(Locale.US, "%.2f km", distanceKm) }
+    val timeTextShort = remember(elapsedTimeMs) { formatElapsedTimeShort(elapsedTimeMs) }
+    val timeTextFull = remember(elapsedTimeMs) { formatElapsedTime(elapsedTimeMs) }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -50,7 +59,7 @@ fun GpsStatsDashboard(
                 // Speed Section
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = String.format(Locale.US, "%.0f", speedKmh),
+                        text = speedText,
                         style = MaterialTheme.typography.displayMedium.copy(
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Black
@@ -69,7 +78,7 @@ fun GpsStatsDashboard(
 
                 StatItemLandscape(
                     icon = Icons.Rounded.Route,
-                    value = String.format(Locale.US, "%.1f", distanceKm),
+                    value = distanceTextShort,
                     unit = "km",
                     color = SecondaryBlue
                 )
@@ -78,7 +87,7 @@ fun GpsStatsDashboard(
 
                 StatItemLandscape(
                     icon = Icons.Rounded.AccessTime,
-                    value = formatElapsedTimeShort(elapsedTimeMs),
+                    value = timeTextShort,
                     unit = "",
                     color = AccentGreen
                 )
@@ -105,7 +114,7 @@ fun GpsStatsDashboard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = String.format(Locale.US, "%.0f", speedKmh),
+                        text = speedText,
                         style = MaterialTheme.typography.displayLarge.copy(
                             fontSize = 64.sp,
                             fontWeight = FontWeight.Black
@@ -147,13 +156,13 @@ fun GpsStatsDashboard(
                 ) {
                     StatItem(
                         icon = Icons.Rounded.Route,
-                        value = String.format(Locale.US, "%.2f km", distanceKm),
+                        value = distanceTextFull,
                         label = "DISTANCE",
                         color = SecondaryBlue
                     )
                     StatItem(
                         icon = Icons.Rounded.AccessTime,
-                        value = formatElapsedTime(elapsedTimeMs),
+                        value = timeTextFull,
                         label = "DURATION",
                         color = AccentGreen
                     )
