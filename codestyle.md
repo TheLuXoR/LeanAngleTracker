@@ -14,8 +14,8 @@
 4. **Interface Segregation**: Don't force a class to implement methods it doesn't use.
 5. **Dependency Inversion**: High-level modules should not depend on low-level modules. Both should depend on abstractions.
 
-## Handling "God Classes" (The 1000-Line Rule)
-When a class exceeds 500-1000 lines (like `MainViewModel.kt`), any new change **must** include a mini-refactor:
+## Handling "God Classes" (The 500-Line Rule)
+When a class exceeds 500 lines (like `MainViewModel.kt`), any new change **must** include a mini-refactor:
 1. **Identify a Responsibility**: Find a group of related functions (e.g., all `Calibration` logic).
 2. **Extract to Use Case/Helper**: Create a new class (e.g., `CalibrationManager`) and move the logic there.
 3. **Delegate**: Call the new class from the original class.
