@@ -29,34 +29,38 @@ internal fun MainViewModel.resolveRecovery(continueRide: Boolean) {
                 startLocationUpdates()
             }
             activeRideStartedMs = session.startedAtMs
-            activeRideId = session.rideId // Use the existing ID from DB
+            activeRideId = session.rideId
             
             recentRidePoints.clear()
             recentRidePoints.addAll(session.points.takeLast(LIVE_POINTS_UI_LIMIT))
             
-            trackLengthMeters = 0f
+            // Restore stats from DB record
+            accumulatedTimeMs = session.accumulatedTimeMs
+            trackLengthMeters = session.trackLengthMeters
             ridePointCount = session.points.size
-            rideSumSpeedKmh = 0f
-            rideSumAbsLeanDeg = 0f
+            rideSumSpeedKmh = session.sumSpeedKmh
+            rideSumAbsLeanDeg = session.sumAbsLeanDeg
             
-            for (i in 0 until session.points.size) {
-                val p = session.points[i]
-                rideSumSpeedKmh += p.speedKmh
-                rideSumAbsLeanDeg += abs(p.leanAngleDeg)
-                if (i > 0) {
-                    trackLengthMeters += distanceMeters(
-                        session.points[i-1].latitude, session.points[i-1].longitude,
-                        p.latitude, p.longitude
-                    )
-                }
-                // No need to record again, they are already in DB, but we populate the local stats
-            }
-            
-            accumulatedTimeMs = session.endedAtMs - session.startedAtMs
+            // maxLeftDeg is negative, maxRightDeg is positive
+            val lMax = session.maxLeftDeg
+            val rMax = session.maxRightDeg
+
             lastResumeMs = System.currentTimeMillis()
             peakLeanSinceLastTick = 0f
             startRecorder()
-            updateTrackingState { it.copy(trackingStarted = true, isPaused = false, hasTrackData = true, recentPoints = recentRidePoints.toList()) }
+            
+            updateTrackingState { it.copy(
+                trackingStarted = true, 
+                isPaused = false, 
+                hasTrackData = session.points.isNotEmpty(), 
+                recentPoints = recentRidePoints.toList(),
+                elapsedTimeMs = accumulatedTimeMs,
+                trackLengthKm = trackLengthMeters / 1000f,
+                maxLeftDeg = lMax,
+                maxRightDeg = rMax,
+                averageSpeedKmh = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f,
+                averageLeanAngleDeg = if (ridePointCount > 0) rideSumAbsLeanDeg / ridePointCount else 0f
+            ) }
         }
     } else {
         viewModelScope.launch(Dispatchers.IO) {
@@ -73,6 +77,11 @@ internal fun MainViewModel.resolveRecovery(continueRide: Boolean) {
                 }
             } else {
                 rideRepository.deleteRide(session.rideId)
+                launch(Dispatchers.Main) {
+                    _uiState.update { state ->
+                        state.copy(rideHistory = state.rideHistory.filter { it.rideId != session.rideId })
+                    }
+                }
             }
         }
     }

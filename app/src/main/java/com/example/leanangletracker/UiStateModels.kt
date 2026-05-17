@@ -33,7 +33,13 @@ data class RideSession(
     val points: List<TrackPoint>,
     val name: String? = null,
     val routeDescription: String? = null,
-    val isFinished: Boolean = true
+    val isFinished: Boolean = true,
+    val accumulatedTimeMs: Long = 0L,
+    val trackLengthMeters: Float = 0f,
+    val maxLeftDeg: Float = 0f,
+    val maxRightDeg: Float = 0f,
+    val sumSpeedKmh: Float = 0f,
+    val sumAbsLeanDeg: Float = 0f
 )
 
 data class RideSummary(
@@ -44,7 +50,13 @@ data class RideSummary(
     val routeDescription: String? = null,
     val pointCount: Int = 0,
     val isSkeleton: Boolean = false,
-    val isFinished: Boolean = true
+    val isFinished: Boolean = true,
+    val accumulatedTimeMs: Long = 0L,
+    val trackLengthMeters: Float = 0f,
+    val maxLeftDeg: Float = 0f,
+    val maxRightDeg: Float = 0f,
+    val averageSpeedKmh: Float = 0f,
+    val averageLeanAngleDeg: Float = 0f
 )
 
 fun RideSession.toSummary() = RideSummary(
@@ -54,7 +66,13 @@ fun RideSession.toSummary() = RideSummary(
     name = name,
     routeDescription = routeDescription,
     pointCount = points.size,
-    isFinished = isFinished
+    isFinished = isFinished,
+    accumulatedTimeMs = accumulatedTimeMs,
+    trackLengthMeters = trackLengthMeters,
+    maxLeftDeg = maxLeftDeg,
+    maxRightDeg = maxRightDeg,
+    averageSpeedKmh = if (points.isNotEmpty()) sumSpeedKmh / points.size else 0f,
+    averageLeanAngleDeg = if (points.isNotEmpty()) sumAbsLeanDeg / points.size else 0f
 )
 
 data class TrackingUiState(

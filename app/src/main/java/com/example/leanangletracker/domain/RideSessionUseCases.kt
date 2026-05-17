@@ -5,6 +5,7 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.RideSummary
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.data.RideRepository
+import com.example.leanangletracker.data.RideStats
 import com.example.leanangletracker.ui.tracking.calculateRouteDescription
 
 class RideSessionUseCases(
@@ -25,7 +26,16 @@ class RideSessionUseCases(
     suspend fun saveRecoveredRide(session: RideSession): RideSession {
         // Mark as finished in the DB
         val desc = calculateRouteDescription(application, session)
-        rideRepository.finishRide(session.rideId, session.endedAtMs, desc)
+        val stats = RideStats(
+            accumulatedTimeMs = session.accumulatedTimeMs,
+            trackLengthMeters = session.trackLengthMeters,
+            maxLeftDeg = session.maxLeftDeg,
+            maxRightDeg = session.maxRightDeg,
+            sumSpeedKmh = session.sumSpeedKmh,
+            sumAbsLeanDeg = session.sumAbsLeanDeg,
+            pointCount = session.points.size
+        )
+        rideRepository.finishRide(session.rideId, session.endedAtMs, desc, stats)
         return session.copy(routeDescription = desc, isFinished = true)
     }
 
@@ -47,10 +57,28 @@ class RideSessionUseCases(
      * Metadata is now updated live or at the end.
      * The points are already in the DB.
      */
-    suspend fun saveFinishedRide(rideId: Long, started: Long, ended: Long, points: List<TrackPoint>): RideSession {
-        val session = RideSession(rideId = rideId, startedAtMs = started, endedAtMs = ended, points = points, isFinished = true)
+    suspend fun saveFinishedRide(
+        rideId: Long, 
+        started: Long, 
+        ended: Long, 
+        points: List<TrackPoint>,
+        stats: RideStats
+    ): RideSession {
+        val session = RideSession(
+            rideId = rideId, 
+            startedAtMs = started, 
+            endedAtMs = ended, 
+            points = points, 
+            isFinished = true,
+            accumulatedTimeMs = stats.accumulatedTimeMs,
+            trackLengthMeters = stats.trackLengthMeters,
+            maxLeftDeg = stats.maxLeftDeg,
+            maxRightDeg = stats.maxRightDeg,
+            sumSpeedKmh = stats.sumSpeedKmh,
+            sumAbsLeanDeg = stats.sumAbsLeanDeg
+        )
         val desc = calculateRouteDescription(application, session)
-        rideRepository.finishRide(rideId, ended, desc)
+        rideRepository.finishRide(rideId, ended, desc, stats)
         return session.copy(routeDescription = desc)
     }
 
@@ -74,13 +102,43 @@ class RideSessionUseCases(
         val sorted = sessions.sortedBy { it.startedAtMs }
         val mergedPoints = sorted.flatMap { it.points }.sortedBy { it.timestampMs }
         
+        val totalTime = sorted.sumOf { it.accumulatedTimeMs }
+        val totalDist = sorted.sumOf { it.trackLengthMeters.toDouble() }.toFloat()
+        val maxL = sorted.minOf { it.maxLeftDeg } // maxLeftDeg is negative
+        val maxR = sorted.maxOf { it.maxRightDeg }
+        val sumSpeed = sorted.sumOf { it.sumSpeedKmh.toDouble() }.toFloat()
+        val sumLean = sorted.sumOf { it.sumAbsLeanDeg.toDouble() }.toFloat()
+        
         // Create a new ride in Room
         val newRideId = rideRepository.startNewRide(sorted.first().startedAtMs)
         mergedPoints.forEach { rideRepository.recordPoint(it, newRideId) }
         
-        val temp = RideSession(newRideId, sorted.first().startedAtMs, sorted.last().endedAtMs, mergedPoints, "Combined Ride", isFinished = true)
+        val stats = RideStats(
+            accumulatedTimeMs = totalTime,
+            trackLengthMeters = totalDist,
+            maxLeftDeg = maxL,
+            maxRightDeg = maxR,
+            sumSpeedKmh = sumSpeed,
+            sumAbsLeanDeg = sumLean,
+            pointCount = mergedPoints.size
+        )
+        
+        val temp = RideSession(
+            rideId = newRideId, 
+            startedAtMs = sorted.first().startedAtMs, 
+            endedAtMs = sorted.last().endedAtMs, 
+            points = mergedPoints, 
+            name = "Combined Ride", 
+            isFinished = true,
+            accumulatedTimeMs = totalTime,
+            trackLengthMeters = totalDist,
+            maxLeftDeg = maxL,
+            maxRightDeg = maxR,
+            sumSpeedKmh = sumSpeed,
+            sumAbsLeanDeg = sumLean
+        )
         val desc = calculateRouteDescription(application, temp)
-        rideRepository.finishRide(newRideId, sorted.last().endedAtMs, desc)
+        rideRepository.finishRide(newRideId, sorted.last().endedAtMs, desc, stats)
         
         // Delete old ones
         rideIds.forEach { rideRepository.deleteRide(it) }

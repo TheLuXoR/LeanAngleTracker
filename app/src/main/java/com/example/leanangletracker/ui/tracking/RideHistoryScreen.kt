@@ -24,6 +24,7 @@ import com.example.leanangletracker.RideSummary
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +144,7 @@ private fun RideHistoryItem(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-                enabled = true // Click handling checks isFinished inside the lambda
+                enabled = true
             ),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
@@ -183,6 +184,7 @@ private fun RideHistoryItem(
                     fontWeight = FontWeight.Bold,
                     color = if (summary.isFinished) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+                
                 if (!summary.isFinished) {
                     Text(
                         text = "Recording in progress...",
@@ -200,11 +202,27 @@ private fun RideHistoryItem(
                         modifier = Modifier.padding(vertical = 2.dp)
                     )
                 }
-                Text(
-                    text = stringResource(R.string.ride_history_points_recorded, summary.pointCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
+
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "%.1f km".format(summary.trackLengthMeters / 1000f),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Max: %.1f°".format(maxOf(abs(summary.maxLeftDeg), abs(summary.maxRightDeg))),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = stringResource(R.string.ride_history_points_recorded, summary.pointCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
             }
             
             IconButton(onClick = onDelete) {

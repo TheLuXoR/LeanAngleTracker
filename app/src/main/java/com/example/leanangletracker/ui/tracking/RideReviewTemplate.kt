@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,13 +47,9 @@ internal fun RideReviewTemplate(
         return
     }
 
-    // Performance: Pre-calculate values lists only when points change
     val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
     val allSpeedValues = remember(rideSession.points) { rideSession.points.map { it.speedKmh } }
 
-    // Adaptive viewport size based on zoom level.
-    // Capped at 1500 points (~5 mins at 5Hz) to keep a readable summary window 
-    // even when the map is zoomed out to the max.
     val visibleRangeCount = remember(currentZoom, rideSession.points.size) {
         val basePoints = 200.0
         val zoomFactor = 2.0.pow(16.0 - currentZoom)
@@ -71,8 +66,10 @@ internal fun RideReviewTemplate(
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val onStatSelected: (Int) -> Unit = { index ->
-        selectedIndex = index
-        centerTrigger++
+        if (index in rideSession.points.indices) {
+            selectedIndex = index
+            centerTrigger++
+        }
     }
 
     if (isLandscape) {
@@ -262,51 +259,78 @@ private fun SkeletonStatItem(brush: Brush) {
 
 @Composable
 private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) -> Unit) {
-    val sessionStats = remember(rideSession.points) {
+    val stats = remember(rideSession) {
         val points = rideSession.points
-        var totalDist = 0.0
-        var maxLeanIdx = 0
-        var maxSpeedIdx = 0
-        var speedSum = 0.0
-        
-        for (i in points.indices) {
-            val p = points[i]
-            if (i < points.size - 1) {
-                val p2 = points[i + 1]
-                val x = Math.toRadians(p2.longitude - p.longitude) * cos(Math.toRadians((p.latitude + p2.latitude) / 2.0))
-                val y = Math.toRadians(p2.latitude - p.latitude)
-                totalDist += sqrt(x * x + y * y) * 6371000.0
+        if (points.isEmpty()) return@remember null
+
+        // Use pre-calculated stats if available (non-zero)
+        if (rideSession.trackLengthMeters > 0) {
+            val maxAbsLean = max(abs(rideSession.maxLeftDeg), abs(rideSession.maxRightDeg))
+            val avgSpeed = if (points.isNotEmpty()) rideSession.sumSpeedKmh / points.size else 0f
+            
+            // Still need to find indices for "Jump to" functionality
+            val maxLeanIdx = points.indexOfFirst { abs(it.leanAngleDeg - rideSession.maxLeftDeg) < 0.1f || abs(it.leanAngleDeg - rideSession.maxRightDeg) < 0.1f }.coerceAtLeast(0)
+            val maxSpeed = points.maxOfOrNull { it.speedKmh } ?: 0f
+            val maxSpeedIdx = points.indexOfFirst { it.speedKmh == maxSpeed }.coerceAtLeast(0)
+
+            RideStats(
+                distanceKm = rideSession.trackLengthMeters / 1000.0,
+                maxLeanIndex = maxLeanIdx,
+                maxLeanVal = maxAbsLean,
+                maxSpeedIndex = maxSpeedIdx,
+                maxSpeedVal = maxSpeed,
+                avgSpeed = avgSpeed
+            )
+        } else {
+            // Fallback for legacy rides: Manual calculation
+            var totalDist = 0.0
+            var maxLeanIdx = 0
+            var maxSpeedIdx = 0
+            var speedSum = 0.0
+            
+            for (i in points.indices) {
+                val p = points[i]
+                if (i < points.size - 1) {
+                    val p2 = points[i + 1]
+                    val x = Math.toRadians(p2.longitude - p.longitude) * cos(Math.toRadians((p.latitude + p2.latitude) / 2.0))
+                    val y = Math.toRadians(p2.latitude - p.latitude)
+                    totalDist += sqrt(x * x + y * y) * 6371000.0
+                }
+                if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
+                if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
+                speedSum += p.speedKmh
             }
-            if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
-            if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
-            speedSum += p.speedKmh
-        }
-        
-        object {
-            val distanceKm = totalDist / 1000.0
-            val maxLeanIndex = maxLeanIdx
-            val maxSpeedIndex = maxSpeedIdx
-            val avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
+
+            RideStats(
+                distanceKm = totalDist / 1000.0,
+                maxLeanIndex = maxLeanIdx,
+                maxLeanVal = abs(points[maxLeanIdx].leanAngleDeg),
+                maxSpeedIndex = maxSpeedIdx,
+                maxSpeedVal = points[maxSpeedIdx].speedKmh,
+                avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
+            )
         }
     }
+
+    if (stats == null) return
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StatItem(label = "DISTANCE", value = "%.2f km".format(sessionStats.distanceKm))
+        StatItem(label = "DISTANCE", value = "%.2f km".format(stats.distanceKm))
         StatItem(
             label = "MAX LEAN", 
-            value = "%.1f°".format(abs(rideSession.points[sessionStats.maxLeanIndex].leanAngleDeg)),
-            onClick = { onSelectIndex(sessionStats.maxLeanIndex) }
+            value = "%.1f°".format(stats.maxLeanVal),
+            onClick = { onSelectIndex(stats.maxLeanIndex) }
         )
         StatItem(
             label = "MAX SPEED", 
-            value = "${rideSession.points[sessionStats.maxSpeedIndex].speedKmh.toInt()} km/h",
-            onClick = { onSelectIndex(sessionStats.maxSpeedIndex) }
+            value = "${stats.maxSpeedVal.toInt()} km/h",
+            onClick = { onSelectIndex(stats.maxSpeedIndex) }
         )
-        StatItem(label = "AVG SPEED", value = "${sessionStats.avgSpeed.toInt()} km/h")
+        StatItem(label = "AVG SPEED", value = "${stats.avgSpeed.toInt()} km/h")
     }
 }
 
@@ -326,6 +350,7 @@ private fun StatItem(label: String, value: String, onClick: (() -> Unit)? = null
 }
 
 public fun formatTimeWithTick(index: Int, points: List<TrackPoint>): String {
+    if (index !in points.indices) return "--:--:--"
     val point = points[index]
     val baseTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(point.timestampMs))
     var tick = 1

@@ -22,12 +22,13 @@ A robust, high-performance motorcycle lean angle tracker using sensor fusion. We
 - **Language**: Kotlin | **UI**: Jetpack Compose
 - **Architecture**: MVVM -> Clean Architecture (Transitioning)
 - **Sensors**: High-frequency fusion in `MainViewModel.kt` (Target for extraction).
-- **Storage**: GSON/File-based (Target for Room migration).
+- **Storage**: Room Database (with strict Migration rules).
 
 ## Critical Areas
 - **MainViewModel.kt**: The "God Class" (currently ~1500 lines). **Rule: New logic goes into UseCases/Managers, not here.**
 - **UiStateModels.kt**: Canonical home for UI-state and ride DTO data classes extracted from `MainViewModel`.
 - **Sensor Math**: Precision is critical. Verify math against `Vec3.kt` and `util/` helpers.
+- **Database Schema**: Version 3. Always preserve user rides via `Migration` objects.
 
 ## Agent Guidelines
 1. **Incrementalism**: Small, verifiable steps. Never refactor a whole module in one go.

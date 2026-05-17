@@ -77,7 +77,6 @@ internal suspend fun MainViewModel.performStartNewRide() {
     activeRideStartedMs = startTime
     activeRideId = rideRepository.startNewRide(startTime)
     
-    // Add the active ride to the history list immediately so it shows as "Recording"
     val activeSummary = RideSummary(
         rideId = activeRideId!!,
         startedAtMs = startTime,
@@ -107,25 +106,17 @@ internal fun MainViewModel.performExtendRide(session: RideSession) {
         activeRideStartedMs = session.startedAtMs
         activeRideId = rideRepository.startNewRide(session.startedAtMs)
         
-        trackLengthMeters = 0f
+        trackLengthMeters = session.trackLengthMeters
         ridePointCount = session.points.size
-        rideSumSpeedKmh = 0f
-        rideSumAbsLeanDeg = 0f
+        rideSumSpeedKmh = session.sumSpeedKmh
+        rideSumAbsLeanDeg = session.sumAbsLeanDeg
         
         for (i in 0 until session.points.size) {
             val p = session.points[i]
-            rideSumSpeedKmh += p.speedKmh
-            rideSumAbsLeanDeg += abs(p.leanAngleDeg)
-            if (i > 0) {
-                trackLengthMeters += distanceMeters(
-                    session.points[i-1].latitude, session.points[i-1].longitude,
-                    p.latitude, p.longitude
-                )
-            }
             rideRepository.recordPoint(p, activeRideId!!)
         }
         
-        accumulatedTimeMs = session.endedAtMs - session.startedAtMs
+        accumulatedTimeMs = session.accumulatedTimeMs
         lastResumeMs = System.currentTimeMillis()
         
         recentRidePoints.clear()
@@ -134,12 +125,16 @@ internal fun MainViewModel.performExtendRide(session: RideSession) {
         
         rideSessionUseCases.deleteRide(session.rideId)
         
-        // Update history: remove old, add new active one
         val activeSummary = RideSummary(
             rideId = activeRideId!!,
             startedAtMs = session.startedAtMs,
             endedAtMs = System.currentTimeMillis(),
-            isFinished = false
+            isFinished = false,
+            accumulatedTimeMs = accumulatedTimeMs,
+            trackLengthMeters = trackLengthMeters,
+            maxLeftDeg = session.maxLeftDeg,
+            maxRightDeg = session.maxRightDeg,
+            pointCount = ridePointCount
         )
         _uiState.update { state -> 
             state.copy(rideHistory = (listOf(activeSummary) + state.rideHistory.filter { it.rideId != session.rideId })
@@ -148,7 +143,15 @@ internal fun MainViewModel.performExtendRide(session: RideSession) {
 
         peakLeanSinceLastTick = 0f
         startRecorder()
-        updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = true, recentPoints = recentRidePoints.toList()) }
+        updateTrackingState { it.copy(
+            trackingStarted = true, 
+            isPaused = false, 
+            gpsTrackingEnabled = true, 
+            hasTrackData = true, 
+            recentPoints = recentRidePoints.toList(),
+            maxLeftDeg = session.maxLeftDeg,
+            maxRightDeg = session.maxRightDeg
+        ) }
     }
 }
 
@@ -200,15 +203,33 @@ internal fun MainViewModel.finishRide() {
     val currentRideId = activeRideId
     val started = activeRideStartedMs ?: System.currentTimeMillis()
     val ended = System.currentTimeMillis()
+    val nowMs = System.currentTimeMillis()
+    val finalElapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
     
     if (currentRideId != null) {
         if (ridePointCount > 0) {
+            val tracking = _uiState.value.tracking
+            val stats = com.example.leanangletracker.data.RideStats(
+                accumulatedTimeMs = finalElapsedMs,
+                trackLengthMeters = trackLengthMeters,
+                maxLeftDeg = tracking.maxLeftDeg,
+                maxRightDeg = tracking.maxRightDeg,
+                sumSpeedKmh = rideSumSpeedKmh,
+                sumAbsLeanDeg = rideSumAbsLeanDeg,
+                pointCount = ridePointCount
+            )
+
             val skeleton = RideSummary(
                 rideId = currentRideId,
                 startedAtMs = started,
                 endedAtMs = ended,
                 isSkeleton = true,
-                isFinished = false
+                isFinished = false,
+                accumulatedTimeMs = finalElapsedMs,
+                trackLengthMeters = trackLengthMeters,
+                maxLeftDeg = tracking.maxLeftDeg,
+                maxRightDeg = tracking.maxRightDeg,
+                pointCount = ridePointCount
             )
             _uiState.update { it.copy(
                 rideHistory = it.rideHistory.map { summary ->
@@ -219,10 +240,9 @@ internal fun MainViewModel.finishRide() {
 
             viewModelScope.launch(Dispatchers.IO) {
                 rideRepository.flushRidePoints(currentRideId)
-                delay(2000) 
-                // Load points once from DB to finalize the session (route description etc)
+                delay(1000) 
                 val allPoints = rideRepository.loadFullSession(currentRideId)?.points ?: emptyList()
-                val newSession = rideSessionUseCases.saveFinishedRide(currentRideId, started, ended, allPoints)
+                val newSession = rideSessionUseCases.saveFinishedRide(currentRideId, started, ended, allPoints, stats)
                 
                 launch(Dispatchers.Main) {
                     _uiState.update { state ->
@@ -236,7 +256,6 @@ internal fun MainViewModel.finishRide() {
                 }
             }
         } else {
-            // No points stored, delete the empty ride record
             viewModelScope.launch(Dispatchers.IO) {
                 rideRepository.deleteRide(currentRideId)
             }
@@ -272,6 +291,8 @@ internal fun MainViewModel.finishRide() {
             averageSpeedKmh = 0f,
             trackLengthKm = 0f,
             averageLeanAngleDeg = 0f,
+            maxLeftDeg = 0f,
+            maxRightDeg = 0f,
             isUpsideDown = false,
             showHighRotationWarning = false,
             recentPoints = emptyList()
@@ -395,18 +416,29 @@ internal fun MainViewModel.recordFusedSample() {
     // Live stats update & Local buffer update
     addTrackPoint(point)
     
-    // Immediate persistence
+    val elapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
+    val avgSpeed = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f
+    val avgLean = if (ridePointCount > 0) rideSumAbsLeanDeg / ridePointCount else 0f
+
+    // Immediate persistence of both point AND stats
     activeRideId?.let { id ->
         viewModelScope.launch(Dispatchers.IO) {
             rideRepository.recordPoint(point, id)
+            // Periodic stats update
+            rideRepository.updateRideStats(
+                rideId = id,
+                accumulatedTimeMs = elapsedMs,
+                trackLengthMeters = trackLengthMeters,
+                maxLeftDeg = state.tracking.maxLeftDeg,
+                maxRightDeg = state.tracking.maxRightDeg,
+                sumSpeedKmh = rideSumSpeedKmh,
+                sumAbsLeanDeg = rideSumAbsLeanDeg,
+                pointCount = ridePointCount
+            )
         }
     }
     
     peakLeanSinceLastTick = latestLeanDeg
-
-    val elapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
-    val avgSpeed = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f
-    val avgLean = if (ridePointCount > 0) rideSumAbsLeanDeg / ridePointCount else 0f
 
     updateTrackingState {
         it.copy(

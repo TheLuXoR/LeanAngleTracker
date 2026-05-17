@@ -69,6 +69,33 @@ class RideRepository(context: Context) {
     }
 
     /**
+     * Updates the running totals for a ride in the database.
+     */
+    suspend fun updateRideStats(
+        rideId: Long,
+        accumulatedTimeMs: Long,
+        trackLengthMeters: Float,
+        maxLeftDeg: Float,
+        maxRightDeg: Float,
+        sumSpeedKmh: Float,
+        sumAbsLeanDeg: Float,
+        pointCount: Int
+    ) {
+        val ride = rideDao.getRideById(rideId)
+        if (ride != null) {
+            rideDao.updateRide(ride.copy(
+                accumulatedTimeMs = accumulatedTimeMs,
+                trackLengthMeters = trackLengthMeters,
+                maxLeftDeg = maxLeftDeg,
+                maxRightDeg = maxRightDeg,
+                sumSpeedKmh = sumSpeedKmh,
+                sumAbsLeanDeg = sumAbsLeanDeg,
+                pointCount = pointCount
+            ))
+        }
+    }
+
+    /**
      * Flushes any buffered points for the given ride.
      */
     suspend fun flushRidePoints(rideId: Long) {
@@ -86,14 +113,26 @@ class RideRepository(context: Context) {
     /**
      * Updates the ride metadata when tracking is finished.
      */
-    suspend fun finishRide(rideId: Long, endTimeMs: Long, routeDescription: String? = null) {
+    suspend fun finishRide(
+        rideId: Long,
+        endTimeMs: Long,
+        routeDescription: String? = null,
+        stats: RideStats? = null
+    ) {
         flushRidePoints(rideId)
         val ride = rideDao.getRideById(rideId)
         if (ride != null) {
             rideDao.updateRide(ride.copy(
                 endTime = endTimeMs,
                 routeDescription = routeDescription ?: ride.routeDescription,
-                isFinished = true
+                isFinished = true,
+                accumulatedTimeMs = stats?.accumulatedTimeMs ?: ride.accumulatedTimeMs,
+                trackLengthMeters = stats?.trackLengthMeters ?: ride.trackLengthMeters,
+                maxLeftDeg = stats?.maxLeftDeg ?: ride.maxLeftDeg,
+                maxRightDeg = stats?.maxRightDeg ?: ride.maxRightDeg,
+                sumSpeedKmh = stats?.sumSpeedKmh ?: ride.sumSpeedKmh,
+                sumAbsLeanDeg = stats?.sumAbsLeanDeg ?: ride.sumAbsLeanDeg,
+                pointCount = stats?.pointCount ?: ride.pointCount
             ))
         }
     }
@@ -108,15 +147,20 @@ class RideRepository(context: Context) {
      */
     suspend fun getRideSummary(rideId: Long): RideSummary? {
         val entity = rideDao.getRideById(rideId) ?: return null
-        val pointCount = rideDao.getPointCountForRide(rideId)
         return RideSummary(
             rideId = entity.id,
             startedAtMs = entity.startTime,
             endedAtMs = entity.endTime,
             name = entity.name,
             routeDescription = entity.routeDescription,
-            pointCount = pointCount,
-            isFinished = entity.isFinished
+            pointCount = entity.pointCount,
+            isFinished = entity.isFinished,
+            accumulatedTimeMs = entity.accumulatedTimeMs,
+            trackLengthMeters = entity.trackLengthMeters,
+            maxLeftDeg = entity.maxLeftDeg,
+            maxRightDeg = entity.maxRightDeg,
+            averageSpeedKmh = if (entity.pointCount > 0) entity.sumSpeedKmh / entity.pointCount else 0f,
+            averageLeanAngleDeg = if (entity.pointCount > 0) entity.sumAbsLeanDeg / entity.pointCount else 0f
         )
     }
 
@@ -128,8 +172,14 @@ class RideRepository(context: Context) {
                 endedAtMs = entity.endTime,
                 name = entity.name,
                 routeDescription = entity.routeDescription,
-                pointCount = rideDao.getPointCountForRide(entity.id),
-                isFinished = entity.isFinished
+                pointCount = entity.pointCount,
+                isFinished = entity.isFinished,
+                accumulatedTimeMs = entity.accumulatedTimeMs,
+                trackLengthMeters = entity.trackLengthMeters,
+                maxLeftDeg = entity.maxLeftDeg,
+                maxRightDeg = entity.maxRightDeg,
+                averageSpeedKmh = if (entity.pointCount > 0) entity.sumSpeedKmh / entity.pointCount else 0f,
+                averageLeanAngleDeg = if (entity.pointCount > 0) entity.sumAbsLeanDeg / entity.pointCount else 0f
             )
         }
     }
@@ -155,7 +205,13 @@ class RideRepository(context: Context) {
             points = points,
             name = ride.name,
             routeDescription = ride.routeDescription,
-            isFinished = ride.isFinished
+            isFinished = ride.isFinished,
+            accumulatedTimeMs = ride.accumulatedTimeMs,
+            trackLengthMeters = ride.trackLengthMeters,
+            maxLeftDeg = ride.maxLeftDeg,
+            maxRightDeg = ride.maxRightDeg,
+            sumSpeedKmh = ride.sumSpeedKmh,
+            sumAbsLeanDeg = ride.sumAbsLeanDeg
         )
     }
 
@@ -170,3 +226,13 @@ class RideRepository(context: Context) {
         rideDao.deleteRide(rideId)
     }
 }
+
+data class RideStats(
+    val accumulatedTimeMs: Long,
+    val trackLengthMeters: Float,
+    val maxLeftDeg: Float,
+    val maxRightDeg: Float,
+    val sumSpeedKmh: Float,
+    val sumAbsLeanDeg: Float,
+    val pointCount: Int
+)
