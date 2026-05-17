@@ -236,12 +236,12 @@ internal fun LeanAngleScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Left Column: Gauge and Ads
                     Column(
                         modifier = Modifier
-                            .weight(1.2f)
+                            .weight(1.1f)
                             .fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
