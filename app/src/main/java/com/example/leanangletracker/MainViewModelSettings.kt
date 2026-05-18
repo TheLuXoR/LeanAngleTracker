@@ -25,42 +25,7 @@ internal fun MainViewModel.resolveRecovery(continueRide: Boolean) {
     
     if (continueRide) {
         viewModelScope.launch(Dispatchers.Main) {
-            if (hasLocationPermission()) {
-                startLocationUpdates()
-            }
-            activeRideStartedMs = session.startedAtMs
-            activeRideId = session.rideId
-            
-            recentRidePoints.clear()
-            recentRidePoints.addAll(session.points.takeLast(LIVE_POINTS_UI_LIMIT))
-            
-            // Restore stats from DB record
-            accumulatedTimeMs = session.accumulatedTimeMs
-            trackLengthMeters = session.trackLengthMeters
-            ridePointCount = session.points.size
-            rideSumSpeedKmh = session.sumSpeedKmh
-            rideSumAbsLeanDeg = session.sumAbsLeanDeg
-            
-            // maxLeftDeg is negative, maxRightDeg is positive
-            val lMax = session.maxLeftDeg
-            val rMax = session.maxRightDeg
-
-            lastResumeMs = System.currentTimeMillis()
-            peakLeanSinceLastTick = 0f
-            startRecorder()
-            
-            updateTrackingState { it.copy(
-                trackingStarted = true, 
-                isPaused = false, 
-                hasTrackData = session.points.isNotEmpty(), 
-                recentPoints = recentRidePoints.toList(),
-                elapsedTimeMs = accumulatedTimeMs,
-                trackLengthKm = trackLengthMeters / 1000f,
-                maxLeftDeg = lMax,
-                maxRightDeg = rMax,
-                averageSpeedKmh = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f,
-                averageLeanAngleDeg = if (ridePointCount > 0) rideSumAbsLeanDeg / ridePointCount else 0f
-            ) }
+            resumeRideSession(session)
         }
     } else {
         viewModelScope.launch(Dispatchers.IO) {
