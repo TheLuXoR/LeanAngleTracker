@@ -113,7 +113,36 @@ internal fun MainViewModel.processAccelerometer(event: SensorEvent) {
     val dt = if (lastTs == null) 0.01f else ((event.timestamp - lastTs).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
     filteredGravity = gravityLowPass.update(raw, dt)
     latestLinearAccelerationMagnitude = abs(filteredGravity.norm() - SensorManager.GRAVITY_EARTH)
+
+    val step = _uiState.value.calibration.calibrationStep
+    if (step == BikeLean.UPRIGHT) {
+        val stillness = (1f - (latestLinearAccelerationMagnitude / 1.2f)).coerceIn(0f, 1f)
+        updateCalibrationState {
+            it.copy(
+                currentProgress = stillness,
+                currentAngleDeg = 0f,
+                isWrongDirection = false
+            )
+        }
+    } else if (step == BikeLean.LEFT) {
+        val progress = (headingSampleCount / 24f).coerceIn(0f, 1f)
+        val up = uprightUp
+        val currentUp = (filteredGravity * -1f).normalized()
+        val angleDeg = if (up != null) {
+            val dot = up.dot(currentUp).coerceIn(-1f, 1f)
+            Math.toDegrees(kotlin.math.acos(dot).toDouble()).toFloat()
+        } else 0f
+        updateCalibrationState {
+            it.copy(
+                currentProgress = progress,
+                leftMax = maxOf(it.leftMax, progress),
+                currentAngleDeg = angleDeg,
+                isWrongDirection = false
+            )
+        }
+    }
 }
+
 
 internal fun MainViewModel.buildBikeFrameFromCalibration(forwardWorld: Vec3): BikeFrameCalibration {
     val up = uprightUp ?: Vec3(0f, 0f, 1f)
