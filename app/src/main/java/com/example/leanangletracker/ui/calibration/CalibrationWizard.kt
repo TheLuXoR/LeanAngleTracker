@@ -112,8 +112,8 @@ fun CalibrationWizardLandscape(
                         ) {
                             val buttonText = when (state.calibrationStep) {
                                 BikeLean.UPRIGHT -> stringResource(R.string.calibration_action_fix_center)
-                                BikeLean.LEFT -> stringResource(R.string.calibration_action_left_saved)
-                                BikeLean.RIGHT -> stringResource(R.string.calibration_action_right_saved)
+                                BikeLean.LEFT -> stringResource(R.string.calibration_action_left_confirmed)
+                                BikeLean.RIGHT -> stringResource(R.string.calibration_action_right_confirmed)
                                 else -> ""
                             }
                             Text(text = buttonText, fontWeight = FontWeight.Bold)
@@ -240,8 +240,8 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
 
         val instructionText = when (state.calibrationStep) {
             BikeLean.UPRIGHT -> stringResource(R.string.calibration_instr_upright)
-            BikeLean.LEFT -> stringResource(R.string.calibration_instr_tilt_left)
-            BikeLean.RIGHT -> stringResource(R.string.calibration_instr_tilt_right)
+            BikeLean.LEFT -> stringResource(R.string.calibration_instr_straight_ride)
+            BikeLean.RIGHT -> stringResource(R.string.calibration_instr_right_validation)
             else -> stringResource(R.string.calibration_instr_ready)
         }
 
@@ -254,8 +254,9 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
 
         Text(
             text = when(state.calibrationStep) {
-                BikeLean.UPRIGHT -> stringResource(R.string.calibration_hint_firm_mount)
-                BikeLean.LEFT, BikeLean.RIGHT -> stringResource(R.string.calibration_hint_min_angle)
+                BikeLean.UPRIGHT -> stringResource(R.string.calibration_hint_upright)
+                BikeLean.LEFT -> stringResource(R.string.calibration_hint_straight_ride)
+                BikeLean.RIGHT -> stringResource(R.string.calibration_hint_right_validation)
                 else -> stringResource(R.string.calibration_hint_ready)
             },
             style = MaterialTheme.typography.bodySmall,
