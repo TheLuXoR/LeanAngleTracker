@@ -91,6 +91,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal var fusionQuaternion: Quaternion? = Quaternion.IDENTITY
     internal var bikeFrameCalibration: BikeFrameCalibration? = null
     internal var lastAccelTimestampNs: Long? = null
+    internal var headingSinAccum = 0f
+    internal var headingCosAccum = 0f
+    internal var headingSampleCount = 0
     internal var autoResumeTimerStartMs: Long? = null
     internal val pausedPointsBuffer = ArrayDeque<TrackPoint>()
     internal var highRotationStartNs: Long? = null
@@ -190,6 +193,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestGpsLocation = location
         latestGpsTimestampNs = location.elapsedRealtimeNanos
         speedKmh = (location.speed * 3.6f).coerceAtLeast(0f)
+
+        if (_uiState.value.calibration.calibrationStep == BikeLean.LEFT && location.hasBearing() && speedKmh >= 8f) {
+            val headingRad = Math.toRadians(location.bearing.toDouble()).toFloat()
+            headingSinAccum += kotlin.math.sin(headingRad)
+            headingCosAccum += kotlin.math.cos(headingRad)
+            headingSampleCount += 1
+        }
 
         if (isCheckingForExtension) {
             isCheckingForExtension = false

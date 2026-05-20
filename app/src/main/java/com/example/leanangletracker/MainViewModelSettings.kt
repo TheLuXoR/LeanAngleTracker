@@ -218,6 +218,9 @@ internal fun MainViewModel.startCalibration() {
     bikeFrameCalibration = null
     fusionQuaternion = Quaternion.IDENTITY
     lastAccelTimestampNs = null
+    headingSinAccum = 0f
+    headingCosAccum = 0f
+    headingSampleCount = 0
     gyroLeanDeg = 0f
     gyroBiasRadPerSec = 0f
     gyroBiasVectorRadPerSec = null
@@ -252,9 +255,12 @@ internal fun MainViewModel.captureUpright() {
     when (state.calibrationStep) {
         BikeLean.UPRIGHT -> {
             uprightUp = (filteredGravity * -1f).normalized()
-            gyroBiasVectorRadPerSec = if (gyroBiasSampleCount > 0) gyroBiasAccumulated * (1f / gyroBiasSampleCount) else Vec3(0f,0f,0f)
-            gyroBiasAccumulated = Vec3(0f,0f,0f)
+            gyroBiasVectorRadPerSec = if (gyroBiasSampleCount > 0) gyroBiasAccumulated * (1f / gyroBiasSampleCount) else Vec3(0f, 0f, 0f)
+            gyroBiasAccumulated = Vec3(0f, 0f, 0f)
             gyroBiasSampleCount = 0
+            headingSinAccum = 0f
+            headingCosAccum = 0f
+            headingSampleCount = 0
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.LEFT,
@@ -263,9 +269,13 @@ internal fun MainViewModel.captureUpright() {
             }
         }
         BikeLean.LEFT -> {
-            val headingDeg = latestGpsLocation?.bearing?.takeIf { latestGpsLocation?.hasBearing() == true } ?: 0f
-            val headingRad = Math.toRadians(headingDeg.toDouble()).toFloat()
-            val forwardWorld = Vec3(kotlin.math.sin(headingRad), kotlin.math.cos(headingRad), 0f)
+            if (headingSampleCount < 12) {
+                updateCalibrationState { it.copy(instructionsResId = R.string.instructions_hold_still_for_bias) }
+                return
+            }
+
+            val avgHeadingRad = kotlin.math.atan2(headingSinAccum, headingCosAccum)
+            val forwardWorld = Vec3(kotlin.math.sin(avgHeadingRad), kotlin.math.cos(avgHeadingRad), 0f)
             val frame = buildBikeFrameFromCalibration(forwardWorld)
             bikeFrameCalibration = frame
             bikeForwardAxis = frame.bikeForwardWorld
