@@ -118,27 +118,35 @@ internal fun MainViewModel.processAccelerometer(event: SensorEvent) {
     if (step == BikeLean.UPRIGHT) {
         val stillness = (1f - (latestLinearAccelerationMagnitude / 1.2f)).coerceIn(0f, 1f)
         updateCalibrationState {
+            it.copy(currentProgress = stillness, currentAngleDeg = 0f, isWrongDirection = false)
+        }
+    } else if (step == BikeLean.LEFT) {
+        val headingProgress = (headingSampleCount / 24f).coerceIn(0f, 1f)
+        updateCalibrationState {
             it.copy(
-                currentProgress = stillness,
+                currentProgress = headingProgress,
+                leftMax = maxOf(it.leftMax, headingProgress),
                 currentAngleDeg = 0f,
                 isWrongDirection = false
             )
         }
-    } else if (step == BikeLean.LEFT) {
-        val progress = (headingSampleCount / 24f).coerceIn(0f, 1f)
-        val up = uprightUp
-        val currentUp = (filteredGravity * -1f).normalized()
-        val angleDeg = if (up != null) {
-            val dot = up.dot(currentUp).coerceIn(-1f, 1f)
-            Math.toDegrees(kotlin.math.acos(dot).toDouble()).toFloat()
-        } else 0f
-        updateCalibrationState {
-            it.copy(
-                currentProgress = progress,
-                leftMax = maxOf(it.leftMax, progress),
-                currentAngleDeg = angleDeg,
-                isWrongDirection = false
-            )
+    } else if (step == BikeLean.RIGHT) {
+        val frame = bikeFrameCalibration
+        val q = fusionQuaternion
+        if (frame != null && q != null) {
+            val worldGravity = q.rotate(Vec3(0f, 0f, SensorManager.GRAVITY_EARTH)).normalized() * -1f
+            val leanRad = atan2(worldGravity.dot(frame.bikeRightWorld), worldGravity.dot(frame.bikeUpWorld))
+            val leanDeg = -Math.toDegrees(leanRad.toDouble()).toFloat()
+            val progress = (kotlin.math.abs(leanDeg) / 20f).coerceIn(0f, 1f)
+            val wrongDirection = leanDeg < -3f
+            updateCalibrationState {
+                it.copy(
+                    currentProgress = progress,
+                    rightMax = maxOf(it.rightMax, progress),
+                    currentAngleDeg = kotlin.math.abs(leanDeg),
+                    isWrongDirection = wrongDirection
+                )
+            }
         }
     }
 }

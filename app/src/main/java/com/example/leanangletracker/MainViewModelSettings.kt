@@ -264,7 +264,10 @@ internal fun MainViewModel.captureUpright() {
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.LEFT,
-                    instructionsResId = R.string.instructions_tilt_left_then_return
+                    instructionsResId = R.string.instructions_tilt_left_then_return,
+                    currentProgress = 0f,
+                    leftMax = 0f,
+                    rightMax = 0f
                 )
             }
         }
@@ -281,9 +284,25 @@ internal fun MainViewModel.captureUpright() {
             bikeForwardAxis = frame.bikeForwardWorld
             updateCalibrationState {
                 it.copy(
+                    calibrationStep = BikeLean.RIGHT,
+                    instructionsResId = R.string.instructions_tilt_right_then_return,
+                    currentProgress = 0f,
+                    currentAngleDeg = 0f,
+                    isWrongDirection = false
+                )
+            }
+        }
+        BikeLean.RIGHT -> {
+            if (state.rightMax < 0.35f) {
+                updateCalibrationState { it.copy(instructionsResId = R.string.instructions_tilt_right_then_return) }
+                return
+            }
+            updateCalibrationState {
+                it.copy(
                     calibrationStep = BikeLean.DONE,
                     isCalibrated = true,
-                    instructionsResId = R.string.instructions_calibrated
+                    instructionsResId = R.string.instructions_calibrated,
+                    currentProgress = 1f
                 )
             }
             persistCalibration()
