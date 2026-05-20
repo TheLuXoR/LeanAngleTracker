@@ -21,6 +21,8 @@ import com.example.leanangletracker.MainViewModelConfig.EXTEND_PROXIMITY_METERS
 import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.domain.RideSessionUseCases
+import com.example.leanangletracker.sensor.BikeFrameCalibration
+import com.example.leanangletracker.sensor.Quaternion
 import com.example.leanangletracker.ui.animation.BikeLean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,9 +42,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     private val sensorManager = application.getSystemService(SensorManager::class.java)
     private val accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
-    private val linearAccelerationSensor =
-        sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     internal val locationManager = application.getSystemService(LocationManager::class.java)
     internal val rideRepository = RideRepository(application)
@@ -89,6 +88,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal var isCheckingForExtension = false
     internal var latestLinearAccelerationMagnitude = 0f
     internal var fusionConfidence = 1f
+    internal var fusionQuaternion: Quaternion? = Quaternion.IDENTITY
+    internal var bikeFrameCalibration: BikeFrameCalibration? = null
+    internal var lastAccelTimestampNs: Long? = null
     internal var autoResumeTimerStartMs: Long? = null
     internal val pausedPointsBuffer = ArrayDeque<TrackPoint>()
     internal var highRotationStartNs: Long? = null
@@ -107,12 +109,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         accelerometerSensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
-        gravitySensor?.let {
-            sensorManager.registerListener(this, it, delay)
-        }
-        linearAccelerationSensor?.let {
-            sensorManager.registerListener(this, it, delay)
-        }
         gyroscopeSensor?.let {
             sensorManager.registerListener(this, it, delay)
         }
@@ -128,7 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         backfillRouteDescriptions()
         checkForUnfinishedRides()
 
-        if (accelerometerSensor == null && gravitySensor == null) {
+        if (accelerometerSensor == null) {
             updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
         }
     }
@@ -138,40 +134,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
 
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> {
-                val alpha = if (gravitySensor == null) 0.92f else 0.985f
-                val raw = Vec3(event.values[0], event.values[1], event.values[2])
-                filteredGravity = filteredGravity * alpha + raw * (1f - alpha)
-                latestLinearAccelerationMagnitude = (raw - filteredGravity).norm()
-
-                val step = _uiState.value.calibration.calibrationStep
-                if (step == BikeLean.LEFT || step == BikeLean.RIGHT) {
-                    handleManualCalibrationSensorUpdate()
-                } else if (step == BikeLean.UPRIGHT || step == BikeLean.DONE) {
-                    updateLeanAngle(event.timestamp)
-                }
-            }
-
-            Sensor.TYPE_GRAVITY -> {
-                val raw = Vec3(event.values[0], event.values[1], event.values[2])
-                filteredGravity = filteredGravity * 0.25f + raw * 0.75f
-                val step = _uiState.value.calibration.calibrationStep
-                if (step == BikeLean.LEFT || step == BikeLean.RIGHT) {
-                    handleManualCalibrationSensorUpdate()
-                } else if (step == BikeLean.UPRIGHT || step == BikeLean.DONE) {
-                    updateLeanAngle(event.timestamp)
-                }
-            }
-
-            Sensor.TYPE_LINEAR_ACCELERATION -> {
-                val raw = Vec3(event.values[0], event.values[1], event.values[2])
-                filteredLinearAcceleration = filteredLinearAcceleration * 0.6f + raw * 0.4f
-            }
-
-            Sensor.TYPE_GYROSCOPE -> {
-                collectGyroBiasSample(event)
-                updateGyroLean(event)
-            }
+            Sensor.TYPE_ACCELEROMETER -> processAccelerometer(event)
+            Sensor.TYPE_GYROSCOPE -> updateGyroLean(event)
         }
     }
 

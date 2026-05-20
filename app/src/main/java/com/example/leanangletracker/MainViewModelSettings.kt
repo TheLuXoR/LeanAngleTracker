@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import com.example.leanangletracker.data.Vec3
+import com.example.leanangletracker.sensor.Quaternion
 import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.abs
 
@@ -88,6 +89,7 @@ internal fun MainViewModel.loadPersistedState() {
 
     uprightUp = persistedCalibration.uprightUp
     bikeForwardAxis = persistedCalibration.bikeForwardAxis
+    bikeFrameCalibration = buildBikeFrameFromCalibration(persistedCalibration.bikeForwardAxis)
     gyroLeanDeg = 0f
     gyroBiasVectorRadPerSec = persistedCalibration.gyroBiasVectorRadPerSec
     gyroBiasRadPerSec = persistedCalibration.bikeForwardAxis?.let { gyroBiasVectorRadPerSec?.dot(it) }
@@ -213,6 +215,9 @@ internal fun MainViewModel.startCalibration() {
     rightUpPeak = null
     bikeForwardAxis = null
     calibrationSideAxis = null
+    bikeFrameCalibration = null
+    fusionQuaternion = Quaternion.IDENTITY
+    lastAccelTimestampNs = null
     gyroLeanDeg = 0f
     gyroBiasRadPerSec = 0f
     gyroBiasVectorRadPerSec = null
@@ -247,6 +252,9 @@ internal fun MainViewModel.captureUpright() {
     when (state.calibrationStep) {
         BikeLean.UPRIGHT -> {
             uprightUp = (filteredGravity * -1f).normalized()
+            gyroBiasVectorRadPerSec = if (gyroBiasSampleCount > 0) gyroBiasAccumulated * (1f / gyroBiasSampleCount) else Vec3(0f,0f,0f)
+            gyroBiasAccumulated = Vec3(0f,0f,0f)
+            gyroBiasSampleCount = 0
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.LEFT,
@@ -255,15 +263,20 @@ internal fun MainViewModel.captureUpright() {
             }
         }
         BikeLean.LEFT -> {
+            val headingDeg = latestGpsLocation?.bearing?.takeIf { latestGpsLocation?.hasBearing() == true } ?: 0f
+            val headingRad = Math.toRadians(headingDeg.toDouble()).toFloat()
+            val forwardWorld = Vec3(kotlin.math.sin(headingRad), kotlin.math.cos(headingRad), 0f)
+            val frame = buildBikeFrameFromCalibration(forwardWorld)
+            bikeFrameCalibration = frame
+            bikeForwardAxis = frame.bikeForwardWorld
             updateCalibrationState {
                 it.copy(
-                    calibrationStep = BikeLean.RIGHT,
-                    instructionsResId = R.string.instructions_tilt_right_then_return
+                    calibrationStep = BikeLean.DONE,
+                    isCalibrated = true,
+                    instructionsResId = R.string.instructions_calibrated
                 )
             }
-        }
-        BikeLean.RIGHT -> {
-            finalizeManualCalibration()
+            persistCalibration()
         }
         else -> Unit
     }
