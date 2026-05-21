@@ -12,8 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -32,6 +32,7 @@ enum class BikeLean(val angle: Float) {
     UPRIGHT(0f),
     LEFT(-35f),
     RIGHT(35f),
+    DYNAMIC(0f),
     DONE(0f)
 }
 

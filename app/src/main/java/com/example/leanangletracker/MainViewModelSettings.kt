@@ -1,7 +1,7 @@
 package com.example.leanangletracker
 
+import android.annotation.SuppressLint
 import androidx.lifecycle.viewModelScope
-import com.example.leanangletracker.MainViewModelConfig.LIVE_POINTS_UI_LIMIT
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_STEP_MS
@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.update
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.sensor.Quaternion
 import com.example.leanangletracker.ui.animation.BikeLean
-import kotlin.math.abs
 
 internal fun MainViewModel.checkForUnfinishedRides() {
     viewModelScope.launch(Dispatchers.IO) {
@@ -89,7 +88,7 @@ internal fun MainViewModel.loadPersistedState() {
 
     uprightUp = persistedCalibration.uprightUp
     bikeForwardAxis = persistedCalibration.bikeForwardAxis
-    bikeFrameCalibration = buildBikeFrameFromCalibration(persistedCalibration.bikeForwardAxis)
+    bikeFrameCalibration = buildBikeFrameFromCalibration(persistedCalibration.bikeForwardAxis ?: Vec3(0f, 1f, 0f))
     gyroLeanDeg = 0f
     gyroBiasVectorRadPerSec = persistedCalibration.gyroBiasVectorRadPerSec
     gyroBiasRadPerSec = persistedCalibration.bikeForwardAxis?.let { gyroBiasVectorRadPerSec?.dot(it) }
@@ -106,7 +105,10 @@ internal fun MainViewModel.loadPersistedState() {
         it.copy(
             calibrationStep = BikeLean.DONE,
             isCalibrated = true,
-            instructionsResId = R.string.instructions_calibrated
+            instructionsResId = R.string.instructions_calibrated,
+            currentStepIndex = 4,
+            totalSteps = 4,
+            isMeasuring = false
         )
     }
 }
@@ -209,6 +211,7 @@ internal fun MainViewModel.setGpsTrackingEnabled(enabled: Boolean) {
     persistSettings()
 }
 
+@SuppressLint("MissingPermission")
 internal fun MainViewModel.startCalibration() {
     uprightUp = null
     leftUpPeak = null
@@ -235,6 +238,10 @@ internal fun MainViewModel.startCalibration() {
     lastLeanComputationTimestampNs = null
     recentLeanSamples.clear()
     clearPersistedCalibration()
+    
+    if (hasLocationPermission()) {
+        startLocationUpdates()
+    }
 
     updateCalibrationState {
         it.copy(
@@ -243,69 +250,73 @@ internal fun MainViewModel.startCalibration() {
             instructionsResId = R.string.instructions_upright,
             leftMax = 0f,
             rightMax = 0f,
+            dynamicMax = 0f,
             currentProgress = 0f,
             currentAngleDeg = 0f,
-            isWrongDirection = false
+            isWrongDirection = false,
+            currentStepIndex = 1,
+            totalSteps = 4,
+            isMeasuring = false,
+            currentSpeedKmh = 0f
         )
     }
 }
 
 internal fun MainViewModel.captureUpright() {
-    val state = _uiState.value.calibration
-    when (state.calibrationStep) {
+    val calState = _uiState.value.calibration
+    val currentStep = calState.calibrationStep
+    when (currentStep) {
         BikeLean.UPRIGHT -> {
             uprightUp = (filteredGravity * -1f).normalized()
             gyroBiasVectorRadPerSec = if (gyroBiasSampleCount > 0) gyroBiasAccumulated * (1f / gyroBiasSampleCount) else Vec3(0f, 0f, 0f)
             gyroBiasAccumulated = Vec3(0f, 0f, 0f)
             gyroBiasSampleCount = 0
-            headingSinAccum = 0f
-            headingCosAccum = 0f
-            headingSampleCount = 0
+            
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.LEFT,
-                    instructionsResId = R.string.instructions_tilt_left_then_return,
+                    instructionsResId = R.string.instructions_tilt_left,
                     currentProgress = 0f,
-                    leftMax = 0f,
-                    rightMax = 0f
+                    currentStepIndex = 2
                 )
             }
         }
         BikeLean.LEFT -> {
-            if (headingSampleCount < 12) {
-                updateCalibrationState { it.copy(instructionsResId = R.string.instructions_hold_still_for_bias) }
-                return
-            }
-
-            val avgHeadingRad = kotlin.math.atan2(headingSinAccum, headingCosAccum)
-            val forwardWorld = Vec3(kotlin.math.sin(avgHeadingRad), kotlin.math.cos(avgHeadingRad), 0f)
-            val frame = buildBikeFrameFromCalibration(forwardWorld)
-            bikeFrameCalibration = frame
-            bikeForwardAxis = frame.bikeForwardWorld
+            if (calState.leftMax < 0.2f) return 
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.RIGHT,
-                    instructionsResId = R.string.instructions_tilt_right_then_return,
+                    instructionsResId = R.string.instructions_tilt_right,
                     currentProgress = 0f,
-                    currentAngleDeg = 0f,
-                    isWrongDirection = false
+                    currentStepIndex = 3
                 )
             }
         }
         BikeLean.RIGHT -> {
-            if (state.rightMax < 0.35f) {
-                updateCalibrationState { it.copy(instructionsResId = R.string.instructions_tilt_right_then_return) }
-                return
-            }
+            if (calState.rightMax < 0.2f) return
+            
             updateCalibrationState {
                 it.copy(
-                    calibrationStep = BikeLean.DONE,
-                    isCalibrated = true,
-                    instructionsResId = R.string.instructions_calibrated,
-                    currentProgress = 1f
+                    calibrationStep = BikeLean.DYNAMIC,
+                    instructionsResId = R.string.instructions_dynamic,
+                    currentProgress = 0f,
+                    currentStepIndex = 4,
+                    isMeasuring = false
                 )
             }
-            persistCalibration()
+        }
+        BikeLean.DYNAMIC -> {
+            headingSinAccum = 0f
+            headingCosAccum = 0f
+            headingSampleCount = 0
+            gyroBiasAccumulated = Vec3(0f, 0f, 0f)
+            
+            updateCalibrationState {
+                it.copy(
+                    isMeasuring = true,
+                    currentProgress = 0.01f
+                )
+            }
         }
         else -> Unit
     }
@@ -326,15 +337,17 @@ internal fun MainViewModel.setInvertLeanAngle(invert: Boolean) {
     recentLeanSamples.clear()
     recentLeanSamples.addAll(transformedRecentSamples)
 
-    _uiState.update { it.copy(
-        settings = it.settings.copy(invertLeanAngle = invert),
-        tracking = it.tracking.copy(
-            leanAngleDeg = -it.tracking.leanAngleDeg,
-            maxLeftDeg = -it.tracking.maxRightDeg,
-            maxRightDeg = -it.tracking.maxLeftDeg,
-            leanHistoryDeg = transformedHistory
+    _uiState.update { state ->
+        state.copy(
+            settings = state.settings.copy(invertLeanAngle = invert),
+            tracking = state.tracking.copy(
+                leanAngleDeg = -state.tracking.leanAngleDeg,
+                maxLeftDeg = -state.tracking.maxRightDeg,
+                maxRightDeg = -state.tracking.maxLeftDeg,
+                leanHistoryDeg = transformedHistory
+            )
         )
-    ) }
+    }
     persistSettings()
 }
 
@@ -344,19 +357,19 @@ internal fun MainViewModel.setHistoryWindowSeconds(seconds: Int) {
     if (previous.settings.historyWindowSeconds == clamped) return
 
     leanHistory.lastOrNull()?.let { pruneHistory(it.timestampNs, clamped) }
-    _uiState.update { it.copy(
-        settings = it.settings.copy(historyWindowSeconds = clamped),
-        tracking = it.tracking.copy(leanHistoryDeg = leanHistory.map { it.valueDeg })
-    ) }
+    _uiState.update { state ->
+        state.copy(
+            settings = state.settings.copy(historyWindowSeconds = clamped),
+            tracking = state.tracking.copy(leanHistoryDeg = leanHistory.map { it.valueDeg })
+        )
+    }
     persistSettings()
 }
 
 internal fun MainViewModel.setRecorderIntervalMs(intervalMs: Int) {
     val stepped = (intervalMs / RECORDER_INTERVAL_STEP_MS) * RECORDER_INTERVAL_STEP_MS
     val clamped = stepped.coerceIn(RECORDER_INTERVAL_MIN_MS, RECORDER_INTERVAL_MAX_MS)
-    val previous = _uiState.value
-    if (previous.settings.recorderIntervalMs == clamped) return
-
+    
     _uiState.update { it.copy(settings = it.settings.copy(recorderIntervalMs = clamped)) }
     persistSettings()
 }

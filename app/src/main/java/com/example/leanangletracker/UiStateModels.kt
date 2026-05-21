@@ -9,9 +9,14 @@ data class CalibrationUiState(
     val isCalibrated: Boolean = false,
     val leftMax: Float = 0f,
     val rightMax: Float = 0f,
+    val dynamicMax: Float = 0f,
     val currentProgress: Float = 0f,
     val currentAngleDeg: Float = 0f,
-    val isWrongDirection: Boolean = false
+    val isWrongDirection: Boolean = false,
+    val currentStepIndex: Int = 1,
+    val totalSteps: Int = 4,
+    val isMeasuring: Boolean = false,
+    val currentSpeedKmh: Float = 0f
 )
 
 data class TrackPoint(

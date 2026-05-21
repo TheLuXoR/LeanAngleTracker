@@ -59,24 +59,25 @@
 
     <!-- Calibration Wizard -->
     <string name="calibration_title">Precision Calibration</string>
-    <string name="calibration_action_fix_center">Motorcycle is upright</string>
-    <string name="calibration_action_left_saved">Left Saved</string>
-    <string name="calibration_action_right_saved">Right Saved &amp; Done</string>
-    <string name="calibration_action_left_confirmed">Step 2 complete (heading sampled)</string>
-    <string name="calibration_action_right_confirmed">Finish calibration</string>
+    <string name="calibration_step_indicator">Step %1$d of %2$d</string>
+    <string name="calibration_action_fix_center">Fix Center</string>
+    <string name="calibration_action_left_confirmed">Fix Left</string>
+    <string name="calibration_action_right_confirmed">Fix Right</string>
+    <string name="calibration_action_start_ride">Start Learning</string>
+    <string name="calibration_action_measuring">Measuring...</string>
     <string name="calibration_error_wrong_direction">Wrong Direction!</string>
-    <string name="calibration_hint_min_angle">Be careful not to drop your motorcycle. Only go as far as you feel safe!</string>
-    <string name="calibration_instr_upright">Step 1/3: Hold the motorcycle upright and still.</string>
-    <string name="calibration_instr_tilt_left">Lean the motorcycle to the LEFT and back.</string>
-    <string name="calibration_instr_tilt_right">Lean the motorcycle to the RIGHT and back.</string>
+    
+    <string name="calibration_instr_upright">Step 1: Upright Standing</string>
+    <string name="calibration_instr_left">Step 2: Lean Left</string>
+    <string name="calibration_instr_right">Step 3: Lean Right</string>
+    <string name="calibration_instr_dynamic">Step 4: Dynamic Learning</string>
     <string name="calibration_instr_ready">System Ready!</string>
-    <string name="calibration_hint_firm_mount">Try to stand as upright as possible, this improves the results.</string>
-    <string name="calibration_instr_straight_ride">Step 2/3: Ride straight for a few seconds.</string>
-    <string name="calibration_instr_right_validation">Step 3/3: Lean right once to validate sign and axis.</string>
-    <string name="calibration_hint_upright">Keep bike still. Press button when stability is high.</string>
-    <string name="calibration_hint_straight_ride">Ride straight above ~8 km/h until progress reaches 100%.</string>
-    <string name="calibration_hint_right_validation">Lean right smoothly to at least ~20°. If warning appears, lean to the other side.</string>
-    <string name="calibration_hint_ready">You can start riding now.</string>
+
+    <string name="calibration_hint_upright">Hold bike upright on level ground. Keep phone still.</string>
+    <string name="calibration_hint_left">Lean bike to the left (side stand or hold) and confirm.</string>
+    <string name="calibration_hint_right">Lean bike to the right and confirm.</string>
+    <string name="calibration_hint_dynamic">Press Start, then ride straight above 15 km/h for 5 seconds.</string>
+    <string name="calibration_hint_ready">Calibration finished. Enjoy your ride!</string>
     <string name="calibration_progress_label">Progress: %1$d%%</string>
 
     <!-- Tracking Labels -->
@@ -101,9 +102,9 @@
 
     <!-- Legacy / Backup Instructions (Still used in ViewModel logic) -->
     <string name="instructions_sensor_missing">Acceleration sensor missing</string>
-    <string name="instructions_upright">Capturing center…</string>
-    <string name="instructions_hold_still_for_bias">Hold still (Bias check)…</string>
-    <string name="instructions_tilt_left_then_return">Lean left → return</string>
-    <string name="instructions_tilt_right_then_return">Lean right → return</string>
-    <string name="instructions_calibrated">Calibrated!</string>
+    <string name="instructions_upright">Hold bike upright on level ground.</string>
+    <string name="instructions_tilt_left">Lean bike to the LEFT and confirm.</string>
+    <string name="instructions_tilt_right">Lean bike to the RIGHT and confirm.</string>
+    <string name="instructions_dynamic">Base calibration done. Ride straight (> 15 km/h) to perfect alignment.</string>
+    <string name="instructions_calibrated">Calibration finished!</string>
 </resources>

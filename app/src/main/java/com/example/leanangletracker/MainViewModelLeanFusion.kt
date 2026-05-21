@@ -12,6 +12,8 @@ import com.example.leanangletracker.sensor.Quaternion
 import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val gravityLowPass = LowPassFilter(cutoffHz = 4f)
 private val madgwick = MadgwickFilter(betaBase = 0.055f)
@@ -38,14 +40,15 @@ internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
     val q = fusionQuaternion ?: return
     val frame = bikeFrameCalibration ?: return
 
-    // World gravity from quaternion (device-frame +Z projected to world then flipped).
-    val worldGravity = q.rotate(Vec3(0f, 0f, SensorManager.GRAVITY_EARTH)).normalized() * -1f
-    val bikeUp = frame.bikeUpWorld
-    val bikeRight = frame.bikeRightWorld
-
-    // Signed lean from projected gravity around bike right axis, no Euler extraction.
-    val leanRad = atan2(worldGravity.dot(bikeRight), worldGravity.dot(bikeUp))
-    val leanDegRaw = (-Math.toDegrees(leanRad.toDouble()).toFloat()).coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+    val worldUpD = q.conjugate().rotate(Vec3(0f, 0f, 1f))
+    val bUpD = frame.bikeUpWorld
+    val bRightD = frame.bikeRightWorld
+    
+    val upProj = worldUpD.dot(bUpD)
+    val rightProj = worldUpD.dot(bRightD)
+    
+    val leanRad = atan2(-rightProj, upProj)
+    val leanDegRaw = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
     val leanDeg = if (_uiState.value.settings.invertLeanAngle) -leanDegRaw else leanDegRaw
 
     latestLeanDeg = leanDeg
@@ -86,10 +89,10 @@ internal fun MainViewModel.pruneHistory(currentTimestampNs: Long, historyWindowS
 internal fun MainViewModel.updateGyroLean(event: SensorEvent) {
     val step = _uiState.value.calibration.calibrationStep
     val rawGyro = Vec3(event.values[0], event.values[1], event.values[2])
+    
     if (step == BikeLean.UPRIGHT) {
         gyroBiasAccumulated += rawGyro
         gyroBiasSampleCount += 1
-        return
     }
 
     val lastTs = lastGyroTimestampNs
@@ -115,46 +118,133 @@ internal fun MainViewModel.processAccelerometer(event: SensorEvent) {
     latestLinearAccelerationMagnitude = abs(filteredGravity.norm() - SensorManager.GRAVITY_EARTH)
 
     val step = _uiState.value.calibration.calibrationStep
-    if (step == BikeLean.UPRIGHT) {
-        val stillness = (1f - (latestLinearAccelerationMagnitude / 1.2f)).coerceIn(0f, 1f)
-        updateCalibrationState {
-            it.copy(currentProgress = stillness, currentAngleDeg = 0f, isWrongDirection = false)
-        }
-    } else if (step == BikeLean.LEFT) {
-        val headingProgress = (headingSampleCount / 24f).coerceIn(0f, 1f)
-        updateCalibrationState {
-            it.copy(
-                currentProgress = headingProgress,
-                leftMax = maxOf(it.leftMax, headingProgress),
-                currentAngleDeg = 0f,
-                isWrongDirection = false
-            )
-        }
-    } else if (step == BikeLean.RIGHT) {
-        val frame = bikeFrameCalibration
-        val q = fusionQuaternion
-        if (frame != null && q != null) {
-            val worldGravity = q.rotate(Vec3(0f, 0f, SensorManager.GRAVITY_EARTH)).normalized() * -1f
-            val leanRad = atan2(worldGravity.dot(frame.bikeRightWorld), worldGravity.dot(frame.bikeUpWorld))
-            val leanDeg = -Math.toDegrees(leanRad.toDouble()).toFloat()
-            val progress = (kotlin.math.abs(leanDeg) / 20f).coerceIn(0f, 1f)
-            val wrongDirection = leanDeg < -3f
+    when (step) {
+        BikeLean.UPRIGHT -> {
+            val stillness = (1f - (latestLinearAccelerationMagnitude / 1.2f)).coerceIn(0f, 1f)
             updateCalibrationState {
-                it.copy(
-                    currentProgress = progress,
-                    rightMax = maxOf(it.rightMax, progress),
-                    currentAngleDeg = kotlin.math.abs(leanDeg),
-                    isWrongDirection = wrongDirection
-                )
+                it.copy(currentProgress = stillness, currentAngleDeg = 0f, isWrongDirection = false)
             }
         }
+        BikeLean.LEFT -> {
+            val up = uprightUp ?: return
+            val currentUp = (filteredGravity * -1f).normalized()
+            val angle = Math.toDegrees(Math.acos(up.dot(currentUp).toDouble().coerceIn(-1.0, 1.0))).toFloat()
+            updateCalibrationState {
+                it.copy(
+                    currentProgress = (angle / 15f).coerceIn(0f, 1f),
+                    leftMax = maxOf(it.leftMax, (angle / 15f).coerceIn(0f, 1f)),
+                    currentAngleDeg = -angle
+                )
+            }
+            if (angle > 4f) {
+                if (leftUpPeak == null || angle > Math.toDegrees(Math.acos(up.dot(leftUpPeak!!).toDouble().coerceIn(-1.0, 1.0)))) {
+                    leftUpPeak = currentUp
+                }
+            }
+        }
+        BikeLean.RIGHT -> {
+            val up = uprightUp ?: return
+            val currentUp = (filteredGravity * -1f).normalized()
+            val angle = Math.toDegrees(Math.acos(up.dot(currentUp).toDouble().coerceIn(-1.0, 1.0))).toFloat()
+            updateCalibrationState {
+                it.copy(
+                    currentProgress = (angle / 15f).coerceIn(0f, 1f),
+                    rightMax = maxOf(it.rightMax, (angle / 15f).coerceIn(0f, 1f)),
+                    currentAngleDeg = angle
+                )
+            }
+            if (angle > 4f) {
+                if (rightUpPeak == null || angle > Math.toDegrees(Math.acos(up.dot(rightUpPeak!!).toDouble().coerceIn(-1.0, 1.0)))) {
+                    rightUpPeak = currentUp
+                }
+            }
+        }
+        BikeLean.DYNAMIC -> {
+            val calibState = _uiState.value.calibration
+            if (calibState.isMeasuring) {
+                val q = fusionQuaternion
+                var forwardSample: Vec3? = null
+                
+                // Strategy A: GPS velocity (Very reliable if moving)
+                val loc = latestGpsLocation
+                if (q != null && loc != null && speedKmh > 5f && loc.hasBearing()) {
+                    val bearingRad = Math.toRadians(loc.bearing.toDouble())
+                    val velocityWorld = Vec3(sin(bearingRad).toFloat(), cos(bearingRad).toFloat(), 0f)
+                    forwardSample = q.conjugate().rotate(velocityWorld)
+                } 
+                // Strategy B: Linear acceleration (Works when speeding up/braking)
+                else {
+                    val upD = uprightUp ?: return
+                    val gravityD = upD * -SensorManager.GRAVITY_EARTH
+                    val linAccelD = raw - gravityD
+                    val lateralAccelD = linAccelD - upD * linAccelD.dot(upD)
+                    if (lateralAccelD.norm() > 0.15f) { // Lowered threshold
+                        forwardSample = lateralAccelD.normalized()
+                    }
+                }
+
+                if (forwardSample != null) {
+                    gyroBiasAccumulated += forwardSample
+                    headingSampleCount += 1
+                    
+                    val calculatedProgress = (headingSampleCount / 40f).coerceIn(0f, 1f)
+                    updateCalibrationState {
+                        it.copy(
+                            currentProgress = calculatedProgress,
+                            dynamicMax = maxOf(it.dynamicMax, calculatedProgress)
+                        )
+                    }
+                    
+                    if (calculatedProgress >= 1f) {
+                        finalizeDynamicCalibration()
+                    }
+                }
+            }
+        }
+        else -> Unit
     }
 }
 
+internal fun MainViewModel.finalizeDynamicCalibration() {
+    val forwardD = gyroBiasAccumulated.normalized()
+    if (forwardD.norm() < 0.1f) return
+    
+    bikeFrameCalibration = buildBikeFrameFromCalibration(forwardD)
+    bikeForwardAxis = bikeFrameCalibration?.bikeForwardWorld
+    
+    updateCalibrationState {
+        it.copy(
+            calibrationStep = BikeLean.DONE,
+            isCalibrated = true,
+            instructionsResId = R.string.instructions_calibrated,
+            currentProgress = 1f,
+            isMeasuring = false
+        )
+    }
+    persistCalibration()
+}
 
-internal fun MainViewModel.buildBikeFrameFromCalibration(forwardWorld: Vec3): BikeFrameCalibration {
+internal fun MainViewModel.buildBikeFrameFromCalibration(forwardDevice: Vec3): BikeFrameCalibration {
     val up = uprightUp ?: Vec3(0f, 0f, 1f)
-    val forward = (forwardWorld - up * forwardWorld.dot(up)).normalized()
-    val right = up.cross(forward).normalized()
-    return BikeFrameCalibration(up, forward, right, true)
+    val forward = (forwardDevice - up * forwardDevice.dot(up)).normalized()
+    var right = up.cross(forward).normalized()
+    
+    val rPeak = rightUpPeak
+    val lPeak = leftUpPeak
+    
+    if (rPeak != null && lPeak != null) {
+        val rDir = (rPeak - up * rPeak.dot(up)).normalized()
+        val lDir = (lPeak - up * lPeak.dot(up)).normalized()
+        val score = rDir.dot(right) - lDir.dot(right)
+        if (score < 0) right = right * -1f
+    } else if (rPeak != null) {
+        val rDir = (rPeak - up * rPeak.dot(up)).normalized()
+        if (rDir.dot(right) < 0) right = right * -1f
+    } else if (lPeak != null) {
+        val lDir = (lPeak - up * lPeak.dot(up)).normalized()
+        if (lDir.dot(right) > 0) right = right * -1f
+    }
+    
+    val finalForward = right.cross(up).normalized()
+    return BikeFrameCalibration(up, finalForward, right, true)
 }
