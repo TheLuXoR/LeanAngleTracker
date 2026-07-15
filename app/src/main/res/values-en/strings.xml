@@ -2,15 +2,9 @@
     <string name="app_name">Lean Angle Tracker</string>
 
     <string name="instructions_sensor_missing">Acceleration sensor missing</string>
-    <string name="instructions_upright">To calibrate the app your motorcycle must be </string>
-    <string name="instructions_tilt_left_then_return">Lean left → return upright (careful!)</string>
-    <string name="instructions_tilt_right_then_return">Lean right → return upright (careful!)</string>
-    <string name="instructions_calibrated">Calibrated</string>
 
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="history_title">History</string>
-    <string name="history_upper_bound">Upper bound (Max R): %1$.1f°</string>
-    <string name="history_lower_bound">Lower bound (Max L): %1$.1f°</string>
 
     <string name="settings_dialog_info_title">App Info</string>
     <string name="settings_dialog_info_text">Lean Angle Tracker helps you monitor your riding dynamics. Use Gyro-Fusion for better accuracy during aggressive cornering.</string>
@@ -58,6 +52,27 @@
     <string name="intro_attach_text">Securely mount your smartphone in a holder on the motorcycle.</string>
     <string name="intro_button_understood">Understood</string>
     <string name="intro_button_attached">Mounted</string>
+
+    <!-- Calibration Wizard -->
+    <string name="calibration_title">Precision Calibration</string>
+    <string name="calibration_step_indicator">Step %1$d of %2$d</string>
+    <string name="calibration_action_fix_center">Fix Center</string>
+    <string name="calibration_action_left_confirmed">Fix Left</string>
+    <string name="calibration_action_right_confirmed">Fix Right</string>
+    <string name="calibration_error_wrong_direction">Wrong Direction!</string>
+    <string name="calibration_error_unstable">Keep the motorcycle and phone still until the measurement is complete.</string>
+    <string name="calibration_error_too_little">Lean the motorcycle at least 8°.</string>
+    <string name="calibration_error_same_direction">The right sample points to the same side as the left sample.</string>
+    <string name="calibration_error_degenerate">The motorcycle axes could not be determined. Please repeat the calibration.</string>
+    <string name="calibration_instr_upright">Step 1: Upright Standing</string>
+    <string name="calibration_instr_left">Step 2: Lean Left</string>
+    <string name="calibration_instr_right">Step 3: Lean Right</string>
+    <string name="calibration_instr_ready">System Ready!</string>
+    <string name="calibration_hint_upright">Hold the bike upright and still until the measurement reaches 100 percent.</string>
+    <string name="calibration_hint_left">Lean the bike at least 8° to the left and hold it still.</string>
+    <string name="calibration_hint_right">Lean the bike at least 8° to the right and hold it still.</string>
+    <string name="calibration_hint_ready">Calibration finished. Enjoy your ride!</string>
+    <string name="calibration_progress_label">Progress: %1$d%%</string>
 
     <!-- Tracking Labels -->
     <string name="tracking_searching_gps">Searching GPS…</string>

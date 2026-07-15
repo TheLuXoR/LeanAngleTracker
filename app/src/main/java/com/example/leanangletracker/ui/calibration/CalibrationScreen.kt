@@ -13,7 +13,6 @@ import com.example.leanangletracker.CalibrationUiState
 internal fun CalibrationScreen(
     calibrationState: CalibrationUiState,
     onCaptureUpright: () -> Unit,
-    onContinueFallback: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -27,14 +26,12 @@ internal fun CalibrationScreen(
         if (isLandscape) {
             CalibrationWizardLandscape(
                 state = calibrationState,
-                onCaptureUpright = onCaptureUpright,
-                onContinueFallback = onContinueFallback
+                onCaptureUpright = onCaptureUpright
             )
         } else {
             CalibrationWizardPortrait(
                 state = calibrationState,
-                onCaptureUpright = onCaptureUpright,
-                onContinueFallback = onContinueFallback
+                onCaptureUpright = onCaptureUpright
             )
         }
     }

@@ -5,18 +5,14 @@ import com.example.leanangletracker.ui.animation.BikeLean
 
 data class CalibrationUiState(
     val calibrationStep: BikeLean = BikeLean.UPRIGHT,
-    @StringRes val instructionsResId: Int = R.string.instructions_upright,
     val isCalibrated: Boolean = false,
     val leftMax: Float = 0f,
     val rightMax: Float = 0f,
-    val dynamicMax: Float = 0f,
     val currentProgress: Float = 0f,
     val currentAngleDeg: Float = 0f,
-    val isWrongDirection: Boolean = false,
+    @param:StringRes val errorResId: Int? = null,
     val currentStepIndex: Int = 1,
-    val totalSteps: Int = 4,
-    val isMeasuring: Boolean = false,
-    val currentSpeedKmh: Float = 0f
+    val totalSteps: Int = 3
 )
 
 data class TrackPoint(

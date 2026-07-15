@@ -3,6 +3,7 @@ package com.example.leanangletracker
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.leanangletracker.data.Vec3
+import com.example.leanangletracker.sensor.BikeFrameMath
 
 data class PersistedSettings(
     val invertLeanAngle: Boolean,
@@ -33,6 +34,7 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_RECORDER_INTERVAL = "recorder_interval_ms"
         const val KEY_GPS_ENABLED = "gps_enabled"
         const val KEY_CALIBRATED = "is_calibrated"
+        const val KEY_CALIBRATION_VERSION = "calibration_version"
         const val KEY_UPRIGHT_X = "upright_x"
         const val KEY_UPRIGHT_Y = "upright_y"
         const val KEY_UPRIGHT_Z = "upright_z"
@@ -65,17 +67,27 @@ class SettingsStore(applicationContext: Context) {
         if (!prefs.getBoolean(KEY_CALIBRATED, false)) {
             return PersistedState(settings = settings, calibration = null)
         }
+        if (!isSupportedCalibrationVersion(prefs.getInt(KEY_CALIBRATION_VERSION, 0))) {
+            clearCalibration()
+            return PersistedState(settings = settings, calibration = null)
+        }
 
-        val uprightUp = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)?.normalized()
-        val bikeForwardAxis = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)?.normalized()
-        if (uprightUp == null || bikeForwardAxis == null) {
+        val uprightUp = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)
+        val bikeForwardAxis = readVec3(KEY_FORWARD_X, KEY_FORWARD_Y, KEY_FORWARD_Z)
+        val frame = if (uprightUp != null && bikeForwardAxis != null) {
+            BikeFrameMath.fromUpAndForward(uprightUp, bikeForwardAxis)
+        } else {
+            null
+        }
+        if (frame == null) {
+            clearCalibration()
             return PersistedState(settings = settings, calibration = null)
         }
         return PersistedState(
             settings = settings,
             calibration = PersistedCalibration(
-                uprightUp = uprightUp,
-                bikeForwardAxis = bikeForwardAxis,
+                uprightUp = frame.bikeUpDevice,
+                bikeForwardAxis = frame.bikeForwardDevice,
                 gyroBiasVectorRadPerSec = readVec3(KEY_GYRO_BIAS_X, KEY_GYRO_BIAS_Y, KEY_GYRO_BIAS_Z)
             )
         )
@@ -96,6 +108,7 @@ class SettingsStore(applicationContext: Context) {
     fun saveCalibration(up: Vec3, forward: Vec3, biasVec: Vec3?) {
         val editor = prefs.edit()
             .putBoolean(KEY_CALIBRATED, true)
+            .putInt(KEY_CALIBRATION_VERSION, CALIBRATION_SCHEMA_VERSION)
             .putFloat(KEY_UPRIGHT_X, up.x)
             .putFloat(KEY_UPRIGHT_Y, up.y)
             .putFloat(KEY_UPRIGHT_Z, up.z)
@@ -119,6 +132,7 @@ class SettingsStore(applicationContext: Context) {
     fun clearCalibration() {
         prefs.edit()
             .putBoolean(KEY_CALIBRATED, false)
+            .remove(KEY_CALIBRATION_VERSION)
             .remove(KEY_UPRIGHT_X)
             .remove(KEY_UPRIGHT_Y)
             .remove(KEY_UPRIGHT_Z)

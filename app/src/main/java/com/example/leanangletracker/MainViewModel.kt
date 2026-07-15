@@ -22,7 +22,11 @@ import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.domain.RideSessionUseCases
 import com.example.leanangletracker.sensor.BikeFrameCalibration
+import com.example.leanangletracker.sensor.LowPassFilter
+import com.example.leanangletracker.sensor.MadgwickFilter
 import com.example.leanangletracker.sensor.Quaternion
+import com.example.leanangletracker.sensor.SensorDebugTrace
+import com.example.leanangletracker.sensor.StaticCalibrationCollector
 import com.example.leanangletracker.ui.animation.BikeLean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,26 +56,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal val settingsStore = SettingsStore(application.applicationContext)
 
     internal var filteredGravity = Vec3(0f, 0f, 9.81f)
-    internal var filteredLinearAcceleration = Vec3(0f, 0f, 0f)
 
     internal var uprightUp: Vec3? = null
     internal var leftUpPeak: Vec3? = null
-    internal var rightUpPeak: Vec3? = null
     internal var bikeForwardAxis: Vec3? = null
     internal var calibrationSideAxis: Vec3? = null
 
-    internal var gyroLeanDeg = 0f
-    internal var gyroBiasRadPerSec = 0f
     internal var gyroBiasVectorRadPerSec: Vec3? = null
-    internal var gyroBiasCollectionStartNs: Long? = null
-    internal var gyroBiasAccumulated = Vec3(0f, 0f, 0f)
-    internal var gyroBiasSampleCount = 0
     internal var lastGyroTimestampNs: Long? = null
-    internal var lastRollRateRadPerSec = 0f
-    internal var lastYawRateRadPerSec = 0f
-    internal var latestRotationLeanDeg: Float? = null
-    internal var latestRotationTimestampNs: Long? = null
-    internal var lastLeanComputationTimestampNs: Long? = null
     internal var speedKmh = 0f
     internal var activeRideId: Long? = null
     internal var activeRideStartedMs: Long? = null
@@ -86,14 +78,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal var recorderJob: Job? = null
     internal var trackLengthMeters = 0f
     internal var isCheckingForExtension = false
-    internal var latestLinearAccelerationMagnitude = 0f
-    internal var fusionConfidence = 1f
     internal var fusionQuaternion: Quaternion? = Quaternion.IDENTITY
+    internal var fusionInitialized = false
     internal var bikeFrameCalibration: BikeFrameCalibration? = null
     internal var lastAccelTimestampNs: Long? = null
-    internal var headingSinAccum = 0f
-    internal var headingCosAccum = 0f
-    internal var headingSampleCount = 0
+    internal var latestRawAcceleration = Vec3(0f, 0f, 0f)
+    internal var latestRawGyro = Vec3(0f, 0f, 0f)
+    internal var latestRawGyroTimestampNs: Long? = null
+    internal var latestAccelerationWeight = 0f
+    internal var pendingStableCalibrationSample: com.example.leanangletracker.sensor.StableCalibrationSample? = null
+    internal val gravityLowPass = LowPassFilter(cutoffHz = 4f)
+    internal val madgwickFilter = MadgwickFilter(betaBase = 0.055f)
+    internal val staticCalibrationCollector = StaticCalibrationCollector()
+    internal val sensorDebugTrace = SensorDebugTrace(capacity = 20_000)
     internal var autoResumeTimerStartMs: Long? = null
     internal val pausedPointsBuffer = ArrayDeque<TrackPoint>()
     internal var highRotationStartNs: Long? = null
@@ -128,7 +125,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         checkForUnfinishedRides()
 
         if (accelerometerSensor == null) {
-            updateCalibrationState { it.copy(instructionsResId = R.string.instructions_sensor_missing) }
+            updateCalibrationState { it.copy(errorResId = R.string.instructions_sensor_missing) }
         }
     }
 
@@ -193,13 +190,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         latestGpsLocation = location
         latestGpsTimestampNs = location.elapsedRealtimeNanos
         speedKmh = (location.speed * 3.6f).coerceAtLeast(0f)
-
-        if (_uiState.value.calibration.calibrationStep == BikeLean.LEFT && location.hasBearing() && speedKmh >= 8f) {
-            val headingRad = Math.toRadians(location.bearing.toDouble()).toFloat()
-            headingSinAccum += kotlin.math.sin(headingRad)
-            headingCosAccum += kotlin.math.cos(headingRad)
-            headingSampleCount += 1
-        }
 
         if (isCheckingForExtension) {
             isCheckingForExtension = false

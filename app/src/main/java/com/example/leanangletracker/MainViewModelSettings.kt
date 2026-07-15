@@ -1,6 +1,5 @@
 package com.example.leanangletracker
 
-import android.annotation.SuppressLint
 import androidx.lifecycle.viewModelScope
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
@@ -8,8 +7,8 @@ import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_STEP_M
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
-import com.example.leanangletracker.data.Vec3
-import com.example.leanangletracker.sensor.Quaternion
+import com.example.leanangletracker.sensor.BikeFrameFailure
+import com.example.leanangletracker.sensor.BikeFrameMath
 import com.example.leanangletracker.ui.animation.BikeLean
 
 internal fun MainViewModel.checkForUnfinishedRides() {
@@ -86,29 +85,29 @@ internal fun MainViewModel.loadPersistedState() {
 
     val persistedCalibration = persistedState.calibration ?: return
 
-    uprightUp = persistedCalibration.uprightUp
-    bikeForwardAxis = persistedCalibration.bikeForwardAxis
-    bikeFrameCalibration = buildBikeFrameFromCalibration(persistedCalibration.bikeForwardAxis ?: Vec3(0f, 1f, 0f))
-    gyroLeanDeg = 0f
+    val up = persistedCalibration.uprightUp ?: return
+    val forward = persistedCalibration.bikeForwardAxis ?: return
+    val frame = BikeFrameMath.fromUpAndForward(up, forward)
+    if (frame == null) {
+        clearPersistedCalibration()
+        return
+    }
+
+    uprightUp = frame.bikeUpDevice
+    bikeForwardAxis = frame.bikeForwardDevice
+    bikeFrameCalibration = frame
     gyroBiasVectorRadPerSec = persistedCalibration.gyroBiasVectorRadPerSec
-    gyroBiasRadPerSec = persistedCalibration.bikeForwardAxis?.let { gyroBiasVectorRadPerSec?.dot(it) }
-        ?: 0f
     lastGyroTimestampNs = null
-    lastRollRateRadPerSec = 0f
-    lastYawRateRadPerSec = 0f
-    latestRotationLeanDeg = null
-    latestRotationTimestampNs = null
-    lastLeanComputationTimestampNs = null
     recentLeanSamples.clear()
 
     updateCalibrationState {
         it.copy(
             calibrationStep = BikeLean.DONE,
             isCalibrated = true,
-            instructionsResId = R.string.instructions_calibrated,
-            currentStepIndex = 4,
-            totalSteps = 4,
-            isMeasuring = false
+            currentStepIndex = 3,
+            totalSteps = 3,
+            currentProgress = 1f,
+            errorResId = null
         )
     }
 }
@@ -211,53 +210,28 @@ internal fun MainViewModel.setGpsTrackingEnabled(enabled: Boolean) {
     persistSettings()
 }
 
-@SuppressLint("MissingPermission")
 internal fun MainViewModel.startCalibration() {
     uprightUp = null
     leftUpPeak = null
-    rightUpPeak = null
     bikeForwardAxis = null
     calibrationSideAxis = null
     bikeFrameCalibration = null
-    fusionQuaternion = Quaternion.IDENTITY
-    lastAccelTimestampNs = null
-    headingSinAccum = 0f
-    headingCosAccum = 0f
-    headingSampleCount = 0
-    gyroLeanDeg = 0f
-    gyroBiasRadPerSec = 0f
+    resetSensorFusion()
     gyroBiasVectorRadPerSec = null
-    gyroBiasCollectionStartNs = null
-    gyroBiasAccumulated = Vec3(0f, 0f, 0f)
-    gyroBiasSampleCount = 0
-    lastGyroTimestampNs = null
-    lastRollRateRadPerSec = 0f
-    lastYawRateRadPerSec = 0f
-    latestRotationLeanDeg = null
-    latestRotationTimestampNs = null
-    lastLeanComputationTimestampNs = null
     recentLeanSamples.clear()
     clearPersistedCalibration()
     
-    if (hasLocationPermission()) {
-        startLocationUpdates()
-    }
-
     updateCalibrationState {
         it.copy(
             calibrationStep = BikeLean.UPRIGHT,
             isCalibrated = false,
-            instructionsResId = R.string.instructions_upright,
             leftMax = 0f,
             rightMax = 0f,
-            dynamicMax = 0f,
             currentProgress = 0f,
             currentAngleDeg = 0f,
-            isWrongDirection = false,
+            errorResId = null,
             currentStepIndex = 1,
-            totalSteps = 4,
-            isMeasuring = false,
-            currentSpeedKmh = 0f
+            totalSteps = 3
         )
     }
 }
@@ -265,64 +239,93 @@ internal fun MainViewModel.startCalibration() {
 internal fun MainViewModel.captureUpright() {
     val calState = _uiState.value.calibration
     val currentStep = calState.calibrationStep
+    val stableSample = pendingStableCalibrationSample
+    if (stableSample == null || calState.currentProgress < 1f) {
+        updateCalibrationState {
+            it.copy(errorResId = R.string.calibration_error_unstable)
+        }
+        return
+    }
+
     when (currentStep) {
         BikeLean.UPRIGHT -> {
-            uprightUp = (filteredGravity * -1f).normalized()
-            gyroBiasVectorRadPerSec = if (gyroBiasSampleCount > 0) gyroBiasAccumulated * (1f / gyroBiasSampleCount) else Vec3(0f, 0f, 0f)
-            gyroBiasAccumulated = Vec3(0f, 0f, 0f)
-            gyroBiasSampleCount = 0
-            
+            uprightUp = stableSample.worldUpDevice
+            gyroBiasVectorRadPerSec = stableSample.gyroBiasRadPerSec
+            initializeFusionFromUp(stableSample.worldUpDevice)
+            prepareNextCalibrationStep()
+
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.LEFT,
-                    instructionsResId = R.string.instructions_tilt_left,
                     currentProgress = 0f,
-                    currentStepIndex = 2
+                    currentStepIndex = 2,
+                    errorResId = null
                 )
             }
         }
+
         BikeLean.LEFT -> {
-            if (calState.leftMax < 0.2f) return 
+            val up = uprightUp ?: return
+            val tilt = BikeFrameMath.angleBetweenDeg(up, stableSample.worldUpDevice)
+            if (tilt < BikeFrameMath.MIN_TILT_DEG) {
+                updateCalibrationState { it.copy(errorResId = R.string.calibration_error_too_little) }
+                return
+            }
+            val leftDirection = BikeFrameMath.projectedOffset(stableSample.worldUpDevice, up).normalized()
+            if (leftDirection.norm() < 0.9f) {
+                updateCalibrationState { it.copy(errorResId = R.string.calibration_error_degenerate) }
+                return
+            }
+            leftUpPeak = stableSample.worldUpDevice
+            calibrationSideAxis = leftDirection
+            prepareNextCalibrationStep()
+
             updateCalibrationState {
                 it.copy(
                     calibrationStep = BikeLean.RIGHT,
-                    instructionsResId = R.string.instructions_tilt_right,
                     currentProgress = 0f,
-                    currentStepIndex = 3
+                    currentStepIndex = 3,
+                    errorResId = null
                 )
             }
         }
+
         BikeLean.RIGHT -> {
-            if (calState.rightMax < 0.2f) return
-            
+            val up = uprightUp ?: return
+            val left = leftUpPeak ?: return
+            val result = BikeFrameMath.fromStaticSamples(up, left, stableSample.worldUpDevice)
+            val frame = result.calibration
+            if (frame == null) {
+                val error = when (result.failure) {
+                    BikeFrameFailure.INSUFFICIENT_LEFT_TILT,
+                    BikeFrameFailure.INSUFFICIENT_RIGHT_TILT -> R.string.calibration_error_too_little
+                    BikeFrameFailure.SAME_DIRECTION -> R.string.calibration_error_same_direction
+                    BikeFrameFailure.DEGENERATE_FRAME,
+                    null -> R.string.calibration_error_degenerate
+                }
+                updateCalibrationState {
+                    it.copy(errorResId = error)
+                }
+                return
+            }
+
+            bikeFrameCalibration = frame
+            bikeForwardAxis = frame.bikeForwardDevice
+            prepareNextCalibrationStep()
             updateCalibrationState {
                 it.copy(
-                    calibrationStep = BikeLean.DYNAMIC,
-                    instructionsResId = R.string.instructions_dynamic,
-                    currentProgress = 0f,
-                    currentStepIndex = 4,
-                    isMeasuring = false
+                    calibrationStep = BikeLean.DONE,
+                    isCalibrated = true,
+                    currentProgress = 1f,
+                    errorResId = null
                 )
             }
+            persistCalibration()
         }
-        BikeLean.DYNAMIC -> {
-            headingSinAccum = 0f
-            headingCosAccum = 0f
-            headingSampleCount = 0
-            gyroBiasAccumulated = Vec3(0f, 0f, 0f)
-            
-            updateCalibrationState {
-                it.copy(
-                    isMeasuring = true,
-                    currentProgress = 0.01f
-                )
-            }
-        }
+
         else -> Unit
     }
 }
-
-internal fun MainViewModel.continueCalibrationFallback() = Unit
 
 internal fun MainViewModel.setInvertLeanAngle(invert: Boolean) {
     val previous = _uiState.value

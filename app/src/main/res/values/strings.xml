@@ -63,20 +63,20 @@
     <string name="calibration_action_fix_center">Fix Center</string>
     <string name="calibration_action_left_confirmed">Fix Left</string>
     <string name="calibration_action_right_confirmed">Fix Right</string>
-    <string name="calibration_action_start_ride">Start Learning</string>
-    <string name="calibration_action_measuring">Measuring...</string>
     <string name="calibration_error_wrong_direction">Wrong Direction!</string>
-    
+    <string name="calibration_error_unstable">Keep the motorcycle and phone still until the measurement is complete.</string>
+    <string name="calibration_error_too_little">Lean the motorcycle at least 8°.</string>
+    <string name="calibration_error_same_direction">The right sample points to the same side as the left sample.</string>
+    <string name="calibration_error_degenerate">The motorcycle axes could not be determined. Please repeat the calibration.</string>
+
     <string name="calibration_instr_upright">Step 1: Upright Standing</string>
     <string name="calibration_instr_left">Step 2: Lean Left</string>
     <string name="calibration_instr_right">Step 3: Lean Right</string>
-    <string name="calibration_instr_dynamic">Step 4: Dynamic Learning</string>
     <string name="calibration_instr_ready">System Ready!</string>
 
-    <string name="calibration_hint_upright">Hold bike upright on level ground. Keep phone still.</string>
-    <string name="calibration_hint_left">Lean bike to the left (side stand or hold) and confirm.</string>
-    <string name="calibration_hint_right">Lean bike to the right and confirm.</string>
-    <string name="calibration_hint_dynamic">Press Start, then ride straight above 15 km/h for 5 seconds.</string>
+    <string name="calibration_hint_upright">Hold the bike upright and still until the measurement reaches 100 percent.</string>
+    <string name="calibration_hint_left">Lean the bike at least 8° to the left and hold it still.</string>
+    <string name="calibration_hint_right">Lean the bike at least 8° to the right and hold it still.</string>
     <string name="calibration_hint_ready">Calibration finished. Enjoy your ride!</string>
     <string name="calibration_progress_label">Progress: %1$d%%</string>
 
@@ -100,11 +100,5 @@
     <string name="dialog_recovery_continue">Continue</string>
     <string name="dialog_recovery_save">Save and Finish</string>
 
-    <!-- Legacy / Backup Instructions (Still used in ViewModel logic) -->
     <string name="instructions_sensor_missing">Acceleration sensor missing</string>
-    <string name="instructions_upright">Hold bike upright on level ground.</string>
-    <string name="instructions_tilt_left">Lean bike to the LEFT and confirm.</string>
-    <string name="instructions_tilt_right">Lean bike to the RIGHT and confirm.</string>
-    <string name="instructions_dynamic">Base calibration done. Ride straight (> 15 km/h) to perfect alignment.</string>
-    <string name="instructions_calibrated">Calibration finished!</string>
 </resources>

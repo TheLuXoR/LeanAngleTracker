@@ -15,6 +15,12 @@ class MadgwickFilter(
         orientation = Quaternion.IDENTITY
     }
 
+    fun initializeFromGravity(accelMs2: Vec3): Quaternion {
+        if (accelMs2.norm() < 1e-6f) return orientation
+        orientation = Quaternion.fromTo(accelMs2.normalized(), Vec3(0f, 0f, 1f))
+        return orientation
+    }
+
     fun update(gyroRadSec: Vec3, accelMs2: Vec3, dtSec: Float, accelWeight: Float): Quaternion {
         if (dtSec <= 0f) return orientation
         var q1 = orientation.w
@@ -78,7 +84,7 @@ class MadgwickFilter(
         return when {
             errorG < 0.05f -> 1f
             errorG < 0.15f -> 1f - (errorG - 0.05f) / 0.10f * 0.85f
-            else -> 0.05f
+            else -> 0f
         }
     }
 }

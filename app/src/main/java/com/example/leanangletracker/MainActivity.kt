@@ -248,8 +248,7 @@ class MainActivity : ComponentActivity() {
 
                             AppRoute.Calibration -> CalibrationScreen(
                                 calibrationState = state.calibration,
-                                onCaptureUpright = viewModel::captureUpright,
-                                onContinueFallback = viewModel::continueCalibrationFallback
+                                onCaptureUpright = viewModel::captureUpright
                             )
 
                             AppRoute.Settings -> SettingsScreen(

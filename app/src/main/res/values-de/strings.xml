@@ -2,32 +2,25 @@
     <string name="app_name">Lean Angle Tracker</string>
 
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
-    <string name="instructions_upright">Stelle dein Motorrad aufrecht auf ebenen Grund.</string>
-    <string name="instructions_tilt_left">Neige das Motorrad nach LINKS und bestätige.</string>
-    <string name="instructions_tilt_right">Neige das Motorrad nach RECHTS und bestätige.</string>
-    <string name="instructions_dynamic">Grundkalibrierung fertig. Drücke Start und fahre dann ein Stück geradeaus (> 15 km/h).</string>
-    <string name="instructions_calibrated">Kalibrierung abgeschlossen!</string>
 
     <string name="calibration_title">Kalibrierung</string>
     <string name="calibration_action_fix_center">Mitte fixieren</string>
     <string name="calibration_action_left_confirmed">Links fixieren</string>
     <string name="calibration_action_right_confirmed">Rechts fixieren</string>
-    <string name="calibration_action_start_ride">Anlernen starten</string>
-    <string name="calibration_action_measuring">Messung läuft…</string>
-    <string name="calibration_status_waiting_movement">Warte auf Fahrt (> 10 km/h)…</string>
-    <string name="calibration_status_speed_fmt">Geschwindigkeit: %1$.0f km/h</string>
-    <string name="calibration_hint_dynamic_active">Fahre geradeaus. Beschleunigen oder Bremsen hilft dem Sensor bei der Orientierung.</string>
-    
+    <string name="calibration_step_indicator">Schritt %1$d von %2$d</string>
+    <string name="calibration_error_unstable">Halte Motorrad und Handy ruhig, bis die Messung abgeschlossen ist.</string>
+    <string name="calibration_error_too_little">Neige das Motorrad um mindestens 8°.</string>
+    <string name="calibration_error_same_direction">Die rechte Messung zeigt auf dieselbe Seite wie die linke Messung.</string>
+    <string name="calibration_error_degenerate">Die Motorradachsen konnten nicht bestimmt werden. Bitte wiederhole die Kalibrierung.</string>
+
     <string name="calibration_instr_upright">Schritt 1: Aufrecht stehen</string>
     <string name="calibration_instr_left">Schritt 2: Linkslage</string>
     <string name="calibration_instr_right">Schritt 3: Rechtslage</string>
-    <string name="calibration_instr_dynamic">Schritt 4: Dynamisches Anlernen</string>
     <string name="calibration_instr_ready">Bereit!</string>
 
-    <string name="calibration_hint_upright">Motorrad gerade halten, Handy fest in der Halterung.</string>
-    <string name="calibration_hint_left">Motorrad nach links neigen (Seitenständer ist ok).</string>
-    <string name="calibration_hint_right">Motorrad nach rechts neigen.</string>
-    <string name="calibration_hint_dynamic">Bereitmachen zur Fahrt. Erst nach dem Drücken von Start wird gemessen.</string>
+    <string name="calibration_hint_upright">Motorrad aufrecht und ruhig halten, bis die Messung 100 Prozent erreicht.</string>
+    <string name="calibration_hint_left">Motorrad mindestens 8° nach links neigen und ruhig halten.</string>
+    <string name="calibration_hint_right">Motorrad mindestens 8° nach rechts neigen und ruhig halten.</string>
     <string name="calibration_hint_ready">Gute Fahrt!</string>
     <string name="calibration_progress_label">Fortschritt: %1$d%%</string>
     <string name="calibration_error_wrong_direction">Falsche Richtung!</string>

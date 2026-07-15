@@ -1,27 +1,20 @@
 package com.example.leanangletracker
 
 import android.hardware.SensorEvent
-import android.hardware.SensorManager
 import com.example.leanangletracker.MainViewModelConfig.AUTO_PAUSE_LEAN_THRESHOLD
+import com.example.leanangletracker.MainViewModelConfig.CALIBRATION_TILT_MAX_RANGE
 import com.example.leanangletracker.MainViewModelConfig.MAX_LEAN_DEG
 import com.example.leanangletracker.data.Vec3
-import com.example.leanangletracker.sensor.BikeFrameCalibration
-import com.example.leanangletracker.sensor.LowPassFilter
-import com.example.leanangletracker.sensor.MadgwickFilter
-import com.example.leanangletracker.sensor.Quaternion
+import com.example.leanangletracker.sensor.BikeFrameMath
+import com.example.leanangletracker.sensor.FusionGating
+import com.example.leanangletracker.sensor.SensorTraceSample
+import com.example.leanangletracker.sensor.fusionDeltaSeconds
 import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 
-private val gravityLowPass = LowPassFilter(cutoffHz = 4f)
-private val madgwick = MadgwickFilter(betaBase = 0.055f)
-
-internal fun MainViewModel.collectGyroBiasSample(event: SensorEvent) = Unit
-internal fun MainViewModel.handleManualCalibrationSensorUpdate() = Unit
-internal fun MainViewModel.finalizeManualCalibration() = Unit
-internal fun MainViewModel.angleBetweenDeg(a: Vec3, b: Vec3): Float = 0f
+private const val UPRIGHT_STABLE_DURATION_NS = 1_500_000_000L
+private const val TILTED_STABLE_DURATION_NS = 750_000_000L
+private const val GYRO_SAMPLE_FRESH_NS = 100_000_000L
 
 internal fun MainViewModel.registerRecentLeanSample(timestampNs: Long, leanDeg: Float) {
     recentLeanSamples += TimedLean(timestampNs, leanDeg)
@@ -30,26 +23,23 @@ internal fun MainViewModel.registerRecentLeanSample(timestampNs: Long, leanDeg: 
 
 internal fun MainViewModel.fallbackLeanFromRecentSamples(timestampNs: Long): Float? {
     if (recentLeanSamples.isEmpty()) return null
-    val v = recentLeanSamples.map { it.valueDeg }.average().toFloat()
-    latestLeanDeg = v
+    val value = recentLeanSamples.map { it.valueDeg }.average().toFloat()
+    latestLeanDeg = value
     latestLeanTimestampNs = timestampNs
-    return v
+    return value
 }
 
 internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
-    val q = fusionQuaternion ?: return
-    val frame = bikeFrameCalibration ?: return
+    val orientation = fusionQuaternion ?: return
+    val worldUpDevice = orientation.conjugate().rotate(Vec3(0f, 0f, 1f))
+    publishLeanAngle(timestampNs, worldUpDevice)
+}
 
-    val worldUpD = q.conjugate().rotate(Vec3(0f, 0f, 1f))
-    val bUpD = frame.bikeUpWorld
-    val bRightD = frame.bikeRightWorld
-    
-    val upProj = worldUpD.dot(bUpD)
-    val rightProj = worldUpD.dot(bRightD)
-    
-    val leanRad = atan2(-rightProj, upProj)
-    val leanDegRaw = Math.toDegrees(leanRad.toDouble()).toFloat().coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
-    val leanDeg = if (_uiState.value.settings.invertLeanAngle) -leanDegRaw else leanDegRaw
+private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec3) {
+    val frame = bikeFrameCalibration ?: return
+    val rawLean = BikeFrameMath.leanAngleDeg(worldUpDevice, frame)
+        .coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+    val leanDeg = if (_uiState.value.settings.invertLeanAngle) -rawLean else rawLean
 
     latestLeanDeg = leanDeg
     latestLeanTimestampNs = timestampNs
@@ -60,8 +50,8 @@ internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
     pruneHistory(timestampNs, _uiState.value.settings.historyWindowSeconds)
 
     if (abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD && _uiState.value.settings.autoPauseEnabled) {
-        val s = _uiState.value.tracking
-        if (s.trackingStarted && !s.isPaused) togglePauseTracking()
+        val state = _uiState.value.tracking
+        if (state.trackingStarted && !state.isPaused) togglePauseTracking()
     }
 
     updateTrackingState {
@@ -69,7 +59,7 @@ internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
             leanAngleDeg = leanDeg,
             maxLeftDeg = minOf(it.maxLeftDeg, if (leanDeg < 0f) leanDeg else 0f),
             maxRightDeg = maxOf(it.maxRightDeg, if (leanDeg > 0f) leanDeg else 0f),
-            leanHistoryDeg = leanHistory.map { h -> h.valueDeg },
+            leanHistoryDeg = leanHistory.map { sample -> sample.valueDeg },
             speedKmh = speedKmh,
             gpsActive = locationUpdatesRunning,
             hasTrackData = ridePointCount > 0,
@@ -83,168 +73,179 @@ internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
 
 internal fun MainViewModel.pruneHistory(currentTimestampNs: Long, historyWindowSeconds: Int) {
     val cutoff = currentTimestampNs - historyWindowSeconds * 1_000_000_000L
-    while (leanHistory.isNotEmpty() && leanHistory.first().timestampNs < cutoff) leanHistory.removeFirst()
+    while (leanHistory.isNotEmpty() && leanHistory.first().timestampNs < cutoff) {
+        leanHistory.removeFirst()
+    }
 }
 
 internal fun MainViewModel.updateGyroLean(event: SensorEvent) {
-    val step = _uiState.value.calibration.calibrationStep
     val rawGyro = Vec3(event.values[0], event.values[1], event.values[2])
-    
-    if (step == BikeLean.UPRIGHT) {
-        gyroBiasAccumulated += rawGyro
-        gyroBiasSampleCount += 1
-    }
+    latestRawGyro = rawGyro
+    latestRawGyroTimestampNs = event.timestamp
 
-    val lastTs = lastGyroTimestampNs
+    val previousTimestamp = lastGyroTimestampNs
     lastGyroTimestampNs = event.timestamp
-    if (lastTs == null) return
+    if (previousTimestamp == null || !fusionInitialized) return
 
-    val dt = ((event.timestamp - lastTs).coerceAtLeast(0L) / 1_000_000_000f)
-    if (dt <= 0f || dt > 0.05f) return
+    val dt = fusionDeltaSeconds(previousTimestamp, event.timestamp) ?: return
 
     val gyro = rawGyro - (gyroBiasVectorRadPerSec ?: Vec3(0f, 0f, 0f))
-    val accelFiltered = filteredGravity
-    val accelWeight = madgwick.adaptiveAccelWeight(accelFiltered)
-    fusionQuaternion = madgwick.update(gyro, accelFiltered, dt, accelWeight)
+    val orientation = fusionQuaternion ?: madgwickFilter.orientation
+    val estimatedUpDevice = orientation.conjugate().rotate(Vec3(0f, 0f, 1f)).normalized()
+    val yawRate = gyro.dot(estimatedUpDevice)
+    val accelerationWeight = FusionGating.accelerationWeight(
+        baseWeight = madgwickFilter.adaptiveAccelWeight(filteredGravity),
+        yawRateRadPerSec = yawRate
+    )
+    latestAccelerationWeight = accelerationWeight
+
+    fusionQuaternion = madgwickFilter.update(gyro, filteredGravity, dt, accelerationWeight)
     updateLeanAngle(event.timestamp)
+    recordSensorTrace(event.timestamp)
 }
 
 internal fun MainViewModel.processAccelerometer(event: SensorEvent) {
     val raw = Vec3(event.values[0], event.values[1], event.values[2])
-    val lastTs = lastAccelTimestampNs
+    latestRawAcceleration = raw
+    val previousTimestamp = lastAccelTimestampNs
     lastAccelTimestampNs = event.timestamp
-    val dt = if (lastTs == null) 0.01f else ((event.timestamp - lastTs).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+    val dt = if (previousTimestamp == null) {
+        0.01f
+    } else {
+        ((event.timestamp - previousTimestamp).coerceAtLeast(0L) / 1_000_000_000f)
+            .coerceIn(0.001f, 0.05f)
+    }
     filteredGravity = gravityLowPass.update(raw, dt)
-    latestLinearAccelerationMagnitude = abs(filteredGravity.norm() - SensorManager.GRAVITY_EARTH)
+    if (!fusionInitialized && filteredGravity.norm() > 1f) {
+        fusionQuaternion = madgwickFilter.initializeFromGravity(filteredGravity)
+        fusionInitialized = true
+        lastGyroTimestampNs = null
+    }
 
+    updateStaticCalibrationProgress(event.timestamp)
+
+    if (gyroscopeSensor == null && bikeFrameCalibration != null) {
+        publishLeanAngle(event.timestamp, filteredGravity.normalized())
+        recordSensorTrace(event.timestamp)
+    }
+}
+
+private fun MainViewModel.updateStaticCalibrationProgress(timestampNs: Long) {
     val step = _uiState.value.calibration.calibrationStep
+    if (step == BikeLean.DONE) return
+
+    val gyroFresh = gyroscopeSensor == null || latestRawGyroTimestampNs?.let {
+        abs(timestampNs - it) <= GYRO_SAMPLE_FRESH_NS
+    } == true
+    val currentUp = filteredGravity.normalized()
+    val upright = uprightUp
+
+    val requiredDurationNs: Long
+    val poseIsValid: Boolean
+    val angleDeg: Float
+    val wrongDirection: Boolean
     when (step) {
         BikeLean.UPRIGHT -> {
-            val stillness = (1f - (latestLinearAccelerationMagnitude / 1.2f)).coerceIn(0f, 1f)
-            updateCalibrationState {
-                it.copy(currentProgress = stillness, currentAngleDeg = 0f, isWrongDirection = false)
-            }
+            requiredDurationNs = UPRIGHT_STABLE_DURATION_NS
+            poseIsValid = gyroFresh
+            angleDeg = 0f
+            wrongDirection = false
         }
+
         BikeLean.LEFT -> {
-            val up = uprightUp ?: return
-            val currentUp = (filteredGravity * -1f).normalized()
-            val angle = Math.toDegrees(Math.acos(up.dot(currentUp).toDouble().coerceIn(-1.0, 1.0))).toFloat()
-            updateCalibrationState {
-                it.copy(
-                    currentProgress = (angle / 15f).coerceIn(0f, 1f),
-                    leftMax = maxOf(it.leftMax, (angle / 15f).coerceIn(0f, 1f)),
-                    currentAngleDeg = -angle
-                )
-            }
-            if (angle > 4f) {
-                if (leftUpPeak == null || angle > Math.toDegrees(Math.acos(up.dot(leftUpPeak!!).toDouble().coerceIn(-1.0, 1.0)))) {
-                    leftUpPeak = currentUp
-                }
-            }
+            val up = upright ?: return
+            angleDeg = BikeFrameMath.angleBetweenDeg(up, currentUp)
+            requiredDurationNs = TILTED_STABLE_DURATION_NS
+            poseIsValid = gyroFresh && angleDeg >= BikeFrameMath.MIN_TILT_DEG
+            wrongDirection = false
         }
+
         BikeLean.RIGHT -> {
-            val up = uprightUp ?: return
-            val currentUp = (filteredGravity * -1f).normalized()
-            val angle = Math.toDegrees(Math.acos(up.dot(currentUp).toDouble().coerceIn(-1.0, 1.0))).toFloat()
-            updateCalibrationState {
-                it.copy(
-                    currentProgress = (angle / 15f).coerceIn(0f, 1f),
-                    rightMax = maxOf(it.rightMax, (angle / 15f).coerceIn(0f, 1f)),
-                    currentAngleDeg = angle
-                )
-            }
-            if (angle > 4f) {
-                if (rightUpPeak == null || angle > Math.toDegrees(Math.acos(up.dot(rightUpPeak!!).toDouble().coerceIn(-1.0, 1.0)))) {
-                    rightUpPeak = currentUp
-                }
-            }
+            val up = upright ?: return
+            angleDeg = BikeFrameMath.angleBetweenDeg(up, currentUp)
+            val currentOffset = BikeFrameMath.projectedOffset(currentUp, up)
+            val leftDirection = calibrationSideAxis
+            wrongDirection = angleDeg > 3f && leftDirection != null &&
+                currentOffset.norm() > 1e-4f &&
+                currentOffset.normalized().dot(leftDirection) > 0f
+            requiredDurationNs = TILTED_STABLE_DURATION_NS
+            poseIsValid = gyroFresh && angleDeg >= BikeFrameMath.MIN_TILT_DEG && !wrongDirection
         }
-        BikeLean.DYNAMIC -> {
-            val calibState = _uiState.value.calibration
-            if (calibState.isMeasuring) {
-                val q = fusionQuaternion
-                var forwardSample: Vec3? = null
-                
-                // Strategy A: GPS velocity (Very reliable if moving)
-                val loc = latestGpsLocation
-                if (q != null && loc != null && speedKmh > 5f && loc.hasBearing()) {
-                    val bearingRad = Math.toRadians(loc.bearing.toDouble())
-                    val velocityWorld = Vec3(sin(bearingRad).toFloat(), cos(bearingRad).toFloat(), 0f)
-                    forwardSample = q.conjugate().rotate(velocityWorld)
-                } 
-                // Strategy B: Linear acceleration (Works when speeding up/braking)
-                else {
-                    val upD = uprightUp ?: return
-                    val gravityD = upD * -SensorManager.GRAVITY_EARTH
-                    val linAccelD = raw - gravityD
-                    val lateralAccelD = linAccelD - upD * linAccelD.dot(upD)
-                    if (lateralAccelD.norm() > 0.15f) { // Lowered threshold
-                        forwardSample = lateralAccelD.normalized()
-                    }
-                }
 
-                if (forwardSample != null) {
-                    gyroBiasAccumulated += forwardSample
-                    headingSampleCount += 1
-                    
-                    val calculatedProgress = (headingSampleCount / 40f).coerceIn(0f, 1f)
-                    updateCalibrationState {
-                        it.copy(
-                            currentProgress = calculatedProgress,
-                            dynamicMax = maxOf(it.dynamicMax, calculatedProgress)
-                        )
-                    }
-                    
-                    if (calculatedProgress >= 1f) {
-                        finalizeDynamicCalibration()
-                    }
-                }
-            }
-        }
-        else -> Unit
+        BikeLean.DONE -> return
     }
-}
 
-internal fun MainViewModel.finalizeDynamicCalibration() {
-    val forwardD = gyroBiasAccumulated.normalized()
-    if (forwardD.norm() < 0.1f) return
-    
-    bikeFrameCalibration = buildBikeFrameFromCalibration(forwardD)
-    bikeForwardAxis = bikeFrameCalibration?.bikeForwardWorld
-    
-    updateCalibrationState {
-        it.copy(
-            calibrationStep = BikeLean.DONE,
-            isCalibrated = true,
-            instructionsResId = R.string.instructions_calibrated,
-            currentProgress = 1f,
-            isMeasuring = false
+    val sampleProgress = staticCalibrationCollector.update(
+        timestampNs = timestampNs,
+        accelerationMs2 = filteredGravity,
+        gyroRadPerSec = if (gyroscopeSensor == null) Vec3(0f, 0f, 0f) else latestRawGyro,
+        requiredDurationNs = requiredDurationNs,
+        poseIsValid = poseIsValid
+    )
+    pendingStableCalibrationSample = sampleProgress.readySample
+
+    updateCalibrationState { state ->
+        state.copy(
+            currentProgress = sampleProgress.progress,
+            leftMax = if (step == BikeLean.LEFT) {
+                maxOf(state.leftMax, (angleDeg / CALIBRATION_TILT_MAX_RANGE).coerceIn(0f, 1f))
+            } else {
+                state.leftMax
+            },
+            rightMax = if (step == BikeLean.RIGHT && !wrongDirection) {
+                maxOf(state.rightMax, (angleDeg / CALIBRATION_TILT_MAX_RANGE).coerceIn(0f, 1f))
+            } else {
+                state.rightMax
+            },
+            currentAngleDeg = when (step) {
+                BikeLean.LEFT -> -angleDeg
+                BikeLean.RIGHT -> angleDeg
+                else -> 0f
+            },
+            errorResId = if (wrongDirection) R.string.calibration_error_wrong_direction else null
         )
     }
-    persistCalibration()
 }
 
-internal fun MainViewModel.buildBikeFrameFromCalibration(forwardDevice: Vec3): BikeFrameCalibration {
-    val up = uprightUp ?: Vec3(0f, 0f, 1f)
-    val forward = (forwardDevice - up * forwardDevice.dot(up)).normalized()
-    var right = up.cross(forward).normalized()
-    
-    val rPeak = rightUpPeak
-    val lPeak = leftUpPeak
-    
-    if (rPeak != null && lPeak != null) {
-        val rDir = (rPeak - up * rPeak.dot(up)).normalized()
-        val lDir = (lPeak - up * lPeak.dot(up)).normalized()
-        val score = rDir.dot(right) - lDir.dot(right)
-        if (score < 0) right = right * -1f
-    } else if (rPeak != null) {
-        val rDir = (rPeak - up * rPeak.dot(up)).normalized()
-        if (rDir.dot(right) < 0) right = right * -1f
-    } else if (lPeak != null) {
-        val lDir = (lPeak - up * lPeak.dot(up)).normalized()
-        if (lDir.dot(right) > 0) right = right * -1f
-    }
-    
-    val finalForward = right.cross(up).normalized()
-    return BikeFrameCalibration(up, finalForward, right, true)
+internal fun MainViewModel.prepareNextCalibrationStep() {
+    staticCalibrationCollector.reset()
+    pendingStableCalibrationSample = null
+}
+
+internal fun MainViewModel.resetSensorFusion() {
+    gravityLowPass.reset()
+    madgwickFilter.reset()
+    staticCalibrationCollector.reset()
+    sensorDebugTrace.clear()
+    fusionQuaternion = com.example.leanangletracker.sensor.Quaternion.IDENTITY
+    fusionInitialized = false
+    latestRawAcceleration = Vec3(0f, 0f, 0f)
+    latestRawGyro = Vec3(0f, 0f, 0f)
+    latestRawGyroTimestampNs = null
+    latestAccelerationWeight = 0f
+    pendingStableCalibrationSample = null
+    lastAccelTimestampNs = null
+    lastGyroTimestampNs = null
+}
+
+internal fun MainViewModel.initializeFusionFromUp(worldUpDevice: Vec3) {
+    fusionQuaternion = madgwickFilter.initializeFromGravity(worldUpDevice)
+    fusionInitialized = true
+    lastGyroTimestampNs = null
+}
+
+internal fun MainViewModel.sensorDebugTraceCsv(): String = sensorDebugTrace.toCsv()
+
+private fun MainViewModel.recordSensorTrace(timestampNs: Long) {
+    if (!BuildConfig.DEBUG) return
+    sensorDebugTrace.add(
+        SensorTraceSample(
+            timestampNs = timestampNs,
+            accelerationMs2 = latestRawAcceleration,
+            gyroRadPerSec = latestRawGyro,
+            orientation = fusionQuaternion ?: madgwickFilter.orientation,
+            accelerationWeight = latestAccelerationWeight,
+            leanAngleDeg = latestLeanDeg
+        )
+    )
 }

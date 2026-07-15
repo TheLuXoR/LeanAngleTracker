@@ -32,7 +32,6 @@ enum class BikeLean(val angle: Float) {
     UPRIGHT(0f),
     LEFT(-35f),
     RIGHT(35f),
-    DYNAMIC(0f),
     DONE(0f)
 }
 
