@@ -12,6 +12,9 @@ import com.example.leanangletracker.sensor.BikeFrameFailure
 import com.example.leanangletracker.sensor.BikeFrameMath
 import com.example.leanangletracker.ui.animation.BikeLean
 
+private const val APP_TOUR_VERSION = 1
+private const val APP_TOUR_PAGE_COUNT = 6
+
 internal fun MainViewModel.checkForUnfinishedRides() {
     viewModelScope.launch(Dispatchers.IO) {
         val pending = rideSessionUseCases.findUnfinishedRideForRecovery() ?: return@launch
@@ -73,7 +76,15 @@ internal fun MainViewModel.loadPersistedState() {
     updateTrackingState {
         it.copy(
             gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled,
-            autoPauseEnabled = persistedSettings.autoPauseEnabled
+            autoPauseEnabled = persistedSettings.autoPauseEnabled,
+            gaugeExtrema = persistedState.gaugeExtrema
+        )
+    }
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                offerPending = persistedState.completedAppTourVersion < APP_TOUR_VERSION
+            )
         )
     }
 
@@ -185,6 +196,7 @@ internal fun MainViewModel.setGpsTrackingEnabled(enabled: Boolean) {
         ridePointCount = 0
         rideSumSpeedKmh = 0f
         rideSumAbsLeanDeg = 0f
+        activeRideExtrema = LeanExtrema.ZERO
         isCheckingForExtension = false
         stopRecorder()
         updateTrackingState {
@@ -346,6 +358,7 @@ internal fun MainViewModel.setInvertLeanAngle(invert: Boolean) {
     val transformedHistory = previous.tracking.leanHistoryDeg.map { -it }
     val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
     val transformedRecentSamples = recentLeanSamples.map { it.copy(valueDeg = -it.valueDeg) }
+    val transformedGaugeExtrema = previous.tracking.gaugeExtrema.inverted()
 
     leanHistory.clear()
     leanHistory.addAll(transformedTimedHistory)
@@ -357,12 +370,12 @@ internal fun MainViewModel.setInvertLeanAngle(invert: Boolean) {
             settings = state.settings.copy(invertLeanAngle = invert),
             tracking = state.tracking.copy(
                 leanAngleDeg = -state.tracking.leanAngleDeg,
-                maxLeftDeg = -state.tracking.maxRightDeg,
-                maxRightDeg = -state.tracking.maxLeftDeg,
+                gaugeExtrema = transformedGaugeExtrema,
                 leanHistoryDeg = transformedHistory
             )
         )
     }
+    settingsStore.saveGaugeExtrema(transformedGaugeExtrema)
     persistSettings()
 }
 
@@ -409,11 +422,66 @@ internal fun MainViewModel.purchaseAutoResume() {
     persistSettings()
 }
 
-internal fun MainViewModel.resetExtrema() {
+internal fun MainViewModel.resetGaugeExtrema() {
     updateTrackingState {
-        it.copy(
-            maxLeftDeg = 0f,
-            maxRightDeg = 0f
+        it.copy(gaugeExtrema = LeanExtrema.ZERO)
+    }
+    settingsStore.saveGaugeExtrema(LeanExtrema.ZERO)
+}
+
+internal fun MainViewModel.acceptAppTourOffer() {
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                offerPending = false,
+                isActive = true,
+                currentPage = 0
+            )
+        )
+    }
+}
+
+internal fun MainViewModel.startAppTour() {
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                offerPending = false,
+                isActive = true,
+                currentPage = 0
+            )
+        )
+    }
+}
+
+internal fun MainViewModel.showPreviousAppTourPage() {
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                currentPage = (state.appTour.currentPage - 1).coerceAtLeast(0)
+            )
+        )
+    }
+}
+
+internal fun MainViewModel.showNextAppTourPage() {
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                currentPage = (state.appTour.currentPage + 1).coerceAtMost(APP_TOUR_PAGE_COUNT - 1)
+            )
+        )
+    }
+}
+
+internal fun MainViewModel.completeAppTour() {
+    settingsStore.saveCompletedAppTourVersion(APP_TOUR_VERSION)
+    _uiState.update { state ->
+        state.copy(
+            appTour = state.appTour.copy(
+                offerPending = false,
+                isActive = false,
+                currentPage = 0
+            )
         )
     }
 }

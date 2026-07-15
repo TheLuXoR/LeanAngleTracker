@@ -23,7 +23,9 @@ data class PersistedCalibration(
 
 data class PersistedState(
     val settings: PersistedSettings,
-    val calibration: PersistedCalibration?
+    val calibration: PersistedCalibration?,
+    val gaugeExtrema: LeanExtrema,
+    val completedAppTourVersion: Int
 )
 
 class SettingsStore(applicationContext: Context) {
@@ -47,6 +49,9 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
         const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
         const val KEY_AUTO_PAUSE = "auto_pause_enabled"
+        const val KEY_GAUGE_MAX_LEFT = "gauge_max_left_deg"
+        const val KEY_GAUGE_MAX_RIGHT = "gauge_max_right_deg"
+        const val KEY_COMPLETED_APP_TOUR_VERSION = "completed_app_tour_version"
     }
 
     private val prefs: SharedPreferences =
@@ -63,13 +68,28 @@ class SettingsStore(applicationContext: Context) {
             isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false),
             autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, true)
         )
+        val gaugeExtrema = LeanExtrema(
+            maxLeftDeg = prefs.getFloat(KEY_GAUGE_MAX_LEFT, 0f).takeIf { it.isFinite() && it <= 0f } ?: 0f,
+            maxRightDeg = prefs.getFloat(KEY_GAUGE_MAX_RIGHT, 0f).takeIf { it.isFinite() && it >= 0f } ?: 0f
+        )
+        val completedAppTourVersion = prefs.getInt(KEY_COMPLETED_APP_TOUR_VERSION, 0).coerceAtLeast(0)
 
         if (!prefs.getBoolean(KEY_CALIBRATED, false)) {
-            return PersistedState(settings = settings, calibration = null)
+            return PersistedState(
+                settings = settings,
+                calibration = null,
+                gaugeExtrema = gaugeExtrema,
+                completedAppTourVersion = completedAppTourVersion
+            )
         }
         if (!isSupportedCalibrationVersion(prefs.getInt(KEY_CALIBRATION_VERSION, 0))) {
             clearCalibration()
-            return PersistedState(settings = settings, calibration = null)
+            return PersistedState(
+                settings = settings,
+                calibration = null,
+                gaugeExtrema = gaugeExtrema,
+                completedAppTourVersion = completedAppTourVersion
+            )
         }
 
         val uprightUp = readVec3(KEY_UPRIGHT_X, KEY_UPRIGHT_Y, KEY_UPRIGHT_Z)
@@ -81,7 +101,12 @@ class SettingsStore(applicationContext: Context) {
         }
         if (frame == null) {
             clearCalibration()
-            return PersistedState(settings = settings, calibration = null)
+            return PersistedState(
+                settings = settings,
+                calibration = null,
+                gaugeExtrema = gaugeExtrema,
+                completedAppTourVersion = completedAppTourVersion
+            )
         }
         return PersistedState(
             settings = settings,
@@ -89,7 +114,9 @@ class SettingsStore(applicationContext: Context) {
                 uprightUp = frame.bikeUpDevice,
                 bikeForwardAxis = frame.bikeForwardDevice,
                 gyroBiasVectorRadPerSec = readVec3(KEY_GYRO_BIAS_X, KEY_GYRO_BIAS_Y, KEY_GYRO_BIAS_Z)
-            )
+            ),
+            gaugeExtrema = gaugeExtrema,
+            completedAppTourVersion = completedAppTourVersion
         )
     }
 
@@ -102,6 +129,19 @@ class SettingsStore(applicationContext: Context) {
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
             .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)
+            .apply()
+    }
+
+    fun saveGaugeExtrema(extrema: LeanExtrema) {
+        prefs.edit()
+            .putFloat(KEY_GAUGE_MAX_LEFT, extrema.maxLeftDeg)
+            .putFloat(KEY_GAUGE_MAX_RIGHT, extrema.maxRightDeg)
+            .apply()
+    }
+
+    fun saveCompletedAppTourVersion(version: Int) {
+        prefs.edit()
+            .putInt(KEY_COMPLETED_APP_TOUR_VERSION, version.coerceAtLeast(0))
             .apply()
     }
 

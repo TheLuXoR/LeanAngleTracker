@@ -101,6 +101,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal var ridePointCount = 0
     internal var rideSumSpeedKmh = 0f
     internal var rideSumAbsLeanDeg = 0f
+    internal var activeRideExtrema = LeanExtrema.ZERO
     internal val recentRidePoints = ArrayDeque<TrackPoint>()
 
     internal val leanHistory = ArrayDeque<TimedLean>()
@@ -233,6 +234,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                     activeRideStartedMs = startTime
                     activeRideId = rideRepository.startNewRide(startTime)
                     lastResumeMs = startTime
+                    activeRideExtrema = LeanExtrema.ZERO
                 }
             }
 

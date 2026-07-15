@@ -54,7 +54,9 @@
     <string name="settings_recorder_tick_title">Recorder-Takt</string>
     <string name="settings_recorder_tick_subtitle">50ms bis 1000ms in 50ms-Schritten</string>
     <string name="settings_value_milliseconds">%1$dms</string>
-    <string name="settings_reset_max_values">Max-Werte zurücksetzen</string>
+    <string name="settings_reset_gauge_max_values">Tacho-Max-Werte zurücksetzen</string>
+    <string name="settings_reset_gauge_hint">Beide Werte lassen sich auch durch langes Drücken auf den Tacho zurücksetzen.</string>
+    <string name="settings_start_app_tour">App-Tour starten</string>
     <string name="settings_recalibrate_device">Gerät neu kalibrieren</string>
 
     <string name="ride_history_selected_count">%1$d ausgewählt</string>
@@ -78,6 +80,43 @@
     <string name="intro_attach_text">Smartphone sicher in einer Halterung am Motorrad befestigen.</string>
     <string name="intro_button_understood">Verstanden</string>
     <string name="intro_button_attached">Befestigt</string>
+
+    <string name="tacho_reset_max_values_long_press">Tacho-Max-Werte zurücksetzen</string>
+    <string name="app_tour_prompt_title">Kurze App-Tour?</string>
+    <string name="app_tour_prompt_body">Möchtest du eine kurze Führung durch Tacho, Aufzeichnung, Live-Daten und Fahrthistorie?</string>
+    <string name="app_tour_prompt_start">Tour starten</string>
+    <string name="app_tour_prompt_decline">Nicht jetzt</string>
+    <string name="app_tour_page_indicator">%1$d von %2$d</string>
+    <string name="app_tour_back">Zurück</string>
+    <string name="app_tour_next">Weiter</string>
+    <string name="app_tour_skip">Überspringen</string>
+    <string name="app_tour_finish">Fertig</string>
+    <string name="app_tour_gauge_title">Schräglagen-Tacho</string>
+    <string name="app_tour_gauge_body">Der Zeiger zeigt die aktuelle Schräglage. MAX L und MAX R sind deine dauerhaften Tacho-Rekorde: Sie bleiben über App-Starts und Fahrten erhalten und steigen nur durch gemessene Neigung. Halte den Tacho lange gedrückt oder nutze den Button in den Settings, um beide Werte zurückzusetzen, ohne eine aufgezeichnete Fahrt zu verändern.</string>
+    <string name="app_tour_recording_title">Fahrt aufzeichnen</string>
+    <string name="app_tour_recording_body">Aktiviere GPS-Tracking in den Settings und erteile die angefragten Berechtigungen. Mit dem Aufnahmebutton startest du eine neue Fahrt; Stop beendet und speichert sie.</string>
+    <string name="app_tour_pause_title">Pause und Automatik</string>
+    <string name="app_tour_pause_body">Pausiere die Aufzeichnung, wenn ein Abschnitt nicht zur Fahrt gehören soll. Auto-Pause schützt die Aufzeichnung bei extremer Rotation; nach Kauf und Aktivierung kann Auto Resume sie bei erneuter Bewegung fortsetzen.</string>
+    <string name="app_tour_live_data_title">Live-Fahrdaten</string>
+    <string name="app_tour_live_data_body">Das Verlaufsdiagramm zeigt die letzten Schräglagen. Während der GPS-Aufzeichnung zeigt das Dashboard zusätzlich Geschwindigkeit, Distanz und Fahrzeit.</string>
+    <string name="app_tour_history_title">Historie und Details</string>
+    <string name="app_tour_history_body">Beendete Fahrten erscheinen mit aufgezeichneter Maximalschräglage und Punktzahl in der Historie. Öffne eine Fahrt, um Strecke, Diagramme und Statistiken zu prüfen und zu wichtigen Punkten zu springen.</string>
+    <string name="app_tour_manage_title">Verwalten und einstellen</string>
+    <string name="app_tour_manage_body">In der Historie kannst du Fahrten auswählen, zusammenführen, umbenennen oder löschen. In den Settings steuerst du Invertierung, GPS, Aufzeichnungsintervall, Verlaufslänge und Kalibrierung und kannst diese Tour jederzeit erneut starten.</string>
+    <string name="app_tour_preview_gps_ready">GPS bereit</string>
+    <string name="app_tour_preview_start">Starten</string>
+    <string name="app_tour_preview_stop">Stoppen &amp; speichern</string>
+    <string name="app_tour_preview_paused">PAUSIERT</string>
+    <string name="app_tour_preview_auto_pause">AUTO-PAUSE</string>
+    <string name="app_tour_preview_auto_resume">AUTO RESUME</string>
+    <string name="app_tour_preview_sample_ride">Beispielfahrt · Heute, 14:32</string>
+    <string name="app_tour_preview_distance">DISTANZ</string>
+    <string name="app_tour_preview_max_lean">MAX. SCHRÄGLAGE</string>
+    <string name="app_tour_preview_points">PUNKTE</string>
+    <string name="app_tour_preview_selected_ride">Ausgewählte Fahrt %1$d</string>
+    <string name="app_tour_preview_combine">Verbinden</string>
+    <string name="app_tour_preview_delete">Löschen</string>
+    <string name="app_tour_preview_settings">Settings</string>
 
     <!-- Tracking Labels -->
     <string name="tracking_searching_gps">GPS wird gesucht…</string>

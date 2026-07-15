@@ -31,6 +31,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
+import com.example.leanangletracker.AppTourUiState
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.components.GpsStatsDashboard
@@ -54,6 +55,13 @@ internal fun LeanAngleScreen(
     onFinishRide: () -> Unit,
     onStartCalibration: () -> Unit = {},
     onTogglePause: () -> Unit = {},
+    onResetGaugeExtrema: () -> Unit = {},
+    appTourState: AppTourUiState = AppTourUiState(),
+    onAcceptAppTourOffer: () -> Unit = {},
+    onDeclineAppTourOffer: () -> Unit = {},
+    onPreviousAppTourPage: () -> Unit = {},
+    onNextAppTourPage: () -> Unit = {},
+    onFinishAppTour: () -> Unit = {},
     offerExtend: RideSession? = null,
     onConfirmExtend: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
@@ -122,8 +130,9 @@ internal fun LeanAngleScreen(
                         TachoGauge(
                             modifier = Modifier.weight(1f),
                             currentDeg = trackingState.leanAngleDeg,
-                            maxLeftDeg = trackingState.maxLeftDeg,
-                            maxRightDeg = trackingState.maxRightDeg
+                            maxLeftDeg = trackingState.gaugeExtrema.maxLeftDeg,
+                            maxRightDeg = trackingState.gaugeExtrema.maxRightDeg,
+                            onResetMaxValues = onResetGaugeExtrema
                         )
                         movableBanner()
                     }
@@ -152,9 +161,10 @@ internal fun LeanAngleScreen(
             } else {
                 TachoGauge(
                     currentDeg = trackingState.leanAngleDeg,
-                    maxLeftDeg = trackingState.maxLeftDeg,
-                    maxRightDeg = trackingState.maxRightDeg,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(2f)
+                    maxLeftDeg = trackingState.gaugeExtrema.maxLeftDeg,
+                    maxRightDeg = trackingState.gaugeExtrema.maxRightDeg,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(2f),
+                    onResetMaxValues = onResetGaugeExtrema
                 )
 
                 if (trackingState.currentLatitude != null) {
@@ -189,6 +199,15 @@ internal fun LeanAngleScreen(
                 }
             )
         }
+
+        AppTourDialogs(
+            state = appTourState,
+            onAcceptOffer = onAcceptAppTourOffer,
+            onDeclineOffer = onDeclineAppTourOffer,
+            onPreviousPage = onPreviousAppTourPage,
+            onNextPage = onNextAppTourPage,
+            onFinish = onFinishAppTour
+        )
     }
 }
 

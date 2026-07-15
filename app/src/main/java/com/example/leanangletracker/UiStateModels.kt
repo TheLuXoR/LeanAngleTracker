@@ -78,8 +78,7 @@ fun RideSession.toSummary() = RideSummary(
 
 data class TrackingUiState(
     val leanAngleDeg: Float = 0f,
-    val maxLeftDeg: Float = 0f,
-    val maxRightDeg: Float = 0f,
+    val gaugeExtrema: LeanExtrema = LeanExtrema.ZERO,
     val leanHistoryDeg: List<Float> = emptyList(),
     val speedKmh: Float = 0f,
     val gpsActive: Boolean = false,
@@ -97,6 +96,12 @@ data class TrackingUiState(
     val showHighRotationWarning: Boolean = false,
     val recentPoints: List<TrackPoint> = emptyList(),
     val autoPauseEnabled: Boolean = true
+)
+
+data class AppTourUiState(
+    val offerPending: Boolean = false,
+    val isActive: Boolean = false,
+    val currentPage: Int = 0
 )
 
 data class SettingsUiState(
@@ -119,5 +124,6 @@ data class UiState(
     val expandedRides: Map<Long, RideSession> = emptyMap(),
     val lastSavedRideId: Long? = null,
     val offerExtendSession: RideSession? = null,
-    val pendingRecovery: RideSession? = null
+    val pendingRecovery: RideSession? = null,
+    val appTour: AppTourUiState = AppTourUiState()
 )

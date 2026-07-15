@@ -1,5 +1,6 @@
 package com.example.leanangletracker.ui.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,8 +25,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.R
 import com.example.leanangletracker.ui.theme.AccentGreen
 import com.example.leanangletracker.ui.theme.GaugeBackground
 import com.example.leanangletracker.ui.theme.GaugeNeedle
@@ -57,13 +65,29 @@ fun TachoGauge(
     currentDeg: Float,
     maxLeftDeg: Float,
     maxRightDeg: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onResetMaxValues: () -> Unit = {}
 ) {
     val df = remember { DecimalFormat("0.0") }
     val maxDisplay = 65f
+    val hapticFeedback = LocalHapticFeedback.current
+    val resetLabel = stringResource(R.string.tacho_reset_max_values_long_press)
+    val resetMaxValues = {
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        onResetMaxValues()
+    }
 
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .pointerInput(onResetMaxValues) {
+                detectTapGestures(onLongPress = { resetMaxValues() })
+            }
+            .semantics {
+                onLongClick(label = resetLabel) {
+                    resetMaxValues()
+                    true
+                }
+            },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(24.dp)
     ) {

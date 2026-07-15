@@ -53,11 +53,15 @@ private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec
         if (state.trackingStarted && !state.isPaused) togglePauseTracking()
     }
 
+    var updatedGaugeExtrema: LeanExtrema? = null
     updateTrackingState {
+        val nextGaugeExtrema = it.gaugeExtrema.include(leanDeg)
+        if (nextGaugeExtrema != it.gaugeExtrema) {
+            updatedGaugeExtrema = nextGaugeExtrema
+        }
         it.copy(
             leanAngleDeg = leanDeg,
-            maxLeftDeg = minOf(it.maxLeftDeg, if (leanDeg < 0f) leanDeg else 0f),
-            maxRightDeg = maxOf(it.maxRightDeg, if (leanDeg > 0f) leanDeg else 0f),
+            gaugeExtrema = nextGaugeExtrema,
             leanHistoryDeg = leanHistory.map { sample -> sample.valueDeg },
             speedKmh = speedKmh,
             gpsActive = locationUpdatesRunning,
@@ -68,6 +72,7 @@ private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec
             autoPauseEnabled = _uiState.value.settings.autoPauseEnabled
         )
     }
+    updatedGaugeExtrema?.let(settingsStore::saveGaugeExtrema)
 }
 
 internal fun MainViewModel.pruneHistory(currentTimestampNs: Long, historyWindowSeconds: Int) {

@@ -39,7 +39,8 @@ internal fun SettingsScreen(
     onToggleGpsTracking: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onSetRecorderIntervalMs: (Int) -> Unit,
-    onResetExtrema: () -> Unit,
+    onResetGaugeExtrema: () -> Unit,
+    onStartAppTour: () -> Unit,
     onStartCalibration: () -> Unit,
     onToggleAutoResume: (Boolean) -> Unit,
     onPurchaseAutoResume: () -> Unit,
@@ -223,15 +224,28 @@ internal fun SettingsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
                 Button(
-                    onClick = onResetExtrema,
+                    onClick = onResetGaugeExtrema,
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Text(stringResource(R.string.settings_reset_max_values), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_reset_gauge_max_values), style = MaterialTheme.typography.titleMedium)
                 }
 
+                Text(
+                    text = stringResource(R.string.settings_reset_gauge_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
 
+                OutlinedButton(
+                    onClick = onStartAppTour,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(stringResource(R.string.settings_start_app_tour), style = MaterialTheme.typography.titleMedium)
+                }
             }
             
             Spacer(modifier = Modifier.height(24.dp))

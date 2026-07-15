@@ -13,6 +13,7 @@ android {
         applicationId = "com.example.leanangletracker"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.0"
 

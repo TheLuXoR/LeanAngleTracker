@@ -91,6 +91,7 @@ internal suspend fun MainViewModel.performStartNewRide() {
     ridePointCount = 0
     rideSumSpeedKmh = 0f
     rideSumAbsLeanDeg = 0f
+    activeRideExtrema = LeanExtrema.ZERO
     recentRidePoints.clear()
     pausedPointsBuffer.clear()
     peakLeanSinceLastTick = 0f
@@ -115,6 +116,7 @@ internal fun MainViewModel.resumeRideSession(session: RideSession) {
     ridePointCount = session.points.size
     rideSumSpeedKmh = session.sumSpeedKmh
     rideSumAbsLeanDeg = session.sumAbsLeanDeg
+    activeRideExtrema = LeanExtrema.fromAngles(session.points.map(TrackPoint::leanAngleDeg))
     accumulatedTimeMs = session.accumulatedTimeMs
     lastResumeMs = System.currentTimeMillis()
     
@@ -139,8 +141,6 @@ internal fun MainViewModel.resumeRideSession(session: RideSession) {
         gpsTrackingEnabled = true, 
         hasTrackData = session.points.isNotEmpty(), 
         recentPoints = recentRidePoints.toList(),
-        maxLeftDeg = session.maxLeftDeg,
-        maxRightDeg = session.maxRightDeg,
         elapsedTimeMs = accumulatedTimeMs,
         trackLengthKm = trackLengthMeters / 1000f,
         averageSpeedKmh = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f,
@@ -184,6 +184,7 @@ internal fun MainViewModel.addTrackPoint(point: TrackPoint) {
     ridePointCount++
     rideSumSpeedKmh += point.speedKmh
     rideSumAbsLeanDeg += abs(point.leanAngleDeg)
+    activeRideExtrema = activeRideExtrema.include(point.leanAngleDeg)
     
     recentRidePoints.addLast(point)
     if (recentRidePoints.size > LIVE_POINTS_UI_LIMIT) {
@@ -201,12 +202,12 @@ internal fun MainViewModel.finishRide() {
     
     if (currentRideId != null) {
         if (ridePointCount > 0) {
-            val tracking = _uiState.value.tracking
+            val rideExtrema = activeRideExtrema
             val stats = com.example.leanangletracker.data.RideStats(
                 accumulatedTimeMs = finalElapsedMs,
                 trackLengthMeters = trackLengthMeters,
-                maxLeftDeg = tracking.maxLeftDeg,
-                maxRightDeg = tracking.maxRightDeg,
+                maxLeftDeg = rideExtrema.maxLeftDeg,
+                maxRightDeg = rideExtrema.maxRightDeg,
                 sumSpeedKmh = rideSumSpeedKmh,
                 sumAbsLeanDeg = rideSumAbsLeanDeg,
                 pointCount = ridePointCount
@@ -220,8 +221,8 @@ internal fun MainViewModel.finishRide() {
                 isFinished = false,
                 accumulatedTimeMs = finalElapsedMs,
                 trackLengthMeters = trackLengthMeters,
-                maxLeftDeg = tracking.maxLeftDeg,
-                maxRightDeg = tracking.maxRightDeg,
+                maxLeftDeg = rideExtrema.maxLeftDeg,
+                maxRightDeg = rideExtrema.maxRightDeg,
                 pointCount = ridePointCount
             )
             _uiState.update { it.copy(
@@ -270,6 +271,7 @@ internal fun MainViewModel.finishRide() {
     ridePointCount = 0
     rideSumSpeedKmh = 0f
     rideSumAbsLeanDeg = 0f
+    activeRideExtrema = LeanExtrema.ZERO
     autoResumeTimerStartMs = null
     updateTrackingState {
         it.copy(
@@ -284,8 +286,6 @@ internal fun MainViewModel.finishRide() {
             averageSpeedKmh = 0f,
             trackLengthKm = 0f,
             averageLeanAngleDeg = 0f,
-            maxLeftDeg = 0f,
-            maxRightDeg = 0f,
             isUpsideDown = false,
             showHighRotationWarning = false,
             recentPoints = emptyList()
@@ -408,6 +408,7 @@ internal fun MainViewModel.recordFusedSample() {
 
     // Live stats update & Local buffer update
     addTrackPoint(point)
+    val rideExtrema = activeRideExtrema
     
     val elapsedMs = accumulatedTimeMs + (nowMs - lastResumeMs)
     val avgSpeed = if (ridePointCount > 0) rideSumSpeedKmh / ridePointCount else 0f
@@ -422,8 +423,8 @@ internal fun MainViewModel.recordFusedSample() {
                 rideId = id,
                 accumulatedTimeMs = elapsedMs,
                 trackLengthMeters = trackLengthMeters,
-                maxLeftDeg = state.tracking.maxLeftDeg,
-                maxRightDeg = state.tracking.maxRightDeg,
+                maxLeftDeg = rideExtrema.maxLeftDeg,
+                maxRightDeg = rideExtrema.maxRightDeg,
                 sumSpeedKmh = rideSumSpeedKmh,
                 sumAbsLeanDeg = rideSumAbsLeanDeg,
                 pointCount = ridePointCount

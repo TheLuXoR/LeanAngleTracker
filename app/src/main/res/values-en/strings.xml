@@ -28,7 +28,9 @@
     <string name="settings_recorder_tick_title">Recorder Tick</string>
     <string name="settings_recorder_tick_subtitle">50ms to 1000ms in 50ms steps</string>
     <string name="settings_value_milliseconds">%1$dms</string>
-    <string name="settings_reset_max_values">Reset Max Values</string>
+    <string name="settings_reset_gauge_max_values">Reset Gauge Max Values</string>
+    <string name="settings_reset_gauge_hint">You can also reset both values by long-pressing the gauge.</string>
+    <string name="settings_start_app_tour">Start App Tour</string>
     <string name="settings_recalibrate_device">Recalibrate Device</string>
 
     <string name="ride_history_selected_count">%1$d selected</string>
@@ -52,6 +54,43 @@
     <string name="intro_attach_text">Securely mount your smartphone in a holder on the motorcycle.</string>
     <string name="intro_button_understood">Understood</string>
     <string name="intro_button_attached">Mounted</string>
+
+    <string name="tacho_reset_max_values_long_press">Reset gauge max values</string>
+    <string name="app_tour_prompt_title">Quick app tour?</string>
+    <string name="app_tour_prompt_body">Would you like a short guided overview of the gauge, ride recording, live data, and ride history?</string>
+    <string name="app_tour_prompt_start">Start tour</string>
+    <string name="app_tour_prompt_decline">Not now</string>
+    <string name="app_tour_page_indicator">%1$d of %2$d</string>
+    <string name="app_tour_back">Back</string>
+    <string name="app_tour_next">Next</string>
+    <string name="app_tour_skip">Skip</string>
+    <string name="app_tour_finish">Done</string>
+    <string name="app_tour_gauge_title">Lean-angle gauge</string>
+    <string name="app_tour_gauge_body">The needle shows the current lean angle. MAX L and MAX R are your persistent gauge records: they survive app restarts and rides and only increase through measured lean. Long-press the gauge, or use the Settings button, to reset both without changing any recorded ride.</string>
+    <string name="app_tour_recording_title">Record a ride</string>
+    <string name="app_tour_recording_body">Enable GPS tracking in Settings and grant the requested permissions. Use the record button to start a new ride and press stop to finish and save it.</string>
+    <string name="app_tour_pause_title">Pause and automation</string>
+    <string name="app_tour_pause_body">Pause recording when you want to exclude a section. Auto-Pause protects the recording during extreme rotation; when purchased and enabled, Auto Resume can continue after movement is detected again.</string>
+    <string name="app_tour_live_data_title">Live ride data</string>
+    <string name="app_tour_live_data_body">The history graph shows recent lean values. During GPS recording, the dashboard also shows speed, distance, and elapsed riding time.</string>
+    <string name="app_tour_history_title">History and details</string>
+    <string name="app_tour_history_body">Finished rides appear in History with their recorded maximum lean and point count. Open a ride to inspect its route, graphs, and statistics and jump to important points.</string>
+    <string name="app_tour_manage_title">Manage and configure</string>
+    <string name="app_tour_manage_body">In History you can select, combine, rename, or delete rides. Settings controls lean inversion, GPS, recording interval, live-history length, calibration, and lets you restart this tour at any time.</string>
+    <string name="app_tour_preview_gps_ready">GPS ready</string>
+    <string name="app_tour_preview_start">Start</string>
+    <string name="app_tour_preview_stop">Stop &amp; save</string>
+    <string name="app_tour_preview_paused">PAUSED</string>
+    <string name="app_tour_preview_auto_pause">AUTO-PAUSE</string>
+    <string name="app_tour_preview_auto_resume">AUTO RESUME</string>
+    <string name="app_tour_preview_sample_ride">Sample ride · Today, 14:32</string>
+    <string name="app_tour_preview_distance">DISTANCE</string>
+    <string name="app_tour_preview_max_lean">MAX LEAN</string>
+    <string name="app_tour_preview_points">POINTS</string>
+    <string name="app_tour_preview_selected_ride">Selected ride %1$d</string>
+    <string name="app_tour_preview_combine">Combine</string>
+    <string name="app_tour_preview_delete">Delete</string>
+    <string name="app_tour_preview_settings">Settings</string>
 
     <!-- Calibration Wizard -->
     <string name="calibration_title">Precision Calibration</string>

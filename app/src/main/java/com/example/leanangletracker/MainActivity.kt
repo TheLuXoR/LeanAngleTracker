@@ -241,6 +241,19 @@ class MainActivity : ComponentActivity() {
                                         viewModel.startCalibration()
                                     },
                                     onTogglePause = viewModel::togglePauseTracking,
+                                    onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                    appTourState = if (
+                                        state.pendingRecovery == null && state.offerExtendSession == null
+                                    ) {
+                                        state.appTour
+                                    } else {
+                                        AppTourUiState()
+                                    },
+                                    onAcceptAppTourOffer = viewModel::acceptAppTourOffer,
+                                    onDeclineAppTourOffer = viewModel::completeAppTour,
+                                    onPreviousAppTourPage = viewModel::showPreviousAppTourPage,
+                                    onNextAppTourPage = viewModel::showNextAppTourPage,
+                                    onFinishAppTour = viewModel::completeAppTour,
                                     offerExtend = state.offerExtendSession,
                                     onConfirmExtend = viewModel::confirmExtendRide
                                 )
@@ -276,7 +289,11 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
                                 onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
-                                onResetExtrema = viewModel::resetExtrema,
+                                onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                onStartAppTour = {
+                                    routeUiState = routeUiState.copy(showSettings = false)
+                                    viewModel.startAppTour()
+                                },
                                 onStartCalibration = {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
