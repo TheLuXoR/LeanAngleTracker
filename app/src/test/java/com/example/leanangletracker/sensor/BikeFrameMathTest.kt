@@ -50,7 +50,7 @@ class BikeFrameMathTest {
         val up = Vec3(0f, 0f, 1f)
         val result = BikeFrameMath.fromStaticSamples(
             up,
-            tiltedUp(up, Vec3(1f, 0f, 0f), 4f),
+            tiltedUp(up, Vec3(1f, 0f, 0f), 2f),
             tiltedUp(up, Vec3(1f, 0f, 0f), -20f)
         )
 

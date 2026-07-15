@@ -74,7 +74,7 @@ data class BikeFrameBuildResult(
 )
 
 object BikeFrameMath {
-    const val MIN_TILT_DEG = 8f
+    const val MIN_TILT_DEG = 3f
 
     fun fromStaticSamples(
         upright: Vec3,

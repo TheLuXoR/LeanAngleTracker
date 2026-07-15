@@ -6,10 +6,10 @@ import com.example.leanangletracker.ui.animation.BikeLean
 data class CalibrationUiState(
     val calibrationStep: BikeLean = BikeLean.UPRIGHT,
     val isCalibrated: Boolean = false,
-    val leftMax: Float = 0f,
-    val rightMax: Float = 0f,
     val currentProgress: Float = 0f,
-    val currentAngleDeg: Float = 0f,
+    val maximumTiltProgress: Float = 0f,
+    val leanDetected: Boolean = false,
+    val currentTiltDeg: Float = 0f,
     @param:StringRes val errorResId: Int? = null,
     val currentStepIndex: Int = 1,
     val totalSteps: Int = 3

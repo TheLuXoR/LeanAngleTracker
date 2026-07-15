@@ -4,8 +4,11 @@ import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -22,11 +25,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.sin
 
 enum class BikeLean(val angle: Float) {
     UPRIGHT(0f),
@@ -38,6 +43,8 @@ enum class BikeLean(val angle: Float) {
 private val SineEaseInOut = Easing { fraction ->
     ((1 - cos(fraction * PI)) / 2).toFloat()
 }
+
+private const val CALIBRATION_ANGLE_VISUAL_SCALE = 3.25f
 
 
 @Composable
@@ -86,30 +93,90 @@ duration: Float = 600f
 @Composable
 fun CalibrationBikeLeanAnimation(
     modifier: Modifier = Modifier,
-    bikeAnimationFrom: BikeLean,
-    bikeAnimationTo: BikeLean,
-    duration: Float = 600f
+    measuredAngleDeg: Float,
+    targetDirection: BikeLean? = null
 ) {
-
-    var start by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        start = true
-    }
-
     val angle by animateFloatAsState(
-        targetValue = if (start) bikeAnimationFrom.angle else bikeAnimationTo.angle,
-        animationSpec = keyframes {
-            durationMillis= duration.toInt()
-        }
+        targetValue = (measuredAngleDeg * CALIBRATION_ANGLE_VISUAL_SCALE).coerceIn(-45f, 45f),
+        animationSpec = tween(durationMillis = 100),
+        label = "calibrationBikeAngle"
     )
 
-    // Pivot for calibration is at the tire contact point (approx 0.85 y)
-    Bike(
-        modifier = modifier,
-        angle = angle,
-        transformOrigin = TransformOrigin(0.5f, 0.85f)
-    )
+    Box(modifier = modifier) {
+        if (targetDirection == BikeLean.LEFT || targetDirection == BikeLean.RIGHT) {
+            CalibrationDirectionArrow(
+                modifier = Modifier.fillMaxSize(),
+                direction = targetDirection
+            )
+        }
+
+        // Pivot for calibration is at the tire contact point (approx 0.85 y)
+        Bike(
+            modifier = Modifier.fillMaxSize(),
+            angle = angle,
+            transformOrigin = TransformOrigin(0.5f, 0.85f)
+        )
+    }
+}
+
+@Composable
+private fun CalibrationDirectionArrow(
+    modifier: Modifier,
+    direction: BikeLean
+) {
+    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+
+    Canvas(modifier = modifier) {
+        val radius = size.minDimension * 0.34f
+        val center = Offset(size.width / 2f, size.height * 0.62f)
+        val isLeft = direction == BikeLean.LEFT
+        val startAngleDeg = if (isLeft) -55f else -125f
+        val sweepAngleDeg = if (isLeft) -75f else 75f
+        val endAngleDeg = startAngleDeg + sweepAngleDeg
+        val strokeWidth = size.minDimension * 0.025f
+
+        drawArc(
+            color = color,
+            startAngle = startAngleDeg,
+            sweepAngle = sweepAngleDeg,
+            useCenter = false,
+            topLeft = Offset(center.x - radius, center.y - radius),
+            size = Size(radius * 2f, radius * 2f),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
+
+        val endRadians = Math.toRadians(endAngleDeg.toDouble())
+        val tip = Offset(
+            x = center.x + radius * cos(endRadians).toFloat(),
+            y = center.y + radius * sin(endRadians).toFloat()
+        )
+        val tangentAngleDeg = endAngleDeg + if (isLeft) -90f else 90f
+        val arrowLength = size.minDimension * 0.10f
+        val wingAngleDeg = 35f
+
+        fun arrowWing(angleDeg: Float): Offset {
+            val radians = Math.toRadians(angleDeg.toDouble())
+            return Offset(
+                x = tip.x - arrowLength * cos(radians).toFloat(),
+                y = tip.y - arrowLength * sin(radians).toFloat()
+            )
+        }
+
+        drawLine(
+            color = color,
+            start = tip,
+            end = arrowWing(tangentAngleDeg - wingAngleDeg),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = tip,
+            end = arrowWing(tangentAngleDeg + wingAngleDeg),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+    }
 }
 
 

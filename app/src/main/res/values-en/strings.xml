@@ -57,22 +57,24 @@
     <string name="calibration_title">Precision Calibration</string>
     <string name="calibration_step_indicator">Step %1$d of %2$d</string>
     <string name="calibration_action_fix_center">Fix Center</string>
-    <string name="calibration_action_left_confirmed">Fix Left</string>
-    <string name="calibration_action_right_confirmed">Fix Right</string>
-    <string name="calibration_error_wrong_direction">Wrong Direction!</string>
+    <string name="calibration_error_wrong_direction">The other direction was detected. Return the motorcycle upright first.</string>
     <string name="calibration_error_unstable">Keep the motorcycle and phone still until the measurement is complete.</string>
-    <string name="calibration_error_too_little">Lean the motorcycle at least 8°.</string>
+    <string name="calibration_error_too_little">The movement was not detected clearly. Repeat only if it feels safe, and never exceed your comfort limit.</string>
     <string name="calibration_error_same_direction">The right sample points to the same side as the left sample.</string>
     <string name="calibration_error_degenerate">The motorcycle axes could not be determined. Please repeat the calibration.</string>
     <string name="calibration_instr_upright">Step 1: Upright Standing</string>
-    <string name="calibration_instr_left">Step 2: Lean Left</string>
-    <string name="calibration_instr_right">Step 3: Lean Right</string>
+    <string name="calibration_instr_left">Step 2: Safe Lean Left</string>
+    <string name="calibration_instr_right">Step 3: Safe Lean Right</string>
+    <string name="calibration_instr_return_upright">Lean detected — return upright</string>
     <string name="calibration_instr_ready">System Ready!</string>
     <string name="calibration_hint_upright">Hold the bike upright and still until the measurement reaches 100 percent.</string>
-    <string name="calibration_hint_left">Lean the bike at least 8° to the left and hold it still.</string>
-    <string name="calibration_hint_right">Lean the bike at least 8° to the right and hold it still.</string>
+    <string name="calibration_hint_left">Slowly lean left only as far as you can safely hold it, then return upright. Do not touch the phone. You are responsible for secure footing and your actions.</string>
+    <string name="calibration_hint_right">Slowly lean right only as far as you can safely hold it, then return upright. Do not touch the phone. You are responsible for secure footing and your actions.</string>
+    <string name="calibration_hint_return_upright">Return the motorcycle upright in a controlled manner. The app captures the lean automatically.</string>
     <string name="calibration_hint_ready">Calibration finished. Enjoy your ride!</string>
     <string name="calibration_progress_label">Progress: %1$d%%</string>
+    <string name="calibration_status_auto_capture">Automatic detection — no button press needed</string>
+    <string name="calibration_status_return_upright">Lean detected — return upright and hold still</string>
 
     <!-- Tracking Labels -->
     <string name="tracking_searching_gps">Searching GPS…</string>

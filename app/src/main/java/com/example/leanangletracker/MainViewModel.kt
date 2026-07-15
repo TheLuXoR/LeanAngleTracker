@@ -23,6 +23,7 @@ import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.domain.RideSessionUseCases
 import com.example.leanangletracker.sensor.BikeFrameCalibration
 import com.example.leanangletracker.sensor.LowPassFilter
+import com.example.leanangletracker.sensor.LeanAndReturnDetector
 import com.example.leanangletracker.sensor.MadgwickFilter
 import com.example.leanangletracker.sensor.Quaternion
 import com.example.leanangletracker.sensor.SensorDebugTrace
@@ -90,6 +91,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal val gravityLowPass = LowPassFilter(cutoffHz = 4f)
     internal val madgwickFilter = MadgwickFilter(betaBase = 0.055f)
     internal val staticCalibrationCollector = StaticCalibrationCollector()
+    internal val leanAndReturnDetector = LeanAndReturnDetector()
     internal val sensorDebugTrace = SensorDebugTrace(capacity = 20_000)
     internal var autoResumeTimerStartMs: Long? = null
     internal val pausedPointsBuffer = ArrayDeque<TrackPoint>()

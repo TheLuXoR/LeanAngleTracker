@@ -1,19 +1,19 @@
 package com.example.leanangletracker.ui.calibration
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -28,16 +28,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
+import com.example.leanangletracker.sensor.CalibrationTiltProgress
 import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
 import com.example.leanangletracker.ui.theme.TextSecondary
+
+private val CalibrationSuccessGreen = Color(0xFF22C55E)
 
 @Composable
 fun CalibrationWizardLandscape(
@@ -58,17 +66,13 @@ fun CalibrationWizardLandscape(
             HeaderWithSteps(state)
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val animTarget = when (state.calibrationStep) {
-                    BikeLean.LEFT -> BikeLean.LEFT
-                    BikeLean.RIGHT -> BikeLean.RIGHT
-                    else -> BikeLean.UPRIGHT
-                }
-
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     CalibrationBikeLeanAnimation(
                         modifier = Modifier.fillMaxHeight(0.7f).aspectRatio(1f),
-                        bikeAnimationFrom = animTarget,
-                        bikeAnimationTo = BikeLean.UPRIGHT
+                        measuredAngleDeg = state.currentTiltDeg,
+                        targetDirection = state.calibrationStep.takeIf {
+                            !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
+                        }
                     )
                 }
 
@@ -127,27 +131,13 @@ fun CalibrationWizardPortrait(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center
             ) {
-                val animTarget = when (state.calibrationStep) {
-                    BikeLean.LEFT -> BikeLean.LEFT
-                    BikeLean.RIGHT -> BikeLean.RIGHT
-                    else -> BikeLean.UPRIGHT
-                }
-
                 CalibrationBikeLeanAnimation(
                     modifier = Modifier.fillMaxSize(0.7f),
-                    bikeAnimationFrom = animTarget,
-                    bikeAnimationTo = BikeLean.UPRIGHT
+                    measuredAngleDeg = state.currentTiltDeg,
+                    targetDirection = state.calibrationStep.takeIf {
+                        !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
+                    }
                 )
-
-                if (state.calibrationStep != BikeLean.DONE && state.calibrationStep != BikeLean.UPRIGHT) {
-                    Text(
-                        text = "${state.currentAngleDeg.toInt()}°",
-                        style = MaterialTheme.typography.displayMedium,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
-                    )
-                }
 
                 Box(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -198,15 +188,13 @@ private fun HeaderWithSteps(state: CalibrationUiState) {
 }
 
 private fun shouldShowActionButton(state: CalibrationUiState): Boolean {
-    return state.calibrationStep != BikeLean.DONE
+    return state.calibrationStep == BikeLean.UPRIGHT
 }
 
 @Composable
 private fun getButtonText(state: CalibrationUiState): String {
     return when (state.calibrationStep) {
         BikeLean.UPRIGHT -> stringResource(R.string.calibration_action_fix_center)
-        BikeLean.LEFT -> stringResource(R.string.calibration_action_left_confirmed)
-        BikeLean.RIGHT -> stringResource(R.string.calibration_action_right_confirmed)
         else -> ""
     }
 }
@@ -247,10 +235,11 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Green, modifier = Modifier.padding(bottom = 4.dp))
         }
 
-        val instructionText = when (state.calibrationStep) {
-            BikeLean.UPRIGHT -> stringResource(R.string.calibration_instr_upright)
-            BikeLean.LEFT -> stringResource(R.string.calibration_instr_left)
-            BikeLean.RIGHT -> stringResource(R.string.calibration_instr_right)
+        val instructionText = when {
+            state.leanDetected -> stringResource(R.string.calibration_instr_return_upright)
+            state.calibrationStep == BikeLean.UPRIGHT -> stringResource(R.string.calibration_instr_upright)
+            state.calibrationStep == BikeLean.LEFT -> stringResource(R.string.calibration_instr_left)
+            state.calibrationStep == BikeLean.RIGHT -> stringResource(R.string.calibration_instr_right)
             else -> stringResource(R.string.calibration_instr_ready)
         }
 
@@ -263,6 +252,7 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
 
         Text(
             text = when {
+                state.leanDetected -> stringResource(R.string.calibration_hint_return_upright)
                 state.calibrationStep == BikeLean.UPRIGHT -> stringResource(R.string.calibration_hint_upright)
                 state.calibrationStep == BikeLean.LEFT -> stringResource(R.string.calibration_hint_left)
                 state.calibrationStep == BikeLean.RIGHT -> stringResource(R.string.calibration_hint_right)
@@ -277,47 +267,108 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
 
 @Composable
 private fun CalibrationProgressIndicator(state: CalibrationUiState) {
+    val isTiltStep = state.calibrationStep == BikeLean.LEFT ||
+        state.calibrationStep == BikeLean.RIGHT
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val mainFillColor by animateColorAsState(
+        targetValue = if (!isTiltStep && state.currentProgress >= 1f) {
+            CalibrationSuccessGreen
+        } else {
+            primaryColor
+        },
+        label = "calibrationProgressColor"
+    )
+
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
+        CalibrationProgressBar(
+            progress = state.currentProgress,
+            primaryColor = mainFillColor,
+            useTiltGradient = isTiltStep,
+            showError = isTiltStep && state.errorResId != null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(24.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.1f)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left Half (Left Lean)
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Box(modifier = Modifier.fillMaxWidth(state.leftMax).fillMaxHeight().background(Color.Green.copy(alpha = 0.2f)))
-                if (state.calibrationStep == BikeLean.LEFT || state.calibrationStep == BikeLean.UPRIGHT) {
-                    Box(modifier = Modifier.fillMaxWidth(state.currentProgress).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
-                }
-            }
+                .height(12.dp)
+        )
 
-            Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.3f)))
-
-            // Right Half (Right Lean)
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Box(modifier = Modifier.fillMaxWidth(state.rightMax).fillMaxHeight().background(Color.Green.copy(alpha = 0.2f)))
-                if (state.calibrationStep == BikeLean.RIGHT || state.calibrationStep == BikeLean.UPRIGHT) {
-                    Box(modifier = Modifier.fillMaxWidth(state.currentProgress).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
-                }
-            }
+        if (isTiltStep) {
+            Spacer(modifier = Modifier.height(5.dp))
+            CalibrationProgressBar(
+                progress = state.maximumTiltProgress,
+                primaryColor = primaryColor,
+                useTiltGradient = true,
+                subdued = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+            )
         }
-        
+
         if (state.calibrationStep != BikeLean.DONE) {
             Text(
-                text = stringResource(R.string.calibration_progress_label, (state.currentProgress * 100).toInt()),
+                text = when {
+                    state.calibrationStep == BikeLean.UPRIGHT -> stringResource(
+                        R.string.calibration_progress_label,
+                        (state.currentProgress * 100).toInt()
+                    )
+                    state.leanDetected -> stringResource(R.string.calibration_status_return_upright)
+                    else -> stringResource(R.string.calibration_status_auto_capture)
+                },
                 style = MaterialTheme.typography.labelSmall,
-                color = if (state.currentProgress > 0.8f) Color.Green else TextSecondary,
+                color = if (state.leanDetected || state.currentProgress > 0.8f) Color.Green else TextSecondary,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun CalibrationProgressBar(
+    progress: Float,
+    primaryColor: Color,
+    useTiltGradient: Boolean,
+    modifier: Modifier = Modifier,
+    showError: Boolean = false,
+    subdued: Boolean = false
+) {
+    val errorColor = MaterialTheme.colorScheme.error
+    val fillAlpha = if (subdued) 0.35f else 1f
+    val trackColor = Color.White.copy(alpha = if (subdued) 0.05f else 0.10f)
+
+    Canvas(modifier = modifier) {
+        val cornerRadius = CornerRadius(size.height / 2f)
+        drawRoundRect(
+            color = trackColor,
+            size = size,
+            cornerRadius = cornerRadius
+        )
+
+        val fillWidth = size.width * progress.coerceIn(0f, 1f)
+        if (fillWidth <= 0f) return@Canvas
+
+        val fillBrush = when {
+            showError -> SolidColor(errorColor.copy(alpha = fillAlpha))
+            useTiltGradient -> Brush.horizontalGradient(
+                0f to primaryColor.copy(alpha = fillAlpha),
+                CalibrationTiltProgress.MINIMUM_TILT_PROGRESS * 0.32f to
+                    primaryColor.copy(alpha = fillAlpha),
+                CalibrationTiltProgress.MINIMUM_TILT_PROGRESS * 0.56f to
+                    lerp(primaryColor, CalibrationSuccessGreen, 0.20f).copy(alpha = fillAlpha),
+                CalibrationTiltProgress.MINIMUM_TILT_PROGRESS * 0.76f to
+                    lerp(primaryColor, CalibrationSuccessGreen, 0.50f).copy(alpha = fillAlpha),
+                CalibrationTiltProgress.MINIMUM_TILT_PROGRESS * 0.92f to
+                    lerp(primaryColor, CalibrationSuccessGreen, 0.78f).copy(alpha = fillAlpha),
+                CalibrationTiltProgress.MINIMUM_TILT_PROGRESS to
+                    CalibrationSuccessGreen.copy(alpha = fillAlpha),
+                1f to CalibrationSuccessGreen.copy(alpha = fillAlpha),
+                startX = 0f,
+                endX = size.width
+            )
+            else -> SolidColor(primaryColor.copy(alpha = fillAlpha))
+        }
+        drawRoundRect(
+            brush = fillBrush,
+            size = Size(fillWidth, size.height),
+            cornerRadius = cornerRadius
+        )
     }
 }

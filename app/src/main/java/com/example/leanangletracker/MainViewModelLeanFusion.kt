@@ -2,10 +2,10 @@ package com.example.leanangletracker
 
 import android.hardware.SensorEvent
 import com.example.leanangletracker.MainViewModelConfig.AUTO_PAUSE_LEAN_THRESHOLD
-import com.example.leanangletracker.MainViewModelConfig.CALIBRATION_TILT_MAX_RANGE
 import com.example.leanangletracker.MainViewModelConfig.MAX_LEAN_DEG
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.sensor.BikeFrameMath
+import com.example.leanangletracker.sensor.CalibrationTiltProgress
 import com.example.leanangletracker.sensor.FusionGating
 import com.example.leanangletracker.sensor.SensorTraceSample
 import com.example.leanangletracker.sensor.fusionDeltaSeconds
@@ -13,7 +13,6 @@ import com.example.leanangletracker.ui.animation.BikeLean
 import kotlin.math.abs
 
 private const val UPRIGHT_STABLE_DURATION_NS = 1_500_000_000L
-private const val TILTED_STABLE_DURATION_NS = 750_000_000L
 private const val GYRO_SAMPLE_FRESH_NS = 100_000_000L
 
 internal fun MainViewModel.registerRecentLeanSample(timestampNs: Long, leanDeg: Float) {
@@ -137,78 +136,72 @@ private fun MainViewModel.updateStaticCalibrationProgress(timestampNs: Long) {
     val gyroFresh = gyroscopeSensor == null || latestRawGyroTimestampNs?.let {
         abs(timestampNs - it) <= GYRO_SAMPLE_FRESH_NS
     } == true
-    val currentUp = filteredGravity.normalized()
-    val upright = uprightUp
-
-    val requiredDurationNs: Long
-    val poseIsValid: Boolean
-    val angleDeg: Float
-    val wrongDirection: Boolean
-    when (step) {
-        BikeLean.UPRIGHT -> {
-            requiredDurationNs = UPRIGHT_STABLE_DURATION_NS
-            poseIsValid = gyroFresh
-            angleDeg = 0f
-            wrongDirection = false
-        }
-
-        BikeLean.LEFT -> {
-            val up = upright ?: return
-            angleDeg = BikeFrameMath.angleBetweenDeg(up, currentUp)
-            requiredDurationNs = TILTED_STABLE_DURATION_NS
-            poseIsValid = gyroFresh && angleDeg >= BikeFrameMath.MIN_TILT_DEG
-            wrongDirection = false
-        }
-
-        BikeLean.RIGHT -> {
-            val up = upright ?: return
-            angleDeg = BikeFrameMath.angleBetweenDeg(up, currentUp)
-            val currentOffset = BikeFrameMath.projectedOffset(currentUp, up)
-            val leftDirection = calibrationSideAxis
-            wrongDirection = angleDeg > 3f && leftDirection != null &&
-                currentOffset.norm() > 1e-4f &&
-                currentOffset.normalized().dot(leftDirection) > 0f
-            requiredDurationNs = TILTED_STABLE_DURATION_NS
-            poseIsValid = gyroFresh && angleDeg >= BikeFrameMath.MIN_TILT_DEG && !wrongDirection
-        }
-
-        BikeLean.DONE -> return
+    val gyroForCalibration = when {
+        gyroscopeSensor == null -> Vec3(0f, 0f, 0f)
+        gyroFresh -> latestRawGyro
+        else -> Vec3(1f, 1f, 1f)
     }
 
-    val sampleProgress = staticCalibrationCollector.update(
+    if (step == BikeLean.UPRIGHT) {
+        val sampleProgress = staticCalibrationCollector.update(
+            timestampNs = timestampNs,
+            accelerationMs2 = filteredGravity,
+            gyroRadPerSec = gyroForCalibration,
+            requiredDurationNs = UPRIGHT_STABLE_DURATION_NS,
+            poseIsValid = gyroFresh
+        )
+        pendingStableCalibrationSample = sampleProgress.readySample
+        updateCalibrationState { state ->
+            state.copy(
+                currentProgress = sampleProgress.progress,
+                maximumTiltProgress = 0f,
+                leanDetected = false,
+                currentTiltDeg = 0f,
+                errorResId = null
+            )
+        }
+        return
+    }
+
+    val upright = uprightUp ?: return
+    val result = leanAndReturnDetector.update(
         timestampNs = timestampNs,
         accelerationMs2 = filteredGravity,
-        gyroRadPerSec = if (gyroscopeSensor == null) Vec3(0f, 0f, 0f) else latestRawGyro,
-        requiredDurationNs = requiredDurationNs,
-        poseIsValid = poseIsValid
+        gyroRadPerSec = gyroForCalibration,
+        uprightWorldUpDevice = upright,
+        oppositeOfDirection = if (step == BikeLean.RIGHT) calibrationSideAxis else null
     )
-    pendingStableCalibrationSample = sampleProgress.readySample
-
+    val currentUp = filteredGravity.normalized()
+    val signedTiltDeg = when (step) {
+        BikeLean.LEFT -> -result.currentAngleDeg
+        BikeLean.RIGHT -> {
+            val sideAxis = calibrationSideAxis
+            val pointsTowardsLeft = sideAxis != null &&
+                BikeFrameMath.projectedOffset(currentUp, upright).dot(sideAxis) > 0f
+            if (pointsTowardsLeft) -result.currentAngleDeg else result.currentAngleDeg
+        }
+    }
     updateCalibrationState { state ->
         state.copy(
-            currentProgress = sampleProgress.progress,
-            leftMax = if (step == BikeLean.LEFT) {
-                maxOf(state.leftMax, (angleDeg / CALIBRATION_TILT_MAX_RANGE).coerceIn(0f, 1f))
+            currentProgress = CalibrationTiltProgress.fromAngle(result.currentAngleDeg),
+            maximumTiltProgress = CalibrationTiltProgress.fromAngle(result.maxAngleDeg),
+            leanDetected = result.leanDetected,
+            currentTiltDeg = signedTiltDeg,
+            errorResId = if (result.wrongDirection) {
+                R.string.calibration_error_wrong_direction
             } else {
-                state.leftMax
-            },
-            rightMax = if (step == BikeLean.RIGHT && !wrongDirection) {
-                maxOf(state.rightMax, (angleDeg / CALIBRATION_TILT_MAX_RANGE).coerceIn(0f, 1f))
-            } else {
-                state.rightMax
-            },
-            currentAngleDeg = when (step) {
-                BikeLean.LEFT -> -angleDeg
-                BikeLean.RIGHT -> angleDeg
-                else -> 0f
-            },
-            errorResId = if (wrongDirection) R.string.calibration_error_wrong_direction else null
+                null
+            }
         )
+    }
+    result.completedWorldUpDevice?.let { capturedUp ->
+        completeAutomaticTiltCalibration(step, capturedUp)
     }
 }
 
 internal fun MainViewModel.prepareNextCalibrationStep() {
     staticCalibrationCollector.reset()
+    leanAndReturnDetector.reset()
     pendingStableCalibrationSample = null
 }
 
@@ -216,6 +209,7 @@ internal fun MainViewModel.resetSensorFusion() {
     gravityLowPass.reset()
     madgwickFilter.reset()
     staticCalibrationCollector.reset()
+    leanAndReturnDetector.reset()
     sensorDebugTrace.clear()
     fusionQuaternion = com.example.leanangletracker.sensor.Quaternion.IDENTITY
     fusionInitialized = false

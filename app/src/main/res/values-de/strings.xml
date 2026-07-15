@@ -5,25 +5,27 @@
 
     <string name="calibration_title">Kalibrierung</string>
     <string name="calibration_action_fix_center">Mitte fixieren</string>
-    <string name="calibration_action_left_confirmed">Links fixieren</string>
-    <string name="calibration_action_right_confirmed">Rechts fixieren</string>
     <string name="calibration_step_indicator">Schritt %1$d von %2$d</string>
     <string name="calibration_error_unstable">Halte Motorrad und Handy ruhig, bis die Messung abgeschlossen ist.</string>
-    <string name="calibration_error_too_little">Neige das Motorrad um mindestens 8°.</string>
+    <string name="calibration_error_too_little">Die Bewegung wurde nicht eindeutig erkannt. Wiederhole sie nur, wenn du dich dabei sicher fühlst, und gehe nie über deine Wohlfühlgrenze.</string>
     <string name="calibration_error_same_direction">Die rechte Messung zeigt auf dieselbe Seite wie die linke Messung.</string>
     <string name="calibration_error_degenerate">Die Motorradachsen konnten nicht bestimmt werden. Bitte wiederhole die Kalibrierung.</string>
 
     <string name="calibration_instr_upright">Schritt 1: Aufrecht stehen</string>
-    <string name="calibration_instr_left">Schritt 2: Linkslage</string>
-    <string name="calibration_instr_right">Schritt 3: Rechtslage</string>
+    <string name="calibration_instr_left">Schritt 2: Sicher nach links neigen</string>
+    <string name="calibration_instr_right">Schritt 3: Sicher nach rechts neigen</string>
+    <string name="calibration_instr_return_upright">Neigung erkannt – wieder aufrichten</string>
     <string name="calibration_instr_ready">Bereit!</string>
 
     <string name="calibration_hint_upright">Motorrad aufrecht und ruhig halten, bis die Messung 100 Prozent erreicht.</string>
-    <string name="calibration_hint_left">Motorrad mindestens 8° nach links neigen und ruhig halten.</string>
-    <string name="calibration_hint_right">Motorrad mindestens 8° nach rechts neigen und ruhig halten.</string>
+    <string name="calibration_hint_left">Langsam nur so weit nach links neigen, wie du es sicher halten kannst, dann wieder aufrichten. Das Handy nicht berühren. Du bist für sicheren Stand und dein Handeln selbst verantwortlich.</string>
+    <string name="calibration_hint_right">Langsam nur so weit nach rechts neigen, wie du es sicher halten kannst, dann wieder aufrichten. Das Handy nicht berühren. Du bist für sicheren Stand und dein Handeln selbst verantwortlich.</string>
+    <string name="calibration_hint_return_upright">Richte das Motorrad kontrolliert wieder auf. Die App übernimmt die Neigung automatisch.</string>
     <string name="calibration_hint_ready">Gute Fahrt!</string>
     <string name="calibration_progress_label">Fortschritt: %1$d%%</string>
-    <string name="calibration_error_wrong_direction">Falsche Richtung!</string>
+    <string name="calibration_status_auto_capture">Automatische Erkennung – kein Tastendruck nötig</string>
+    <string name="calibration_status_return_upright">Neigung erkannt – aufrichten und ruhig halten</string>
+    <string name="calibration_error_wrong_direction">Die andere Richtung wurde erkannt. Richte das Motorrad zuerst wieder auf.</string>
 
     <string name="screen_title_lean_angle">Schräglage</string>
     <string name="history_title">Verlauf</string>
