@@ -32,18 +32,9 @@
     <string name="history_max_left">Links: %1$.1f°</string>
     <string name="history_max_right">Rechts: %1$.1f°</string>
 
-    <string name="settings_dialog_info_title">App-Info</string>
-    <string name="settings_dialog_info_text">Lean Angle Tracker hilft dir, deine Fahrdynamik zu überwachen. Nutze Gyro-Fusion für bessere Genauigkeit in dynamischen Kurven.</string>
     <string name="settings_title">Einstellungen</string>
     <string name="action_back">Zurück</string>
-    <string name="dialog_ok">OK</string>
-    <string name="action_info">Info</string>
     <string name="settings_group_sensors_tracking">SENSOREN &amp; TRACKING</string>
-    <string name="settings_invert_lean_title">Schräglage invertieren</string>
-    <string name="settings_invert_lean_subtitle">Links/Rechts tauschen, wenn das Handy kopfüber montiert ist</string>
-    <string name="settings_gps_tracking_title">GPS-Tracking</string>
-    <string name="settings_gps_tracking_subtitle_granted">Geschwindigkeit + Streckenaufzeichnung</string>
-    <string name="settings_gps_tracking_subtitle_missing">Standortberechtigung erforderlich</string>
     <string name="settings_group_visuals">ANZEIGE</string>
     <string name="settings_history_window_title">Verlaufsfenster</string>
     <string name="settings_history_window_subtitle">Im Verlaufsdiagramm angezeigte Zeit</string>
@@ -94,7 +85,7 @@
     <string name="app_tour_gauge_title">Schräglagen-Tacho</string>
     <string name="app_tour_gauge_body">Der Zeiger zeigt die aktuelle Schräglage. MAX L und MAX R sind deine dauerhaften Tacho-Rekorde: Sie bleiben über App-Starts und Fahrten erhalten und steigen nur durch gemessene Neigung. Halte den Tacho lange gedrückt oder nutze den Button in den Settings, um beide Werte zurückzusetzen, ohne eine aufgezeichnete Fahrt zu verändern.</string>
     <string name="app_tour_recording_title">Fahrt aufzeichnen</string>
-    <string name="app_tour_recording_body">Aktiviere GPS-Tracking in den Settings und erteile die angefragten Berechtigungen. Mit dem Aufnahmebutton startest du eine neue Fahrt; Stop beendet und speichert sie.</string>
+    <string name="app_tour_recording_body">Beim ersten Aufnahmestart erklärt die App die Standort- und Benachrichtigungsberechtigungen und fragt sie an. GPS zeichnet Strecke, Geschwindigkeit und Distanz auf; Stop beendet und speichert die Fahrt.</string>
     <string name="app_tour_pause_title">Pause und Automatik</string>
     <string name="app_tour_pause_body">Pausiere die Aufzeichnung, wenn ein Abschnitt nicht zur Fahrt gehören soll. Auto-Pause schützt die Aufzeichnung bei extremer Rotation; nach Kauf und Aktivierung kann Auto Resume sie bei erneuter Bewegung fortsetzen.</string>
     <string name="app_tour_live_data_title">Live-Fahrdaten</string>
@@ -102,7 +93,7 @@
     <string name="app_tour_history_title">Historie und Details</string>
     <string name="app_tour_history_body">Beendete Fahrten erscheinen mit aufgezeichneter Maximalschräglage und Punktzahl in der Historie. Öffne eine Fahrt, um Strecke, Diagramme und Statistiken zu prüfen und zu wichtigen Punkten zu springen.</string>
     <string name="app_tour_manage_title">Verwalten und einstellen</string>
-    <string name="app_tour_manage_body">In der Historie kannst du Fahrten auswählen, zusammenführen, umbenennen oder löschen. In den Settings steuerst du Invertierung, GPS, Aufzeichnungsintervall, Verlaufslänge und Kalibrierung und kannst diese Tour jederzeit erneut starten.</string>
+    <string name="app_tour_manage_body">In der Historie kannst du Fahrten auswählen, zusammenführen, umbenennen oder löschen. In den Settings steuerst du Aufzeichnungsintervall, Verlaufslänge und Kalibrierung und kannst diese Tour jederzeit erneut starten.</string>
     <string name="app_tour_preview_gps_ready">GPS bereit</string>
     <string name="app_tour_preview_start">Starten</string>
     <string name="app_tour_preview_stop">Stoppen &amp; speichern</string>
@@ -120,7 +111,19 @@
 
     <!-- Tracking Labels -->
     <string name="tracking_searching_gps">GPS wird gesucht…</string>
-    <string name="tracking_warning_upside_down">Handy steht auf dem Kopf! Bitte umdrehen.</string>
+    <string name="tracking_permission_dialog_title">Fahrtaufzeichnung vorbereiten</string>
+    <string name="tracking_permission_location_title">Standort</string>
+    <string name="tracking_permission_location_body">GPS zeichnet deine Strecke auf und berechnet Geschwindigkeit und Distanz.</string>
+    <string name="tracking_permission_notification_title">Benachrichtigungen</string>
+    <string name="tracking_permission_notification_body">Eine Benachrichtigung macht die aktive Hintergrundaufzeichnung sichtbar und führt dich zurück zur App.</string>
+    <string name="tracking_permission_continue">Weiter</string>
+    <string name="tracking_permission_cancel">Abbrechen</string>
+    <string name="auto_resume_premium_shortcut_title">Losfahren während der Pause erkannt</string>
+    <string name="auto_resume_premium_shortcut_body">Auto Resume kann pausierte Aufzeichnungen automatisch fortsetzen.</string>
+    <string name="auto_resume_premium_shortcut_action">Auto Resume ansehen</string>
+    <string name="tracking_warning_upside_down">Das Handy steht gegenüber der Kalibrierung auf dem Kopf. Die Schräglagenwerte sind ungültig. Drehe es zurück oder kalibriere diese Montage neu.</string>
+    <string name="tracking_warning_high_rotation">Starke Rotation erkannt. Die Ausrichtung des Handys könnte falsch sein.</string>
+    <string name="action_recalibrate">Neu kalibrieren</string>
 
     <!-- Extend Ride Dialog -->
     <string name="dialog_extend_ride_title">Fahrt fortsetzen?</string>

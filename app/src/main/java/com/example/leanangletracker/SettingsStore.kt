@@ -6,10 +6,8 @@ import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.sensor.BikeFrameMath
 
 data class PersistedSettings(
-    val invertLeanAngle: Boolean,
     val historyWindowSeconds: Int,
     val recorderIntervalMs: Int,
-    val gpsTrackingEnabled: Boolean,
     val autoResumeEnabled: Boolean,
     val isAutoResumePurchased: Boolean,
     val autoPauseEnabled: Boolean
@@ -31,10 +29,8 @@ data class PersistedState(
 class SettingsStore(applicationContext: Context) {
     private companion object {
         const val PREFS_NAME = "lean_angle_tracker_prefs"
-        const val KEY_INVERT = "invert_lean"
         const val KEY_HISTORY_WINDOW = "history_window_s"
         const val KEY_RECORDER_INTERVAL = "recorder_interval_ms"
-        const val KEY_GPS_ENABLED = "gps_enabled"
         const val KEY_CALIBRATED = "is_calibrated"
         const val KEY_CALIBRATION_VERSION = "calibration_version"
         const val KEY_UPRIGHT_X = "upright_x"
@@ -59,11 +55,9 @@ class SettingsStore(applicationContext: Context) {
 
     fun load(recorderIntervalMinMs: Int, recorderIntervalMaxMs: Int): PersistedState {
         val settings = PersistedSettings(
-            invertLeanAngle = prefs.getBoolean(KEY_INVERT, false),
             historyWindowSeconds = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120),
             recorderIntervalMs = prefs.getInt(KEY_RECORDER_INTERVAL, 200)
                 .coerceIn(recorderIntervalMinMs, recorderIntervalMaxMs),
-            gpsTrackingEnabled = prefs.getBoolean(KEY_GPS_ENABLED, false),
             autoResumeEnabled = prefs.getBoolean(KEY_AUTO_REWIND, false),
             isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false),
             autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, true)
@@ -122,10 +116,8 @@ class SettingsStore(applicationContext: Context) {
 
     fun save(settings: SettingsUiState) {
         prefs.edit()
-            .putBoolean(KEY_INVERT, settings.invertLeanAngle)
             .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
-            .putBoolean(KEY_GPS_ENABLED, settings.gpsTrackingEnabled)
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
             .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)

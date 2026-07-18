@@ -43,6 +43,7 @@ import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
 import com.example.leanangletracker.ui.tracking.RideHistoryScreen
 import com.example.leanangletracker.ui.tracking.RideDetailScreen
+import com.example.leanangletracker.ui.tracking.TrackingPermissionDialog
 import com.example.leanangletracker.ui.calibration.CalibrationScreen
 import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
@@ -68,12 +69,30 @@ class MainActivity : ComponentActivity() {
                     var routeUiState by rememberSaveable(stateSaver = RouteUiState.Saver) {
                         mutableStateOf(RouteUiState())
                     }
+                    var showTrackingPermissionDialog by rememberSaveable { mutableStateOf(false) }
 
                     val permissionsLauncher = rememberLauncherForActivityResult(
                         ActivityResultContracts.RequestMultiplePermissions()
-                    ) { permissions ->
-                        val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+                    ) {
+                        val locationGranted = hasLocationPermission()
                         viewModel.onLocationPermissionResult(locationGranted)
+                        if (locationGranted) viewModel.startTracking()
+                    }
+
+                    if (showTrackingPermissionDialog) {
+                        TrackingPermissionDialog(
+                            onConfirm = {
+                                showTrackingPermissionDialog = false
+                                val missingPermissions = missingTrackingPermissions()
+                                if (missingPermissions.isEmpty()) {
+                                    viewModel.onLocationPermissionResult(true)
+                                    viewModel.startTracking()
+                                } else {
+                                    permissionsLauncher.launch(missingPermissions)
+                                }
+                            },
+                            onDismiss = { showTrackingPermissionDialog = false }
+                        )
                     }
 
                     // Handle Foreground Service for tracking
@@ -221,17 +240,12 @@ class MainActivity : ComponentActivity() {
                                     onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
                                     onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                     onStartTracking = {
-                                        val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-
-                                        if (needsNotificationPermission) {
-                                            permissionsLauncher.launch(
-                                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
-                                            )
-                                        } else if (!state.settings.locationPermissionGranted) {
-                                            permissionsLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+                                        if (missingTrackingPermissions().isEmpty()) {
+                                            viewModel.onLocationPermissionResult(true)
+                                            viewModel.startTracking()
+                                        } else {
+                                            showTrackingPermissionDialog = true
                                         }
-                                        viewModel.startTracking()
                                     },
                                     onFinishRide = {
                                         viewModel.finishRide()
@@ -267,26 +281,6 @@ class MainActivity : ComponentActivity() {
                             AppRoute.Settings -> SettingsScreen(
                                 state = state.settings,
                                 onBack = { routeUiState = routeUiState.copy(showSettings = false) },
-                                onToggleInvertLean = viewModel::setInvertLeanAngle,
-                                onToggleGpsTracking = { enabled ->
-                                    if (enabled) {
-                                        val needsLoc = !state.settings.locationPermissionGranted
-                                        val needsNotif =
-                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                                    ContextCompat.checkSelfPermission(
-                                                        this@MainActivity,
-                                                        Manifest.permission.POST_NOTIFICATIONS
-                                                    ) != PackageManager.PERMISSION_GRANTED
-
-                                        if (needsLoc || needsNotif) {
-                                            val list = mutableListOf<String>()
-                                            if (needsLoc) list.add(Manifest.permission.ACCESS_FINE_LOCATION)
-                                            if (needsNotif) list.add(Manifest.permission.POST_NOTIFICATIONS)
-                                            permissionsLauncher.launch(list.toTypedArray())
-                                        }
-                                    }
-                                    viewModel.setGpsTrackingEnabled(enabled)
-                                },
                                 onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
                                 onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
                                 onResetGaugeExtrema = viewModel::resetGaugeExtrema,
@@ -368,6 +362,27 @@ class MainActivity : ComponentActivity() {
             listener.enable()
         }
     }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun missingTrackingPermissions(): Array<String> = buildList {
+        if (!hasLocationPermission()) {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this@MainActivity,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }.toTypedArray()
 
     private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showHistory: Boolean, selectedRideId: Long?, isCalibrated: Boolean): AppRoute {
         if (introStage != IntroStage.DONE) {

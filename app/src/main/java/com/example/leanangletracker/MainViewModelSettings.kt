@@ -64,10 +64,8 @@ internal fun MainViewModel.loadPersistedState() {
 
     updateSettingsState {
         it.copy(
-            invertLeanAngle = persistedSettings.invertLeanAngle,
             historyWindowSeconds = persistedSettings.historyWindowSeconds,
             recorderIntervalMs = persistedSettings.recorderIntervalMs,
-            gpsTrackingEnabled = persistedSettings.gpsTrackingEnabled && it.locationPermissionGranted,
             autoResumeEnabled = persistedSettings.autoResumeEnabled,
             isAutoResumePurchased = persistedSettings.isAutoResumePurchased,
             autoPauseEnabled = persistedSettings.autoPauseEnabled
@@ -75,7 +73,6 @@ internal fun MainViewModel.loadPersistedState() {
     }
     updateTrackingState {
         it.copy(
-            gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled,
             autoPauseEnabled = persistedSettings.autoPauseEnabled,
             gaugeExtrema = persistedState.gaugeExtrema
         )
@@ -166,62 +163,19 @@ internal inline fun MainViewModel.updateSettingsState(transform: (SettingsUiStat
 }
 
 internal fun MainViewModel.onLocationPermissionResult(granted: Boolean) {
-    updateSettingsState { it.copy(locationPermissionGranted = granted) }
+    _uiState.update { it.copy(locationPermissionGranted = granted) }
     if (!granted) {
         stopLocationUpdates()
-        updateTrackingState { it.copy(trackingStarted = false) }
-    }
-    updateTrackingState {
-        it.copy(
-            gpsTrackingEnabled = _uiState.value.settings.gpsTrackingEnabled && granted,
-            gpsActive = locationUpdatesRunning && granted
-        )
-    }
-    persistSettings()
-}
-
-internal fun MainViewModel.setGpsTrackingEnabled(enabled: Boolean) {
-    updateSettingsState { it.copy(gpsTrackingEnabled = enabled) }
-    if (!enabled) {
-        stopLocationUpdates()
-        recentRidePoints.clear()
-        pausedPointsBuffer.clear()
-        activeRideId = null
-        activeRideStartedMs = null
-        accumulatedTimeMs = 0L
-        latestGpsLocation = null
-        latestGpsTimestampNs = null
-        speedKmh = 0f
-        trackLengthMeters = 0f
-        ridePointCount = 0
-        rideSumSpeedKmh = 0f
-        rideSumAbsLeanDeg = 0f
-        activeRideExtrema = LeanExtrema.ZERO
-        isCheckingForExtension = false
-        stopRecorder()
+        autoResumeTimerStartMs = null
         updateTrackingState {
-            it.copy(
-                speedKmh = 0f,
-                gpsActive = false,
-                hasTrackData = false,
-                trackingStarted = false,
-                isPaused = false,
-                currentLatitude = null,
-                currentLongitude = null,
-                elapsedTimeMs = 0L,
-                averageSpeedKmh = 0f,
-                trackLengthKm = 0f,
-                averageLeanAngleDeg = 0f,
-                isUpsideDown = false,
-                showHighRotationWarning = false,
-                recentPoints = emptyList()
-            )
+            it.copy(trackingStarted = false, showAutoResumePremiumShortcut = false)
         }
     }
     updateTrackingState {
-        it.copy(gpsTrackingEnabled = enabled && _uiState.value.settings.locationPermissionGranted)
+        it.copy(
+            gpsActive = locationUpdatesRunning && granted
+        )
     }
-    persistSettings()
 }
 
 internal fun MainViewModel.startCalibration() {
@@ -234,6 +188,10 @@ internal fun MainViewModel.startCalibration() {
     gyroBiasVectorRadPerSec = null
     recentLeanSamples.clear()
     clearPersistedCalibration()
+
+    updateTrackingState {
+        it.copy(isUpsideDown = false, showHighRotationWarning = false)
+    }
     
     updateCalibrationState {
         it.copy(
@@ -351,34 +309,6 @@ internal fun MainViewModel.completeAutomaticTiltCalibration(step: BikeLean, capt
     }
 }
 
-internal fun MainViewModel.setInvertLeanAngle(invert: Boolean) {
-    val previous = _uiState.value
-    if (previous.settings.invertLeanAngle == invert) return
-
-    val transformedHistory = previous.tracking.leanHistoryDeg.map { -it }
-    val transformedTimedHistory = leanHistory.map { it.copy(valueDeg = -it.valueDeg) }
-    val transformedRecentSamples = recentLeanSamples.map { it.copy(valueDeg = -it.valueDeg) }
-    val transformedGaugeExtrema = previous.tracking.gaugeExtrema.inverted()
-
-    leanHistory.clear()
-    leanHistory.addAll(transformedTimedHistory)
-    recentLeanSamples.clear()
-    recentLeanSamples.addAll(transformedRecentSamples)
-
-    _uiState.update { state ->
-        state.copy(
-            settings = state.settings.copy(invertLeanAngle = invert),
-            tracking = state.tracking.copy(
-                leanAngleDeg = -state.tracking.leanAngleDeg,
-                gaugeExtrema = transformedGaugeExtrema,
-                leanHistoryDeg = transformedHistory
-            )
-        )
-    }
-    settingsStore.saveGaugeExtrema(transformedGaugeExtrema)
-    persistSettings()
-}
-
 internal fun MainViewModel.setHistoryWindowSeconds(seconds: Int) {
     val clamped = seconds.coerceIn(5, 120)
     val previous = _uiState.value
@@ -404,9 +334,10 @@ internal fun MainViewModel.setRecorderIntervalMs(intervalMs: Int) {
 
 internal fun MainViewModel.setAutoResumeEnabled(enabled: Boolean) {
     updateSettingsState { it.copy(autoResumeEnabled = enabled) }
+    autoResumeTimerStartMs = null
+    updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
     if (!enabled) {
         pausedPointsBuffer.clear()
-        autoResumeTimerStartMs = null
     }
     persistSettings()
 }
@@ -419,6 +350,8 @@ internal fun MainViewModel.setAutoPauseEnabled(enabled: Boolean) {
 
 internal fun MainViewModel.purchaseAutoResume() {
     updateSettingsState { it.copy(isAutoResumePurchased = true, autoResumeEnabled = true) }
+    autoResumeTimerStartMs = null
+    updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
     persistSettings()
 }
 

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -77,6 +80,11 @@ internal fun AppTourDialogs(
     val pageIndex = state.currentPage.coerceIn(appTourPages.indices)
     val page = appTourPages[pageIndex]
     val isLastPage = pageIndex == appTourPages.lastIndex
+    val bodyScrollState = rememberScrollState()
+
+    LaunchedEffect(pageIndex) {
+        bodyScrollState.scrollTo(0)
+    }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -109,7 +117,7 @@ internal fun AppTourDialogs(
                         AppTourHeader(pageIndex = pageIndex, page = page)
                         Text(
                             text = stringResource(page.bodyRes),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).verticalScroll(bodyScrollState),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         AppTourNavigation(
@@ -134,7 +142,10 @@ internal fun AppTourDialogs(
                     )
                     Text(
                         text = stringResource(page.bodyRes),
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 132.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 132.dp)
+                            .verticalScroll(bodyScrollState),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     AppTourNavigation(

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -103,7 +104,6 @@ internal fun LeanAngleScreen(
                 isPaused = trackingState.isPaused,
                 autoPauseEnabled = trackingState.autoPauseEnabled,
                 leanAngleDeg = trackingState.leanAngleDeg,
-                gpsTrackingEnabled = trackingState.gpsTrackingEnabled,
                 isUpsideDown = trackingState.isUpsideDown,
                 onTogglePause = onTogglePause,
                 onStartTracking = onStartTracking,
@@ -112,10 +112,15 @@ internal fun LeanAngleScreen(
                 onOpenSettings = onOpenSettings
             )
 
-            WarningBanner(
+            MountOrientationWarning(
                 visible = trackingState.isUpsideDown || trackingState.showHighRotationWarning,
                 isUpsideDown = trackingState.isUpsideDown,
                 onStartCalibration = onStartCalibration
+            )
+
+            AutoResumePremiumShortcut(
+                visible = trackingState.showAutoResumePremiumShortcut,
+                onOpenPremium = onOpenSettings
             )
 
             if (isLandscape) {
@@ -219,7 +224,6 @@ private fun TrackingHeader(
     isPaused: Boolean,
     autoPauseEnabled: Boolean,
     leanAngleDeg: Float,
-    gpsTrackingEnabled: Boolean,
     isUpsideDown: Boolean,
     onTogglePause: () -> Unit,
     onStartTracking: () -> Unit,
@@ -271,7 +275,7 @@ private fun TrackingHeader(
             PauseButton(
                 onClick = onTogglePause,
                 isPaused = isPaused,
-                isVisible = gpsTrackingEnabled && trackingStarted && currentLatitude != null,
+                isVisible = trackingStarted && currentLatitude != null,
                 enabled = !isUpsideDown && (!autoPauseEnabled || abs(leanAngleDeg) < AUTO_PAUSE_LEAN_THRESHOLD)
             )
 
@@ -296,7 +300,53 @@ private fun TrackingHeader(
 }
 
 @Composable
-private fun WarningBanner(
+internal fun AutoResumePremiumShortcut(
+    visible: Boolean,
+    onOpenPremium: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically()
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.auto_resume_premium_shortcut_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.auto_resume_premium_shortcut_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                TextButton(onClick = onOpenPremium) {
+                    Text(stringResource(R.string.auto_resume_premium_shortcut_action))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun MountOrientationWarning(
     visible: Boolean,
     isUpsideDown: Boolean,
     onStartCalibration: () -> Unit

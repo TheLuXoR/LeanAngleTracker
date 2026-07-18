@@ -73,8 +73,15 @@ data class BikeFrameBuildResult(
     val failure: BikeFrameFailure? = null
 )
 
+data class BikePoseEvaluation(
+    val signedLeanAngleDeg: Float,
+    val uprightAlignment: Float,
+    val isUpsideDown: Boolean
+)
+
 object BikeFrameMath {
     const val MIN_TILT_DEG = 3f
+    private const val UPSIDE_DOWN_ALIGNMENT_THRESHOLD = -0.5f
 
     fun fromStaticSamples(
         upright: Vec3,
@@ -135,10 +142,21 @@ object BikeFrameMath {
     }
 
     fun leanAngleDeg(worldUpDevice: Vec3, frame: BikeFrameCalibration): Float {
+        return evaluatePose(worldUpDevice, frame).signedLeanAngleDeg
+    }
+
+    fun evaluatePose(worldUpDevice: Vec3, frame: BikeFrameCalibration): BikePoseEvaluation {
         val currentUp = worldUpDevice.normalized()
-        val upProjection = currentUp.dot(frame.bikeUpDevice)
+        val upProjection = currentUp.dot(frame.bikeUpDevice).coerceIn(-1f, 1f)
         val rightProjection = currentUp.dot(frame.bikeRightDevice)
-        return Math.toDegrees(atan2(-rightProjection, upProjection).toDouble()).toFloat()
+        val signedLeanAngleDeg = Math.toDegrees(
+            atan2(-rightProjection, upProjection).toDouble()
+        ).toFloat()
+        return BikePoseEvaluation(
+            signedLeanAngleDeg = signedLeanAngleDeg,
+            uprightAlignment = upProjection,
+            isUpsideDown = upProjection <= UPSIDE_DOWN_ALIGNMENT_THRESHOLD
+        )
     }
 
     fun angleBetweenDeg(a: Vec3, b: Vec3): Float {

@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -43,6 +44,37 @@ class BikeFrameMathTest {
             assertEquals(-angle, BikeFrameMath.leanAngleDeg(tiltedUp(up, bikeRight, angle), calibration), 0.02f)
             assertEquals(angle, BikeFrameMath.leanAngleDeg(tiltedUp(up, bikeRight, -angle), calibration), 0.02f)
         }
+    }
+
+    @Test
+    fun `upside down pose reports full rotation instead of false center`() {
+        val up = Vec3(0f, 0f, 1f)
+        val frame = requireNotNull(
+            BikeFrameMath.fromUpAndForward(up, Vec3(0f, 1f, 0f))
+        )
+
+        val pose = BikeFrameMath.evaluatePose(up * -1f, frame)
+
+        assertTrue(pose.isUpsideDown)
+        assertEquals(-1f, pose.uprightAlignment, 0.001f)
+        assertEquals(180f, abs(pose.signedLeanAngleDeg), 0.001f)
+    }
+
+    @Test
+    fun `large valid lean and upside down mounting are distinguished`() {
+        val up = Vec3(0f, 0f, 1f)
+        val right = Vec3(1f, 0f, 0f)
+        val frame = requireNotNull(
+            BikeFrameMath.fromUpAndForward(up, Vec3(0f, 1f, 0f))
+        )
+
+        val validLean = BikeFrameMath.evaluatePose(tiltedUp(up, right, 60f), frame)
+        val upsideDown = BikeFrameMath.evaluatePose(tiltedUp(up, right, 140f), frame)
+
+        assertTrue(!validLean.isUpsideDown)
+        assertTrue(upsideDown.isUpsideDown)
+        assertEquals(-60f, validLean.signedLeanAngleDeg, 0.02f)
+        assertEquals(-140f, upsideDown.signedLeanAngleDeg, 0.02f)
     }
 
     @Test

@@ -15,8 +15,6 @@ import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.leanangletracker.MainViewModelConfig.AUTO_REWIND_DURATION_MS
-import com.example.leanangletracker.MainViewModelConfig.AUTO_REWIND_SPEED_THRESHOLD_KMH
 import com.example.leanangletracker.MainViewModelConfig.EXTEND_PROXIMITY_METERS
 import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.data.Vec3
@@ -116,9 +114,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             sensorManager.registerListener(this, it, delay)
         }
 
-        updateSettingsState {
+        _uiState.update {
             it.copy(
-                gyroscopeAvailable = gyroscopeSensor != null,
+                settings = it.settings.copy(gyroscopeAvailable = gyroscopeSensor != null),
                 locationPermissionGranted = hasLocationPermission()
             )
         }
@@ -227,42 +225,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         }
 
         val state = _uiState.value
-        if (state.settings.gpsTrackingEnabled) {
-            if (state.tracking.trackingStarted && activeRideStartedMs == null && !isCheckingForExtension) {
-                viewModelScope.launch {
-                    val startTime = System.currentTimeMillis()
-                    activeRideStartedMs = startTime
-                    activeRideId = rideRepository.startNewRide(startTime)
-                    lastResumeMs = startTime
-                    activeRideExtrema = LeanExtrema.ZERO
-                }
+        if (state.tracking.trackingStarted && activeRideStartedMs == null && !isCheckingForExtension) {
+            viewModelScope.launch {
+                val startTime = System.currentTimeMillis()
+                activeRideStartedMs = startTime
+                activeRideId = rideRepository.startNewRide(startTime)
+                lastResumeMs = startTime
+                activeRideExtrema = LeanExtrema.ZERO
             }
+        }
 
-            // Auto Resume Logic
-            if (state.tracking.trackingStarted && state.tracking.isPaused && state.settings.autoResumeEnabled) {
-                if (speedKmh >= AUTO_REWIND_SPEED_THRESHOLD_KMH) {
-                    val now = System.currentTimeMillis()
-                    val start = autoResumeTimerStartMs ?: now.also { autoResumeTimerStartMs = it }
-                    if (now - start >= AUTO_REWIND_DURATION_MS) {
-                        autoResumeTimerStartMs = null
-                        togglePauseTracking()
-                    }
-                } else {
-                    autoResumeTimerStartMs = null
-                }
+        val pausedRideMovement = evaluatePausedRideMovement(
+            trackingStarted = state.tracking.trackingStarted,
+            isPaused = state.tracking.isPaused,
+            autoResumeEnabled = state.settings.autoResumeEnabled,
+            isAutoResumePurchased = state.settings.isAutoResumePurchased,
+            speedKmh = speedKmh,
+            nowMs = System.currentTimeMillis(),
+            timerStartMs = autoResumeTimerStartMs,
+            premiumShortcutAlreadyVisible = state.tracking.showAutoResumePremiumShortcut
+        )
+        autoResumeTimerStartMs = pausedRideMovement.timerStartMs
+        if (state.tracking.showAutoResumePremiumShortcut != pausedRideMovement.showPremiumShortcut) {
+            updateTrackingState {
+                it.copy(showAutoResumePremiumShortcut = pausedRideMovement.showPremiumShortcut)
             }
+        }
+        if (pausedRideMovement.shouldAutoResume) {
+            togglePauseTracking()
+        }
 
-            if (!state.tracking.trackingStarted) {
-                updateTrackingState {
-                    it.copy(
-                        speedKmh = speedKmh,
-                        gpsActive = locationUpdatesRunning,
-                        currentLatitude = location.latitude,
-                        currentLongitude = location.longitude
-                    )
-                }
-                return
+        if (!state.tracking.trackingStarted) {
+            updateTrackingState {
+                it.copy(
+                    speedKmh = speedKmh,
+                    gpsActive = locationUpdatesRunning,
+                    currentLatitude = location.latitude,
+                    currentLongitude = location.longitude
+                )
             }
+            return
         }
 
         updateTrackingState {

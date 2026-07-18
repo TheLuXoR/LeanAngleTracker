@@ -14,14 +14,6 @@ class LeanExtremaTest {
     }
 
     @Test
-    fun `inverted swaps directions while keeping magnitudes`() {
-        val inverted = LeanExtrema(maxLeftDeg = -31f, maxRightDeg = 24f).inverted()
-
-        assertEquals(-24f, inverted.maxLeftDeg, 0.001f)
-        assertEquals(31f, inverted.maxRightDeg, 0.001f)
-    }
-
-    @Test
     fun `resetting gauge extrema does not change ride extrema`() {
         val gaugeExtrema = LeanExtrema.fromAngles(listOf(-40f, 35f))
         val rideExtrema = LeanExtrema.fromAngles(listOf(-22f, 19f))

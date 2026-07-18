@@ -28,8 +28,6 @@ class SettingsScreenTest {
                 SettingsScreen(
                     state = SettingsUiState(),
                     onBack = {},
-                    onToggleInvertLean = {},
-                    onToggleGpsTracking = {},
                     onSetHistoryWindow = {},
                     onSetRecorderIntervalMs = {},
                     onResetGaugeExtrema = { resetCount++ },

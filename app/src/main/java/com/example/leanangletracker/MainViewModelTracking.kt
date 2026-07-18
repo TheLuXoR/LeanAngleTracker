@@ -18,7 +18,7 @@ import kotlin.math.abs
 
 internal fun MainViewModel.startTracking() {
     val state = _uiState.value
-    if (!state.settings.gpsTrackingEnabled || !state.settings.locationPermissionGranted) return
+    if (!state.locationPermissionGranted) return
 
     if (!locationUpdatesRunning) {
         if (hasLocationPermission()) startLocationUpdates()
@@ -50,7 +50,9 @@ internal fun MainViewModel.startTracking() {
             }
         } else {
             isCheckingForExtension = true
-            updateTrackingState { it.copy(trackingStarted = true, gpsTrackingEnabled = true) }
+            updateTrackingState {
+                it.copy(trackingStarted = true, showAutoResumePremiumShortcut = false)
+            }
         }
     } else {
         viewModelScope.launch {
@@ -96,7 +98,16 @@ internal suspend fun MainViewModel.performStartNewRide() {
     pausedPointsBuffer.clear()
     peakLeanSinceLastTick = 0f
     startRecorder()
-    updateTrackingState { it.copy(trackingStarted = true, isPaused = false, gpsTrackingEnabled = true, hasTrackData = false, recentPoints = emptyList()) }
+    autoResumeTimerStartMs = null
+    updateTrackingState {
+        it.copy(
+            trackingStarted = true,
+            isPaused = false,
+            hasTrackData = false,
+            showAutoResumePremiumShortcut = false,
+            recentPoints = emptyList()
+        )
+    }
 }
 
 /**
@@ -138,8 +149,8 @@ internal fun MainViewModel.resumeRideSession(session: RideSession) {
     updateTrackingState { it.copy(
         trackingStarted = true, 
         isPaused = false, 
-        gpsTrackingEnabled = true, 
         hasTrackData = session.points.isNotEmpty(), 
+        showAutoResumePremiumShortcut = false,
         recentPoints = recentRidePoints.toList(),
         elapsedTimeMs = accumulatedTimeMs,
         trackLengthKm = trackLengthMeters / 1000f,
@@ -162,7 +173,10 @@ internal fun MainViewModel.togglePauseTracking() {
             }
             pausedPointsBuffer.clear()
         }
-        updateTrackingState { it.copy(isPaused = false) }
+        autoResumeTimerStartMs = null
+        updateTrackingState {
+            it.copy(isPaused = false, showAutoResumePremiumShortcut = false)
+        }
     } else {
         accumulatedTimeMs += (now - lastResumeMs)
         pausedPointsBuffer.clear()
@@ -172,7 +186,9 @@ internal fun MainViewModel.togglePauseTracking() {
             }
         }
         autoResumeTimerStartMs = null
-        updateTrackingState { it.copy(isPaused = true) }
+        updateTrackingState {
+            it.copy(isPaused = true, showAutoResumePremiumShortcut = false)
+        }
     }
 }
 
@@ -280,14 +296,13 @@ internal fun MainViewModel.finishRide() {
             gpsActive = false,
             trackingStarted = false,
             isPaused = false,
+            showAutoResumePremiumShortcut = false,
             currentLatitude = null,
             currentLongitude = null,
             elapsedTimeMs = 0L,
             averageSpeedKmh = 0f,
             trackLengthKm = 0f,
             averageLeanAngleDeg = 0f,
-            isUpsideDown = false,
-            showHighRotationWarning = false,
             recentPoints = emptyList()
         )
     }
@@ -368,7 +383,8 @@ internal fun MainViewModel.stopRecorder() {
 
 internal fun MainViewModel.recordFusedSample() {
     val state = _uiState.value
-    if (!state.settings.gpsTrackingEnabled || !state.tracking.trackingStarted || isCheckingForExtension) return
+    if (!state.tracking.trackingStarted || isCheckingForExtension) return
+    if (state.tracking.isUpsideDown) return
 
     val gps = latestGpsLocation ?: return
     val nowNs = SystemClock.elapsedRealtimeNanos()

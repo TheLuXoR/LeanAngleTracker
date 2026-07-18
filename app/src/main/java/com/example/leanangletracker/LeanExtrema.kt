@@ -13,11 +13,6 @@ data class LeanExtrema(
         )
     }
 
-    fun inverted(): LeanExtrema = LeanExtrema(
-        maxLeftDeg = -maxRightDeg,
-        maxRightDeg = -maxLeftDeg
-    )
-
     companion object {
         val ZERO = LeanExtrema()
 

@@ -1,6 +1,5 @@
 package com.example.leanangletracker.ui.settings
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,17 +9,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,8 +30,6 @@ import com.example.leanangletracker.ui.theme.TextSecondary
 internal fun SettingsScreen(
     state: SettingsUiState,
     onBack: () -> Unit,
-    onToggleInvertLean: (Boolean) -> Unit,
-    onToggleGpsTracking: (Boolean) -> Unit,
     onSetHistoryWindow: (Int) -> Unit,
     onSetRecorderIntervalMs: (Int) -> Unit,
     onResetGaugeExtrema: () -> Unit,
@@ -46,18 +39,6 @@ internal fun SettingsScreen(
     onPurchaseAutoResume: () -> Unit,
     onToggleAutoPause: (Boolean) -> Unit
 ) {
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    var showInfo by rememberSaveable { mutableStateOf(false) }
-
-    if (showInfo) {
-        AlertDialog(
-            onDismissRequest = { showInfo = false },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(stringResource(R.string.dialog_ok)) } },
-            title = { Text(stringResource(R.string.settings_dialog_info_title)) },
-            text = { Text(stringResource(R.string.settings_dialog_info_text)) }
-        )
-    }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -65,11 +46,6 @@ internal fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showInfo = true }) {
-                        Icon(Icons.Default.Info, contentDescription = stringResource(R.string.action_info))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -87,24 +63,6 @@ internal fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             SettingsGroup(title = stringResource(R.string.settings_group_sensors_tracking)) {
-                SettingsSwitchItem(
-                    title = stringResource(R.string.settings_invert_lean_title),
-                    subtitle = stringResource(R.string.settings_invert_lean_subtitle),
-                    checked = state.invertLeanAngle,
-                    onCheckedChange = onToggleInvertLean
-                )
-                
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-
-                SettingsSwitchItem(
-                    title = stringResource(R.string.settings_gps_tracking_title),
-                    subtitle = if (state.locationPermissionGranted) stringResource(R.string.settings_gps_tracking_subtitle_granted) else stringResource(R.string.settings_gps_tracking_subtitle_missing),
-                    checked = state.gpsTrackingEnabled,
-                    onCheckedChange = onToggleGpsTracking
-                )
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-
                 SettingsSwitchItem(
                     title = stringResource(R.string.settings_auto_pause_title),
                     subtitle = stringResource(R.string.settings_auto_pause_subtitle),

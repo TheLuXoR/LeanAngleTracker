@@ -14,6 +14,7 @@ import kotlin.math.abs
 
 private const val UPRIGHT_STABLE_DURATION_NS = 1_500_000_000L
 private const val GYRO_SAMPLE_FRESH_NS = 100_000_000L
+private const val HIGH_ROTATION_WARNING_DELAY_NS = 10_000_000_000L
 
 internal fun MainViewModel.registerRecentLeanSample(timestampNs: Long, leanDeg: Float) {
     recentLeanSamples += TimedLean(timestampNs, leanDeg)
@@ -36,26 +37,49 @@ internal fun MainViewModel.updateLeanAngle(timestampNs: Long) {
 
 private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec3) {
     val frame = bikeFrameCalibration ?: return
-    val rawLean = BikeFrameMath.leanAngleDeg(worldUpDevice, frame)
-        .coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
-    val leanDeg = if (_uiState.value.settings.invertLeanAngle) -rawLean else rawLean
+    val pose = BikeFrameMath.evaluatePose(worldUpDevice, frame)
+    val signedFullLean = pose.signedLeanAngleDeg
+    val leanDeg = if (pose.isUpsideDown) {
+        signedFullLean
+    } else {
+        signedFullLean.coerceIn(-MAX_LEAN_DEG, MAX_LEAN_DEG)
+    }
+
+    val trackingStarted = _uiState.value.tracking.trackingStarted
+    val isHighRotation = !pose.isUpsideDown && abs(signedFullLean) >= AUTO_PAUSE_LEAN_THRESHOLD
+    if (isHighRotation && !trackingStarted) {
+        if (highRotationStartNs == null) highRotationStartNs = timestampNs
+    } else {
+        highRotationStartNs = null
+    }
+    val showHighRotationWarning = highRotationStartNs?.let {
+        timestampNs - it >= HIGH_ROTATION_WARNING_DELAY_NS
+    } == true
 
     latestLeanDeg = leanDeg
     latestLeanTimestampNs = timestampNs
-    if (abs(leanDeg) > abs(peakLeanSinceLastTick)) peakLeanSinceLastTick = leanDeg
+    if (!pose.isUpsideDown && abs(leanDeg) > abs(peakLeanSinceLastTick)) {
+        peakLeanSinceLastTick = leanDeg
+    }
 
     leanHistory += TimedLean(timestampNs, leanDeg)
-    registerRecentLeanSample(timestampNs, leanDeg)
+    if (!pose.isUpsideDown) registerRecentLeanSample(timestampNs, leanDeg)
     pruneHistory(timestampNs, _uiState.value.settings.historyWindowSeconds)
 
-    if (abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD && _uiState.value.settings.autoPauseEnabled) {
+    if ((pose.isUpsideDown || abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD) &&
+        _uiState.value.settings.autoPauseEnabled
+    ) {
         val state = _uiState.value.tracking
         if (state.trackingStarted && !state.isPaused) togglePauseTracking()
     }
 
     var updatedGaugeExtrema: LeanExtrema? = null
     updateTrackingState {
-        val nextGaugeExtrema = it.gaugeExtrema.include(leanDeg)
+        val nextGaugeExtrema = if (pose.isUpsideDown) {
+            it.gaugeExtrema
+        } else {
+            it.gaugeExtrema.include(leanDeg)
+        }
         if (nextGaugeExtrema != it.gaugeExtrema) {
             updatedGaugeExtrema = nextGaugeExtrema
         }
@@ -68,6 +92,8 @@ private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec
             hasTrackData = ridePointCount > 0,
             currentLatitude = latestGpsLocation?.latitude,
             currentLongitude = latestGpsLocation?.longitude,
+            isUpsideDown = pose.isUpsideDown,
+            showHighRotationWarning = showHighRotationWarning,
             recentPoints = recentRidePoints.toList(),
             autoPauseEnabled = _uiState.value.settings.autoPauseEnabled
         )
@@ -225,6 +251,7 @@ internal fun MainViewModel.resetSensorFusion() {
     pendingStableCalibrationSample = null
     lastAccelTimestampNs = null
     lastGyroTimestampNs = null
+    highRotationStartNs = null
 }
 
 internal fun MainViewModel.initializeFusionFromUp(worldUpDevice: Vec3) {

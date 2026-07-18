@@ -83,7 +83,6 @@ data class TrackingUiState(
     val speedKmh: Float = 0f,
     val gpsActive: Boolean = false,
     val hasTrackData: Boolean = false,
-    val gpsTrackingEnabled: Boolean = false,
     val trackingStarted: Boolean = false,
     val isPaused: Boolean = false,
     val currentLatitude: Double? = null,
@@ -94,6 +93,7 @@ data class TrackingUiState(
     val averageLeanAngleDeg: Float = 0f,
     val isUpsideDown: Boolean = false,
     val showHighRotationWarning: Boolean = false,
+    val showAutoResumePremiumShortcut: Boolean = false,
     val recentPoints: List<TrackPoint> = emptyList(),
     val autoPauseEnabled: Boolean = true
 )
@@ -105,12 +105,9 @@ data class AppTourUiState(
 )
 
 data class SettingsUiState(
-    val invertLeanAngle: Boolean = false,
     val historyWindowSeconds: Int = 20,
     val recorderIntervalMs: Int = 200,
     val gyroscopeAvailable: Boolean = false,
-    val gpsTrackingEnabled: Boolean = false,
-    val locationPermissionGranted: Boolean = false,
     val autoResumeEnabled: Boolean = false,
     val isAutoResumePurchased: Boolean = false,
     val autoPauseEnabled: Boolean = true
@@ -120,6 +117,7 @@ data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),
     val tracking: TrackingUiState = TrackingUiState(),
     val settings: SettingsUiState = SettingsUiState(),
+    val locationPermissionGranted: Boolean = false,
     val rideHistory: List<RideSummary> = emptyList(),
     val expandedRides: Map<Long, RideSession> = emptyMap(),
     val lastSavedRideId: Long? = null,
