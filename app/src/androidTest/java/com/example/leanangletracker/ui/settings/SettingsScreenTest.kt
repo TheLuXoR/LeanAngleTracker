@@ -34,7 +34,7 @@ class SettingsScreenTest {
                     onStartAppTour = {},
                     onStartCalibration = {},
                     onToggleAutoResume = {},
-                    onPurchaseAutoResume = {},
+                    onOpenPremium = {},
                     onToggleAutoPause = {}
                 )
             }
@@ -43,5 +43,32 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(resetLabel).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(1, resetCount) }
         composeRule.onNodeWithText(resetHint).assertExists()
+    }
+
+    @Test
+    fun premiumReferenceOpensPremiumPage() {
+        var openPremiumCount = 0
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val premiumLabel = context.getString(R.string.settings_premium_open)
+
+        composeRule.setContent {
+            MaterialTheme {
+                SettingsScreen(
+                    state = SettingsUiState(),
+                    onBack = {},
+                    onSetHistoryWindow = {},
+                    onSetRecorderIntervalMs = {},
+                    onResetGaugeExtrema = {},
+                    onStartAppTour = {},
+                    onStartCalibration = {},
+                    onToggleAutoResume = {},
+                    onOpenPremium = { openPremiumCount++ },
+                    onToggleAutoPause = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(premiumLabel).performScrollTo().performClick()
+        composeRule.runOnIdle { assertEquals(1, openPremiumCount) }
     }
 }

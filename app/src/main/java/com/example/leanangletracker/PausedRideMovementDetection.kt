@@ -10,7 +10,7 @@ internal fun evaluatePausedRideMovement(
     trackingStarted: Boolean,
     isPaused: Boolean,
     autoResumeEnabled: Boolean,
-    isAutoResumePurchased: Boolean,
+    hasPremiumAccess: Boolean,
     speedKmh: Float,
     nowMs: Long,
     timerStartMs: Long?,
@@ -18,11 +18,11 @@ internal fun evaluatePausedRideMovement(
 ): PausedRideMovementDecision {
     if (!trackingStarted || !isPaused) return PausedRideMovementDecision(null, false, false)
 
-    if (isAutoResumePurchased && !autoResumeEnabled) {
+    if (hasPremiumAccess && !autoResumeEnabled) {
         return PausedRideMovementDecision(null, false, false)
     }
 
-    if (!isAutoResumePurchased && premiumShortcutAlreadyVisible) {
+    if (!hasPremiumAccess && premiumShortcutAlreadyVisible) {
         return PausedRideMovementDecision(null, true, false)
     }
 
@@ -36,7 +36,7 @@ internal fun evaluatePausedRideMovement(
         return PausedRideMovementDecision(detectionStartedMs, false, false)
     }
 
-    return if (isAutoResumePurchased && autoResumeEnabled) {
+    return if (hasPremiumAccess && autoResumeEnabled) {
         PausedRideMovementDecision(null, false, true)
     } else {
         PausedRideMovementDecision(null, true, false)

@@ -19,6 +19,8 @@ android {
 
         buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-3940256099942544/9214589741\"")
         buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"ca-app-pub-3940256099942544/1033173712\"")
+        buildConfigField("String", "AUTO_RESUME_PRODUCT_ID", "\"auto_resume_unlock\"")
+        buildConfigField("String", "PREMIUM_SUBSCRIPTION_PRODUCT_ID", "\"premium_subscription\"")
         manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
     }
 
@@ -64,6 +66,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.compose.animation:animation:1.11.4")
     val bom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(bom)
     androidTestImplementation(bom)
@@ -81,6 +84,7 @@ dependencies {
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-ads:25.2.0")
+    implementation("com.android.billingclient:billing:9.1.0")
 
     val roomVersion = "2.8.4"
     implementation("androidx.room:room-runtime:$roomVersion")

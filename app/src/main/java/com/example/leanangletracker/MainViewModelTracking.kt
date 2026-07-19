@@ -192,6 +192,10 @@ internal fun MainViewModel.togglePauseTracking() {
     }
 }
 
+internal fun MainViewModel.dismissAutoResumePremiumShortcut() {
+    updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
+}
+
 internal fun MainViewModel.addTrackPoint(point: TrackPoint) {
     val prev = recentRidePoints.lastOrNull()
     if (prev != null) {

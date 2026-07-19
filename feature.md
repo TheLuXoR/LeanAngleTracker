@@ -26,4 +26,10 @@ This file tracks planned features and improvements. When developing a feature, r
 - [ ] **Dependency Injection**: Introduce a DI framework (e.g., Hilt) to replace manual injection.
 
 ## Feature History (For Context)
-*None yet recorded.*
+
+### Premium Features and Play Billing
+- **Status**: Implemented
+- **Products**: `auto_resume_unlock` is a permanent one-time Auto Resume unlock; `premium_subscription` is the subscription that unlocks all premium features and removes ads.
+- **UI**: The Premium screen presents one-time purchases first and the subscription in a separate section. Purchase buttons use the localized price returned by Google Play.
+- **Entitlements**: A subscription grants Auto Resume, ad-free use, and future premium features. An expired subscription does not remove a separately purchased Auto Resume unlock.
+- **Configuration**: Both product IDs must exist and be active in Play Console. The subscription also needs an active base plan before prices and the purchase flow are available.

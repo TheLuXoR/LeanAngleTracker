@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -30,7 +29,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.BuildConfig
 import com.example.leanangletracker.R
 import com.example.leanangletracker.AppTourUiState
 import com.example.leanangletracker.RideSession
@@ -43,6 +44,7 @@ import com.example.leanangletracker.ui.components.buttons.HistoryButton
 import com.example.leanangletracker.ui.components.buttons.PauseButton
 import com.example.leanangletracker.ui.components.buttons.RecordButton
 import com.example.leanangletracker.ui.theme.AccentGreen
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import kotlin.math.abs
 
 private const val AUTO_PAUSE_LEAN_THRESHOLD = 45f
@@ -51,12 +53,14 @@ private const val AUTO_PAUSE_LEAN_THRESHOLD = 45f
 internal fun LeanAngleScreen(
     trackingState: TrackingUiState,
     onOpenSettings: () -> Unit,
+    onOpenPremium: () -> Unit,
     onOpenHistory: () -> Unit,
     onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
     onStartCalibration: () -> Unit = {},
     onTogglePause: () -> Unit = {},
     onResetGaugeExtrema: () -> Unit = {},
+    onAutoResumeIndicatorDismissed: () -> Unit = {},
     appTourState: AppTourUiState = AppTourUiState(),
     onAcceptAppTourOffer: () -> Unit = {},
     onDeclineAppTourOffer: () -> Unit = {},
@@ -65,10 +69,19 @@ internal fun LeanAngleScreen(
     onFinishAppTour: () -> Unit = {},
     offerExtend: RideSession? = null,
     onConfirmExtend: (Boolean) -> Unit = {},
+    isDebugBuild: Boolean = BuildConfig.DEBUG,
+    showAdBanner: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val view = LocalView.current
+    var autoResumeIndicatorRequestId by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(trackingState.showAutoResumePremiumShortcut) {
+        if (trackingState.showAutoResumePremiumShortcut) {
+            autoResumeIndicatorRequestId++
+        }
+    }
 
     DisposableEffect(trackingState.trackingStarted) {
         if (trackingState.trackingStarted) {
@@ -109,7 +122,9 @@ internal fun LeanAngleScreen(
                 onStartTracking = onStartTracking,
                 onFinishRide = onFinishRide,
                 onOpenHistory = onOpenHistory,
-                onOpenSettings = onOpenSettings
+                onOpenSettings = onOpenSettings,
+                showDebugFeatures = isDebugBuild,
+                onShowAutoResumeIndicator = { autoResumeIndicatorRequestId++ }
             )
 
             MountOrientationWarning(
@@ -119,8 +134,9 @@ internal fun LeanAngleScreen(
             )
 
             AutoResumePremiumShortcut(
-                visible = trackingState.showAutoResumePremiumShortcut,
-                onOpenPremium = onOpenSettings
+                displayRequestId = autoResumeIndicatorRequestId,
+                onOpenPremium = onOpenPremium,
+                onDismiss = onAutoResumeIndicatorDismissed
             )
 
             if (isLandscape) {
@@ -139,7 +155,7 @@ internal fun LeanAngleScreen(
                             maxRightDeg = trackingState.gaugeExtrema.maxRightDeg,
                             onResetMaxValues = onResetGaugeExtrema
                         )
-                        movableBanner()
+                        if (showAdBanner) movableBanner()
                     }
 
                     Column (
@@ -188,7 +204,7 @@ internal fun LeanAngleScreen(
                     selectedIndex = trackingState.leanHistoryDeg.lastIndex.coerceAtLeast(0)
                 )
 
-                movableBanner()
+                if (showAdBanner) movableBanner()
             }
         }
 
@@ -229,7 +245,9 @@ private fun TrackingHeader(
     onStartTracking: () -> Unit,
     onFinishRide: () -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    showDebugFeatures: Boolean,
+    onShowAutoResumeIndicator: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -288,58 +306,16 @@ private fun TrackingHeader(
             )
 
             HistoryButton(onOpenHistory = onOpenHistory, enabled = !trackingStarted)
+
+            if (showDebugFeatures) {
+                DebugFeatureMenu(onShowAutoResumeIndicator = onShowAutoResumeIndicator)
+            }
             
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)
             ) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-}
-
-@Composable
-internal fun AutoResumePremiumShortcut(
-    visible: Boolean,
-    onOpenPremium: () -> Unit
-) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically()
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.auto_resume_premium_shortcut_title),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = stringResource(R.string.auto_resume_premium_shortcut_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-                TextButton(onClick = onOpenPremium) {
-                    Text(stringResource(R.string.auto_resume_premium_shortcut_action))
-                }
             }
         }
     }
@@ -407,4 +383,21 @@ private fun RainbowSearchGpsText() {
         style = MaterialTheme.typography.labelMedium.merge(TextStyle(brush = rainbowBrush)),
         fontWeight = FontWeight.Bold
     )
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 840)
+@Composable
+private fun LeanAngleScreenPreview() {
+    LeanAngleTrackerTheme {
+        LeanAngleScreen(
+            trackingState = TrackingUiState(),
+            onOpenSettings = {},
+            onOpenPremium = {},
+            onOpenHistory = {},
+            onStartTracking = {},
+            onFinishRide = {},
+            isDebugBuild = true,
+            showAdBanner = false
+        )
+    }
 }

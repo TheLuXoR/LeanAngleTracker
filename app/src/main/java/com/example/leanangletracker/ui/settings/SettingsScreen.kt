@@ -9,7 +9,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,11 +17,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.SettingsUiState
 import com.example.leanangletracker.ui.components.Minus
 import com.example.leanangletracker.ui.theme.AccentGreen
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +37,7 @@ internal fun SettingsScreen(
     onStartAppTour: () -> Unit,
     onStartCalibration: () -> Unit,
     onToggleAutoResume: (Boolean) -> Unit,
-    onPurchaseAutoResume: () -> Unit,
+    onOpenPremium: () -> Unit,
     onToggleAutoPause: (Boolean) -> Unit
 ) {
     Scaffold(
@@ -113,11 +114,11 @@ internal fun SettingsScreen(
                 }
             }
 
-            SettingsGroup(title = "Premium Features") {
-                if (state.isAutoResumePurchased) {
+            SettingsGroup(title = stringResource(R.string.settings_group_premium)) {
+                if (state.isAutoResumePurchased || state.isPremiumSubscribed) {
                     SettingsSwitchItem(
-                        title = "Auto Resume",
-                        subtitle = "Automatically resume recording when speed exceeds 20km/h for 10s while paused.",
+                        title = stringResource(R.string.settings_auto_resume_title),
+                        subtitle = stringResource(R.string.settings_auto_resume_subtitle),
                         checked = state.autoResumeEnabled,
                         onCheckedChange = onToggleAutoResume
                     )
@@ -128,19 +129,23 @@ internal fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Auto Resume", style = MaterialTheme.typography.titleMedium)
-                            Text("Resume recording automatically when you forget to unpause.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        }
-                        Button(
-                            onClick = onPurchaseAutoResume,
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Get for $0.99")
+                            Text(
+                                stringResource(R.string.settings_auto_resume_title),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                stringResource(R.string.settings_auto_resume_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
                         }
                     }
+                }
+                TextButton(
+                    onClick = onOpenPremium,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(stringResource(R.string.settings_premium_open))
                 }
             }
 
@@ -257,6 +262,25 @@ private fun SettingsSwitchItem(
                 checkedThumbColor = AccentGreen,
                 checkedTrackColor = AccentGreen.copy(alpha = 0.3f)
             )
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 900)
+@Composable
+private fun SettingsScreenPreview() {
+    LeanAngleTrackerTheme {
+        SettingsScreen(
+            state = SettingsUiState(),
+            onBack = {},
+            onSetHistoryWindow = {},
+            onSetRecorderIntervalMs = {},
+            onResetGaugeExtrema = {},
+            onStartAppTour = {},
+            onStartCalibration = {},
+            onToggleAutoResume = {},
+            onOpenPremium = {},
+            onToggleAutoPause = {}
         )
     }
 }

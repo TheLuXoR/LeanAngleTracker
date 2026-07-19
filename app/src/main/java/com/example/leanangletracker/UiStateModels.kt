@@ -110,6 +110,7 @@ data class SettingsUiState(
     val gyroscopeAvailable: Boolean = false,
     val autoResumeEnabled: Boolean = false,
     val isAutoResumePurchased: Boolean = false,
+    val isPremiumSubscribed: Boolean = false,
     val autoPauseEnabled: Boolean = true
 )
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.OrientationEventListener
@@ -38,6 +39,7 @@ import com.example.leanangletracker.ui.intro.IntroScreen
 import com.example.leanangletracker.ui.intro.IntroStage
 import com.example.leanangletracker.ui.navigation.AppRoute
 import com.example.leanangletracker.ui.navigation.ScreenDirection
+import com.example.leanangletracker.ui.premium.PremiumScreen
 import com.example.leanangletracker.ui.settings.SettingsScreen
 import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.tracking.LeanAngleScreen
@@ -49,9 +51,11 @@ import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
 import android.preference.PreferenceManager
+import com.example.leanangletracker.billing.PremiumBillingManager
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+    private lateinit var premiumBillingManager: PremiumBillingManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -61,11 +65,20 @@ class MainActivity : ComponentActivity() {
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
         Configuration.getInstance().userAgentValue = packageName
 
+        premiumBillingManager = PremiumBillingManager(this) { entitlements ->
+            viewModel.setPremiumEntitlements(
+                isAutoResumePurchased = entitlements.isAutoResumePurchased,
+                isPremiumSubscribed = entitlements.isPremiumSubscribed
+            )
+        }
+        premiumBillingManager.start()
+
         enableEdgeToEdge()
         setContent {
             LeanAngleTrackerTheme {
                 ComposeSurface(modifier = Modifier.fillMaxSize()) {
                     val state by viewModel.uiState.collectAsStateWithLifecycle()
+                    val premiumBillingState by premiumBillingManager.state.collectAsStateWithLifecycle()
                     var routeUiState by rememberSaveable(stateSaver = RouteUiState.Saver) {
                         mutableStateOf(RouteUiState())
                     }
@@ -131,6 +144,7 @@ class MainActivity : ComponentActivity() {
                     val route = resolveRoute(
                         introStage = routeUiState.introStage,
                         showSettings = routeUiState.showSettings,
+                        showPremium = routeUiState.showPremium,
                         showHistory = routeUiState.showHistory,
                         selectedRideId = routeUiState.selectedRideId,
                         isCalibrated = state.calibration.isCalibrated
@@ -145,9 +159,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration) {
+                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.Premium || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration) {
                         when (route) {
                             AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
+                            AppRoute.Premium -> routeUiState = routeUiState.copy(showPremium = false)
                             AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
                             is AppRoute.RideDetail -> {
                                 routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
@@ -238,6 +253,7 @@ class MainActivity : ComponentActivity() {
                                 LeanAngleScreen(
                                     trackingState = state.tracking,
                                     onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
+                                    onOpenPremium = { routeUiState = routeUiState.copy(showPremium = true) },
                                     onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
                                     onStartTracking = {
                                         if (missingTrackingPermissions().isEmpty()) {
@@ -256,6 +272,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onTogglePause = viewModel::togglePauseTracking,
                                     onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                    onAutoResumeIndicatorDismissed = viewModel::dismissAutoResumePremiumShortcut,
                                     appTourState = if (
                                         state.pendingRecovery == null && state.offerExtendSession == null
                                     ) {
@@ -269,7 +286,8 @@ class MainActivity : ComponentActivity() {
                                     onNextAppTourPage = viewModel::showNextAppTourPage,
                                     onFinishAppTour = viewModel::completeAppTour,
                                     offerExtend = state.offerExtendSession,
-                                    onConfirmExtend = viewModel::confirmExtendRide
+                                    onConfirmExtend = viewModel::confirmExtendRide,
+                                    showAdBanner = !state.settings.isPremiumSubscribed
                                 )
                             }
 
@@ -293,8 +311,23 @@ class MainActivity : ComponentActivity() {
                                     viewModel.startCalibration()
                                 },
                                 onToggleAutoResume = viewModel::setAutoResumeEnabled,
-                                onPurchaseAutoResume = viewModel::purchaseAutoResume,
+                                onOpenPremium = { routeUiState = routeUiState.copy(showPremium = true) },
                                 onToggleAutoPause = viewModel::setAutoPauseEnabled
+                            )
+
+                            AppRoute.Premium -> PremiumScreen(
+                                isAutoResumePurchased = state.settings.isAutoResumePurchased,
+                                isPremiumSubscribed = state.settings.isPremiumSubscribed,
+                                billingState = premiumBillingState,
+                                onBack = { routeUiState = routeUiState.copy(showPremium = false) },
+                                onBuyAutoResume = {
+                                    premiumBillingManager.launchAutoResumePurchase(this@MainActivity)
+                                },
+                                onSubscribe = {
+                                    premiumBillingManager.launchSubscriptionPurchase(this@MainActivity)
+                                },
+                                onRestorePurchases = premiumBillingManager::refreshPurchases,
+                                onManageSubscription = ::openPremiumSubscriptionManagement
                             )
 
                             AppRoute.TrackReview -> RideHistoryScreen(
@@ -319,7 +352,8 @@ class MainActivity : ComponentActivity() {
                                         onDelete = { 
                                             viewModel.deleteRide(summary)
                                             routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
-                                        }
+                                        },
+                                        isPremiumSubscribed = state.settings.isPremiumSubscribed
                                     )
                                 }
                             }
@@ -332,6 +366,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::premiumBillingManager.isInitialized) premiumBillingManager.refreshPurchases()
         
         // Initial check based on current display rotation
         val currentRotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -363,6 +398,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        if (::premiumBillingManager.isInitialized) premiumBillingManager.close()
+        super.onDestroy()
+    }
+
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED ||
@@ -384,7 +424,7 @@ class MainActivity : ComponentActivity() {
         }
     }.toTypedArray()
 
-    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showHistory: Boolean, selectedRideId: Long?, isCalibrated: Boolean): AppRoute {
+    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showPremium: Boolean, showHistory: Boolean, selectedRideId: Long?, isCalibrated: Boolean): AppRoute {
         if (introStage != IntroStage.DONE) {
             return AppRoute.Intro(introStage)
         }
@@ -397,11 +437,22 @@ class MainActivity : ComponentActivity() {
         if (showHistory) {
             return AppRoute.TrackReview
         }
+        if (showPremium) {
+            return AppRoute.Premium
+        }
         if (showSettings) {
             return AppRoute.Settings
         } else {
             return AppRoute.Tracking
         }
+    }
+
+    private fun openPremiumSubscriptionManagement() {
+        val uri = Uri.parse(
+            "https://play.google.com/store/account/subscriptions" +
+                "?sku=${BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID}&package=$packageName"
+        )
+        startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 
     @Composable
@@ -417,18 +468,20 @@ class MainActivity : ComponentActivity() {
 private data class RouteUiState(
     val introStage: IntroStage = IntroStage.LOADING,
     val showSettings: Boolean = false,
+    val showPremium: Boolean = false,
     val showHistory: Boolean = false,
     val selectedRideId: Long? = null
 ) {
     companion object {
         val Saver: Saver<RouteUiState, Any> = listSaver(
-            save = { listOf(it.introStage.name, it.showSettings, it.showHistory, it.selectedRideId ?: -1L) },
+            save = { listOf(it.introStage.name, it.showSettings, it.showPremium, it.showHistory, it.selectedRideId ?: -1L) },
             restore = {
-                val rideId = it[3] as Long
+                val rideId = it[4] as Long
                 RouteUiState(
                     introStage = IntroStage.valueOf(it[0] as String),
                     showSettings = it[1] as Boolean,
-                    showHistory = it[2] as Boolean,
+                    showPremium = it[2] as Boolean,
+                    showHistory = it[3] as Boolean,
                     selectedRideId = if (rideId == -1L) null else rideId
                 )
             }

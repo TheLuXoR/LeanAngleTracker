@@ -10,6 +10,7 @@ data class PersistedSettings(
     val recorderIntervalMs: Int,
     val autoResumeEnabled: Boolean,
     val isAutoResumePurchased: Boolean,
+    val isPremiumSubscribed: Boolean,
     val autoPauseEnabled: Boolean
 )
 
@@ -44,6 +45,7 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_GYRO_BIAS_Z = "gyro_bias_z"
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
         const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
+        const val KEY_PREMIUM_SUBSCRIBED = "premium_subscribed"
         const val KEY_AUTO_PAUSE = "auto_pause_enabled"
         const val KEY_GAUGE_MAX_LEFT = "gauge_max_left_deg"
         const val KEY_GAUGE_MAX_RIGHT = "gauge_max_right_deg"
@@ -60,6 +62,7 @@ class SettingsStore(applicationContext: Context) {
                 .coerceIn(recorderIntervalMinMs, recorderIntervalMaxMs),
             autoResumeEnabled = prefs.getBoolean(KEY_AUTO_REWIND, false),
             isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false),
+            isPremiumSubscribed = prefs.getBoolean(KEY_PREMIUM_SUBSCRIBED, false),
             autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, true)
         )
         val gaugeExtrema = LeanExtrema(
@@ -120,6 +123,7 @@ class SettingsStore(applicationContext: Context) {
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
             .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
+            .putBoolean(KEY_PREMIUM_SUBSCRIBED, settings.isPremiumSubscribed)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)
             .apply()
     }

@@ -1,0 +1,331 @@
+package com.example.leanangletracker.ui.premium
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.R
+import com.example.leanangletracker.billing.PremiumBillingMessage
+import com.example.leanangletracker.billing.PremiumBillingState
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PremiumScreen(
+    isAutoResumePurchased: Boolean,
+    isPremiumSubscribed: Boolean,
+    billingState: PremiumBillingState,
+    onBack: () -> Unit,
+    onBuyAutoResume: () -> Unit,
+    onSubscribe: () -> Unit,
+    onRestorePurchases: () -> Unit,
+    onManageSubscription: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(R.string.premium_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            PremiumSectionTitle(
+                title = stringResource(R.string.premium_single_purchases_title),
+                body = stringResource(R.string.premium_single_purchases_body)
+            )
+            AutoResumePurchaseCard(
+                isPurchased = isAutoResumePurchased || isPremiumSubscribed,
+                isLoading = billingState.isAutoResumeLoading,
+                priceLabel = billingState.autoResumePriceLabel,
+                onBuy = onBuyAutoResume
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            PremiumSectionTitle(
+                title = stringResource(R.string.premium_subscription_title),
+                body = stringResource(R.string.premium_subscription_body)
+            )
+            PremiumHeader(isPremiumSubscribed = isPremiumSubscribed)
+            PremiumFeatureCard(
+                icon = Icons.Default.DirectionsBike,
+                title = stringResource(R.string.premium_auto_resume_title),
+                body = stringResource(R.string.premium_subscription_all_features_body)
+            )
+            PremiumFeatureCard(
+                icon = Icons.Default.Block,
+                title = stringResource(R.string.premium_no_ads_title),
+                body = stringResource(R.string.premium_no_ads_body)
+            )
+            PremiumFeatureCard(
+                icon = Icons.Default.NewReleases,
+                title = stringResource(R.string.premium_future_title),
+                body = stringResource(R.string.premium_future_body)
+            )
+
+            BillingMessage(message = billingState.message)
+
+            if (isPremiumSubscribed) {
+                Button(
+                    onClick = onManageSubscription,
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                ) {
+                    Text(stringResource(R.string.premium_manage_subscription))
+                }
+            } else {
+                PurchaseButton(
+                    label = stringResource(
+                        R.string.premium_subscribe,
+                        billingState.subscriptionPriceLabel
+                            ?: stringResource(R.string.premium_price_unavailable)
+                    ),
+                    isLoading = billingState.isSubscriptionLoading,
+                    enabled = billingState.subscriptionPriceLabel != null,
+                    onClick = onSubscribe,
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                )
+            }
+
+            TextButton(
+                onClick = onRestorePurchases,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(stringResource(R.string.premium_restore_purchases))
+            }
+
+            Text(
+                text = stringResource(R.string.premium_subscription_terms),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PremiumSectionTitle(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun AutoResumePurchaseCard(
+    isPurchased: Boolean,
+    isLoading: Boolean,
+    priceLabel: String?,
+    onBuy: () -> Unit
+) {
+    Card(shape = RoundedCornerShape(18.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    Icons.Default.DirectionsBike,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.premium_auto_resume_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        stringResource(R.string.premium_auto_resume_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (isPurchased) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = stringResource(R.string.premium_single_purchase_owned),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            if (isPurchased) {
+                Text(
+                    stringResource(R.string.premium_single_purchase_owned),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            } else {
+                PurchaseButton(
+                    label = stringResource(
+                        R.string.premium_buy_once,
+                        priceLabel ?: stringResource(R.string.premium_price_unavailable)
+                    ),
+                    isLoading = isLoading,
+                    enabled = priceLabel != null,
+                    onClick = onBuy,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PurchaseButton(
+    label: String,
+    isLoading: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled && !isLoading,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label)
+        }
+    }
+}
+
+@Composable
+private fun PremiumHeader(isPremiumSubscribed: Boolean) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = if (isPremiumSubscribed) Icons.Default.CheckCircle else Icons.Default.Star,
+                contentDescription = null,
+                modifier = Modifier.size(44.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(
+                    if (isPremiumSubscribed) R.string.premium_active_title else R.string.premium_header_title
+                ),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(
+                    if (isPremiumSubscribed) R.string.premium_active_body else R.string.premium_header_body
+                ),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun PremiumFeatureCard(icon: ImageVector, title: String, body: String) {
+    Card(shape = RoundedCornerShape(18.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BillingMessage(message: PremiumBillingMessage?) {
+    val messageResId = when (message) {
+        PremiumBillingMessage.PURCHASE_PENDING -> R.string.premium_purchase_pending
+        PremiumBillingMessage.PRODUCT_UNAVAILABLE -> R.string.premium_product_unavailable
+        PremiumBillingMessage.BILLING_ERROR -> R.string.premium_billing_error
+        null -> return
+    }
+    Text(
+        text = stringResource(messageResId),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error
+    )
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 1000)
+@Composable
+private fun PremiumScreenPreview() {
+    LeanAngleTrackerTheme {
+        PremiumScreen(
+            isAutoResumePurchased = false,
+            isPremiumSubscribed = false,
+            billingState = PremiumBillingState(
+                isAutoResumeLoading = false,
+                isSubscriptionLoading = false,
+                autoResumePriceLabel = "0,99 €",
+                subscriptionPriceLabel = "2,99 € / Monat"
+            ),
+            onBack = {},
+            onBuyAutoResume = {},
+            onSubscribe = {},
+            onRestorePurchases = {},
+            onManageSubscription = {}
+        )
+    }
+}

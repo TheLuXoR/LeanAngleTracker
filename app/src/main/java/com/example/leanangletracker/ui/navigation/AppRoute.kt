@@ -12,6 +12,7 @@ enum class Screens(val screenEntryDirection: ScreenDirection) {
     HISTORY(ScreenDirection.HORIZONTAL),
     DETAIL(ScreenDirection.HORIZONTAL),
     SETTINGS(ScreenDirection.VERTICAL),
+    PREMIUM(ScreenDirection.VERTICAL),
     CALIBRATION(ScreenDirection.VERTICAL)
 }
 
@@ -47,5 +48,10 @@ sealed interface AppRoute {
     data object Settings : AppRoute {
         override val screen = Screens.SETTINGS
         override fun index() = 5
+    }
+
+    data object Premium : AppRoute {
+        override val screen = Screens.PREMIUM
+        override fun index() = 6
     }
 }

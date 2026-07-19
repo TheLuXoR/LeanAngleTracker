@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.leanangletracker.R
@@ -21,6 +22,7 @@ import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.RideSummary
 import com.example.leanangletracker.ui.components.admob.loadInterstitial
 import com.example.leanangletracker.ui.components.admob.showInterstitial
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -32,7 +34,8 @@ internal fun RideDetailScreen(
     fullSession: RideSession?,
     onBack: () -> Unit,
     onUpdateName: (String) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isPremiumSubscribed: Boolean = false
 ) {
     val context = LocalContext.current
     var isEditingName by remember { mutableStateOf(false) }
@@ -66,7 +69,11 @@ internal fun RideDetailScreen(
                     IconButton(
                         enabled = fullSession != null,
                         onClick = {
-                            loadInterstitial(context) { ad -> showInterstitial(context, ad) { fullSession?.let { openGpxFile(context, it) } } }
+                            fullSession?.let { session ->
+                                runWithOptionalAd(context, isPremiumSubscribed) {
+                                    openGpxFile(context, session)
+                                }
+                            }
                         }
                     ) {
                         Icon(Icons.Default.OpenInNew, contentDescription = "Open")
@@ -74,7 +81,11 @@ internal fun RideDetailScreen(
                     IconButton(
                         enabled = fullSession != null,
                         onClick = {
-                            loadInterstitial(context) { ad -> showInterstitial(context, ad) { fullSession?.let { shareGpxFile(context, it) } } }
+                            fullSession?.let { session ->
+                                runWithOptionalAd(context, isPremiumSubscribed) {
+                                    shareGpxFile(context, session)
+                                }
+                            }
                         }
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
@@ -117,8 +128,35 @@ internal fun RideDetailScreen(
     }
 }
 
+private fun runWithOptionalAd(
+    context: Context,
+    isPremiumSubscribed: Boolean,
+    action: () -> Unit
+) {
+    if (isPremiumSubscribed) {
+        action()
+    } else {
+        loadInterstitial(context) { ad -> showInterstitial(context, ad, action) }
+    }
+}
+
 private fun formatDate(timestampMs: Long): String =
     SimpleDateFormat("EEE, MMM d, HH:mm", Locale.getDefault()).format(Date(timestampMs))
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 800)
+@Composable
+private fun RideDetailScreenPreview() {
+    LeanAngleTrackerTheme {
+        RideDetailScreen(
+            rideSummary = RideSummary(startedAtMs = 0L, endedAtMs = 0L, name = "Sample ride"),
+            fullSession = null,
+            onBack = {},
+            onUpdateName = {},
+            onDelete = {},
+            isPremiumSubscribed = true
+        )
+    }
+}
 
 private fun openGpxFile(context: Context, session: RideSession) {
     val gpxContent = buildGpxString(context, session)

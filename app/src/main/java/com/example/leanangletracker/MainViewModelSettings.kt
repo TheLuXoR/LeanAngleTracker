@@ -68,6 +68,7 @@ internal fun MainViewModel.loadPersistedState() {
             recorderIntervalMs = persistedSettings.recorderIntervalMs,
             autoResumeEnabled = persistedSettings.autoResumeEnabled,
             isAutoResumePurchased = persistedSettings.isAutoResumePurchased,
+            isPremiumSubscribed = persistedSettings.isPremiumSubscribed,
             autoPauseEnabled = persistedSettings.autoPauseEnabled
         )
     }
@@ -348,10 +349,28 @@ internal fun MainViewModel.setAutoPauseEnabled(enabled: Boolean) {
     persistSettings()
 }
 
-internal fun MainViewModel.purchaseAutoResume() {
-    updateSettingsState { it.copy(isAutoResumePurchased = true, autoResumeEnabled = true) }
+internal fun MainViewModel.setPremiumEntitlements(
+    isAutoResumePurchased: Boolean,
+    isPremiumSubscribed: Boolean
+) {
+    val hadAutoResumeAccess = _uiState.value.settings.run {
+        this.isAutoResumePurchased || this.isPremiumSubscribed
+    }
+    val hasAutoResumeAccess = isAutoResumePurchased || isPremiumSubscribed
+    updateSettingsState {
+        it.copy(
+            isAutoResumePurchased = isAutoResumePurchased,
+            isPremiumSubscribed = isPremiumSubscribed,
+            autoResumeEnabled = when {
+                !hasAutoResumeAccess -> false
+                !hadAutoResumeAccess -> true
+                else -> it.autoResumeEnabled
+            }
+        )
+    }
     autoResumeTimerStartMs = null
     updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
+    if (!hasAutoResumeAccess) pausedPointsBuffer.clear()
     persistSettings()
 }
 
