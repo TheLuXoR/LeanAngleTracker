@@ -47,6 +47,11 @@ internal fun LeanHistoryGraph(
     val minBound = 0f
     val maxBound = values.lastIndex.toFloat().coerceAtLeast(0f)
     val overscrollLimit = 2.5f
+    val cursorPosition = if (!isScrollable && selectedIndex != null) {
+        selectedIndex.toFloat().coerceIn(minBound, maxBound)
+    } else {
+        scrollOffset.value
+    }
 
     var showScrollHint by remember { mutableStateOf(false) }
 
@@ -57,8 +62,8 @@ internal fun LeanHistoryGraph(
         label = "amplitude"
     )
 
-    LaunchedEffect(selectedIndex) {
-        if (selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
+    LaunchedEffect(selectedIndex, isScrollable) {
+        if (isScrollable && selectedIndex != null && abs(scrollOffset.value - selectedIndex) > 0.5f && !scrollOffset.isRunning) {
             scrollOffset.snapTo(selectedIndex.toFloat())
         }
     }
@@ -72,9 +77,11 @@ internal fun LeanHistoryGraph(
         }
     }
 
-    val currentLean by remember(values, scrollOffset.value) {
-        derivedStateOf {
-            val clampedIdx = scrollOffset.value.coerceIn(minBound, maxBound)
+    val currentLean = remember(values, cursorPosition) {
+        if (values.isEmpty()) {
+            null
+        } else {
+            val clampedIdx = cursorPosition.coerceIn(minBound, maxBound)
             val idx = clampedIdx.toInt().coerceIn(0, values.lastIndex)
             val nextIdx = (idx + 1).coerceIn(0, values.lastIndex)
             val fraction = clampedIdx - idx
@@ -89,7 +96,7 @@ internal fun LeanHistoryGraph(
     ) {
         Box {
             Column(modifier = Modifier.padding(16.dp)) {
-                val currentScrollVal = scrollOffset.value
+                val currentScrollVal = cursorPosition
                 val displayStartIndex = remember(values.size, currentScrollVal, visibleRangePoints) {
                     if (visibleRangePoints == null || values.size <= (visibleRangePoints ?: 0)) {
                         0
@@ -243,10 +250,16 @@ internal fun LeanHistoryGraph(
                                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                                 )
 
-                                // 3. Cursor
-                                val relativeCursorOffset = scrollOffset.value - displayStartIndex
+                            }
+
+                            // 3. Cursor
+                            if (displayValues.isNotEmpty() && currentLean != null) {
+                                val relativeCursorOffset = cursorPosition - displayStartIndex
                                 if (relativeCursorOffset in -0.5f..(displayValues.size.toFloat() - 0.5f)) {
-                                    val selX = (relativeCursorOffset * stepX).coerceIn(0f, width)
+                                    val cursorRadius = 4.dp.toPx()
+                                    val maxCursorX = (width - cursorRadius).coerceAtLeast(cursorRadius)
+                                    val selX = (relativeCursorOffset * stepX)
+                                        .coerceIn(cursorRadius, maxCursorX)
                                     val selY = yFor(currentLean.coerceIn(-animatedAmplitude, animatedAmplitude))
 
                                     if (showCursorLine) {
@@ -259,7 +272,7 @@ internal fun LeanHistoryGraph(
                                     }
                                     drawCircle(
                                         color = Color.White,
-                                        radius = 4.dp.toPx(),
+                                        radius = cursorRadius,
                                         center = Offset(selX, selY)
                                     )
                                 }
