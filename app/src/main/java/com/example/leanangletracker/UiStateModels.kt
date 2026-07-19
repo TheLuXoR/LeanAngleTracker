@@ -95,8 +95,14 @@ data class TrackingUiState(
     val showHighRotationWarning: Boolean = false,
     val showAutoResumePremiumShortcut: Boolean = false,
     val recentPoints: List<TrackPoint> = emptyList(),
-    val autoPauseEnabled: Boolean = true
+    val autoPauseEnabled: Boolean = true,
+    val sensorSamplingRate: SensorSamplingRate = SensorSamplingRate.MEDIUM
 )
+
+enum class SensorSamplingRate(val samplingPeriodUs: Int) {
+    MEDIUM(samplingPeriodUs = 20_000),
+    HIGHEST(samplingPeriodUs = 5_000)
+}
 
 data class AppTourUiState(
     val offerPending: Boolean = false,

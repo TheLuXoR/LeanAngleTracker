@@ -106,13 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
     internal val recentLeanSamples = ArrayDeque<TimedLean>()
 
     init {
-        val delay = SensorManager.SENSOR_DELAY_FASTEST
-        accelerometerSensor?.let {
-            sensorManager.registerListener(this, it, delay)
-        }
-        gyroscopeSensor?.let {
-            sensorManager.registerListener(this, it, delay)
-        }
+        registerMotionSensors(SensorSamplingRate.MEDIUM)
 
         _uiState.update {
             it.copy(
@@ -137,6 +131,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> processAccelerometer(event)
             Sensor.TYPE_GYROSCOPE -> updateGyroLean(event)
+        }
+    }
+
+    internal fun setSensorSamplingRate(rate: SensorSamplingRate) {
+        if (_uiState.value.tracking.sensorSamplingRate == rate) return
+
+        accelerometerSensor?.let { sensorManager.unregisterListener(this, it) }
+        gyroscopeSensor?.let { sensorManager.unregisterListener(this, it) }
+
+        lastAccelTimestampNs = null
+        lastGyroTimestampNs = null
+        latestRawGyroTimestampNs = null
+        registerMotionSensors(rate)
+        updateTrackingState { it.copy(sensorSamplingRate = rate) }
+    }
+
+    private fun registerMotionSensors(rate: SensorSamplingRate) {
+        accelerometerSensor?.let {
+            sensorManager.registerListener(this, it, rate.samplingPeriodUs)
+        }
+        gyroscopeSensor?.let {
+            sensorManager.registerListener(this, it, rate.samplingPeriodUs)
         }
     }
 

@@ -75,48 +75,18 @@ internal fun PremiumScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             PremiumSectionTitle(
-                title = stringResource(R.string.premium_subscription_title),
+                title = stringResource(R.string.premium_subscription_section_title),
                 body = stringResource(R.string.premium_subscription_body)
             )
-            PremiumHeader(isPremiumSubscribed = isPremiumSubscribed)
-            PremiumFeatureCard(
-                icon = Icons.Default.DirectionsBike,
-                title = stringResource(R.string.premium_auto_resume_title),
-                body = stringResource(R.string.premium_subscription_all_features_body)
-            )
-            PremiumFeatureCard(
-                icon = Icons.Default.Block,
-                title = stringResource(R.string.premium_no_ads_title),
-                body = stringResource(R.string.premium_no_ads_body)
-            )
-            PremiumFeatureCard(
-                icon = Icons.Default.NewReleases,
-                title = stringResource(R.string.premium_future_title),
-                body = stringResource(R.string.premium_future_body)
+            PremiumSubscriptionCard(
+                isSubscribed = isPremiumSubscribed,
+                isLoading = billingState.isSubscriptionLoading,
+                priceLabel = billingState.subscriptionPriceLabel,
+                onSubscribe = onSubscribe,
+                onManageSubscription = onManageSubscription
             )
 
             BillingMessage(message = billingState.message)
-
-            if (isPremiumSubscribed) {
-                Button(
-                    onClick = onManageSubscription,
-                    modifier = Modifier.fillMaxWidth().height(54.dp)
-                ) {
-                    Text(stringResource(R.string.premium_manage_subscription))
-                }
-            } else {
-                PurchaseButton(
-                    label = stringResource(
-                        R.string.premium_subscribe,
-                        billingState.subscriptionPriceLabel
-                            ?: stringResource(R.string.premium_price_unavailable)
-                    ),
-                    isLoading = billingState.isSubscriptionLoading,
-                    enabled = billingState.subscriptionPriceLabel != null,
-                    onClick = onSubscribe,
-                    modifier = Modifier.fillMaxWidth().height(54.dp)
-                )
-            }
 
             TextButton(
                 onClick = onRestorePurchases,
@@ -237,58 +207,98 @@ private fun PurchaseButton(
 }
 
 @Composable
-private fun PremiumHeader(isPremiumSubscribed: Boolean) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        shape = RoundedCornerShape(24.dp)
-    ) {
+private fun PremiumSubscriptionCard(
+    isSubscribed: Boolean,
+    isLoading: Boolean,
+    priceLabel: String?,
+    onSubscribe: () -> Unit,
+    onManageSubscription: () -> Unit
+) {
+    Card(shape = RoundedCornerShape(18.dp)) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(
-                imageVector = if (isPremiumSubscribed) Icons.Default.CheckCircle else Icons.Default.Star,
-                contentDescription = null,
-                modifier = Modifier.size(44.dp),
-                tint = MaterialTheme.colorScheme.primary
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = stringResource(R.string.premium_subscription_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isSubscribed) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = stringResource(R.string.premium_active_title),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            PremiumFeatureRow(
+                icon = Icons.Default.Block,
+                title = stringResource(R.string.premium_no_ads_title),
+                body = stringResource(R.string.premium_no_ads_body)
             )
-            Text(
-                text = stringResource(
-                    if (isPremiumSubscribed) R.string.premium_active_title else R.string.premium_header_title
-                ),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+            PremiumFeatureRow(
+                icon = Icons.Default.DirectionsBike,
+                title = stringResource(R.string.premium_auto_resume_title),
+                body = stringResource(R.string.premium_subscription_all_features_body)
             )
-            Text(
-                text = stringResource(
-                    if (isPremiumSubscribed) R.string.premium_active_body else R.string.premium_header_body
-                ),
-                style = MaterialTheme.typography.bodyMedium
+            PremiumFeatureRow(
+                icon = Icons.Default.NewReleases,
+                title = stringResource(R.string.premium_future_title),
+                body = stringResource(R.string.premium_future_body)
             )
+
+            if (isSubscribed) {
+                Button(
+                    onClick = onManageSubscription,
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                ) {
+                    Text(stringResource(R.string.premium_manage_subscription))
+                }
+            } else {
+                PurchaseButton(
+                    label = stringResource(
+                        R.string.premium_subscribe,
+                        priceLabel ?: stringResource(R.string.premium_price_unavailable)
+                    ),
+                    isLoading = isLoading,
+                    enabled = priceLabel != null,
+                    onClick = onSubscribe,
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun PremiumFeatureCard(icon: ImageVector, title: String, body: String) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+private fun PremiumFeatureRow(icon: ImageVector, title: String, body: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

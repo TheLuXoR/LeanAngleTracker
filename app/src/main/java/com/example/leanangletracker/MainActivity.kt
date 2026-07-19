@@ -272,6 +272,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onTogglePause = viewModel::togglePauseTracking,
                                     onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                    onSetSensorSamplingRate = viewModel::setSensorSamplingRate,
                                     onAutoResumeIndicatorDismissed = viewModel::dismissAutoResumePremiumShortcut,
                                     appTourState = if (
                                         state.pendingRecovery == null && state.offerExtendSession == null

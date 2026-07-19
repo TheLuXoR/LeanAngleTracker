@@ -35,6 +35,7 @@ import com.example.leanangletracker.BuildConfig
 import com.example.leanangletracker.R
 import com.example.leanangletracker.AppTourUiState
 import com.example.leanangletracker.RideSession
+import com.example.leanangletracker.SensorSamplingRate
 import com.example.leanangletracker.TrackingUiState
 import com.example.leanangletracker.ui.components.GpsStatsDashboard
 import com.example.leanangletracker.ui.components.LeanHistoryGraph
@@ -60,6 +61,7 @@ internal fun LeanAngleScreen(
     onStartCalibration: () -> Unit = {},
     onTogglePause: () -> Unit = {},
     onResetGaugeExtrema: () -> Unit = {},
+    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit = {},
     onAutoResumeIndicatorDismissed: () -> Unit = {},
     appTourState: AppTourUiState = AppTourUiState(),
     onAcceptAppTourOffer: () -> Unit = {},
@@ -124,7 +126,9 @@ internal fun LeanAngleScreen(
                 onOpenHistory = onOpenHistory,
                 onOpenSettings = onOpenSettings,
                 showDebugFeatures = isDebugBuild,
-                onShowAutoResumeIndicator = { autoResumeIndicatorRequestId++ }
+                sensorSamplingRate = trackingState.sensorSamplingRate,
+                onShowAutoResumeIndicator = { autoResumeIndicatorRequestId++ },
+                onSetSensorSamplingRate = onSetSensorSamplingRate
             )
 
             MountOrientationWarning(
@@ -247,7 +251,9 @@ private fun TrackingHeader(
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     showDebugFeatures: Boolean,
-    onShowAutoResumeIndicator: () -> Unit
+    sensorSamplingRate: SensorSamplingRate,
+    onShowAutoResumeIndicator: () -> Unit,
+    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -308,7 +314,11 @@ private fun TrackingHeader(
             HistoryButton(onOpenHistory = onOpenHistory, enabled = !trackingStarted)
 
             if (showDebugFeatures) {
-                DebugFeatureMenu(onShowAutoResumeIndicator = onShowAutoResumeIndicator)
+                DebugFeatureMenu(
+                    sensorSamplingRate = sensorSamplingRate,
+                    onShowAutoResumeIndicator = onShowAutoResumeIndicator,
+                    onSetSensorSamplingRate = onSetSensorSamplingRate
+                )
             }
             
             IconButton(
