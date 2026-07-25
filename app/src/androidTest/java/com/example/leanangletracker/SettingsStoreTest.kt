@@ -38,6 +38,19 @@ class SettingsStoreTest {
         assertEquals(1, reloaded.completedAppTourVersion)
     }
 
+    @Test
+    fun freshInstallStartsWithAutomationLockedAndDisabled() {
+        val reloaded = store.load(
+            recorderIntervalMinMs = 50,
+            recorderIntervalMaxMs = 1_000
+        )
+
+        assertEquals(false, reloaded.settings.isAutomationPackPurchased)
+        assertEquals(false, reloaded.settings.isPremiumSubscribed)
+        assertEquals(false, reloaded.settings.autoPauseEnabled)
+        assertEquals(false, reloaded.settings.autoResumeEnabled)
+    }
+
     private fun clearPreferences() {
         context.getSharedPreferences("lean_angle_tracker_prefs", Context.MODE_PRIVATE)
             .edit()

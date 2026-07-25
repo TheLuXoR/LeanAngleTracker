@@ -6,10 +6,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -29,11 +30,11 @@ import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PremiumScreen(
-    isAutoResumePurchased: Boolean,
+    isAutomationPackPurchased: Boolean,
     isPremiumSubscribed: Boolean,
     billingState: PremiumBillingState,
     onBack: () -> Unit,
-    onBuyAutoResume: () -> Unit,
+    onBuyAutomationPack: () -> Unit,
     onSubscribe: () -> Unit,
     onRestorePurchases: () -> Unit,
     onManageSubscription: () -> Unit
@@ -65,11 +66,12 @@ internal fun PremiumScreen(
                 title = stringResource(R.string.premium_single_purchases_title),
                 body = stringResource(R.string.premium_single_purchases_body)
             )
-            AutoResumePurchaseCard(
-                isPurchased = isAutoResumePurchased || isPremiumSubscribed,
-                isLoading = billingState.isAutoResumeLoading,
-                priceLabel = billingState.autoResumePriceLabel,
-                onBuy = onBuyAutoResume
+            AutomationPackPurchaseCard(
+                isPurchased = isAutomationPackPurchased,
+                isIncludedInSubscription = isPremiumSubscribed,
+                isLoading = billingState.isAutomationPackLoading,
+                priceLabel = billingState.automationPackPriceLabel,
+                onBuy = onBuyAutomationPack
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -117,8 +119,9 @@ private fun PremiumSectionTitle(title: String, body: String) {
 }
 
 @Composable
-private fun AutoResumePurchaseCard(
+private fun AutomationPackPurchaseCard(
     isPurchased: Boolean,
+    isIncludedInSubscription: Boolean,
     isLoading: Boolean,
     priceLabel: String?,
     onBuy: () -> Unit
@@ -133,34 +136,59 @@ private fun AutoResumePurchaseCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
-                    Icons.Default.DirectionsBike,
+                    Icons.AutoMirrored.Filled.DirectionsBike,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        stringResource(R.string.premium_auto_resume_title),
+                        stringResource(R.string.premium_automation_pack_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        stringResource(R.string.premium_auto_resume_body),
+                        stringResource(R.string.premium_automation_pack_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (isPurchased) {
+                if (isPurchased || isIncludedInSubscription) {
                     Icon(
                         Icons.Default.CheckCircle,
-                        contentDescription = stringResource(R.string.premium_single_purchase_owned),
+                        contentDescription = stringResource(
+                            if (isPurchased) {
+                                R.string.premium_single_purchase_owned
+                            } else {
+                                R.string.premium_included_in_subscription
+                            }
+                        ),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            if (isPurchased) {
+            HorizontalDivider()
+
+            PremiumFeatureRow(
+                icon = Icons.Default.PauseCircle,
+                title = stringResource(R.string.settings_auto_pause_title),
+                body = stringResource(R.string.settings_auto_pause_subtitle)
+            )
+            PremiumFeatureRow(
+                icon = Icons.AutoMirrored.Filled.DirectionsBike,
+                title = stringResource(R.string.settings_auto_resume_title),
+                body = stringResource(R.string.settings_auto_resume_subtitle)
+            )
+
+            if (isPurchased || isIncludedInSubscription) {
                 Text(
-                    stringResource(R.string.premium_single_purchase_owned),
+                    stringResource(
+                        if (isPurchased) {
+                            R.string.premium_single_purchase_owned
+                        } else {
+                            R.string.premium_included_in_subscription
+                        }
+                    ),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.End)
@@ -251,9 +279,9 @@ private fun PremiumSubscriptionCard(
                 body = stringResource(R.string.premium_no_ads_body)
             )
             PremiumFeatureRow(
-                icon = Icons.Default.DirectionsBike,
-                title = stringResource(R.string.premium_auto_resume_title),
-                body = stringResource(R.string.premium_subscription_all_features_body)
+                icon = Icons.AutoMirrored.Filled.DirectionsBike,
+                title = stringResource(R.string.premium_automation_pack_title),
+                body = stringResource(R.string.premium_automation_pack_subscription_body)
             )
             PremiumFeatureRow(
                 icon = Icons.Default.NewReleases,
@@ -318,21 +346,41 @@ private fun BillingMessage(message: PremiumBillingMessage?) {
     )
 }
 
-@Preview(showBackground = true, widthDp = 420, heightDp = 1000)
+@Preview(name = "Available", showBackground = true, widthDp = 420, heightDp = 1_200)
 @Composable
-private fun PremiumScreenPreview() {
+private fun PremiumScreenAvailablePreview() {
+    PremiumScreenPreviewContent(isAutomationPackPurchased = false, isPremiumSubscribed = false)
+}
+
+@Preview(name = "Automation purchased", showBackground = true, widthDp = 420, heightDp = 1_200)
+@Composable
+private fun PremiumScreenPurchasedPreview() {
+    PremiumScreenPreviewContent(isAutomationPackPurchased = true, isPremiumSubscribed = false)
+}
+
+@Preview(name = "Subscribed", showBackground = true, widthDp = 420, heightDp = 1_200)
+@Composable
+private fun PremiumScreenSubscribedPreview() {
+    PremiumScreenPreviewContent(isAutomationPackPurchased = false, isPremiumSubscribed = true)
+}
+
+@Composable
+private fun PremiumScreenPreviewContent(
+    isAutomationPackPurchased: Boolean,
+    isPremiumSubscribed: Boolean
+) {
     LeanAngleTrackerTheme {
         PremiumScreen(
-            isAutoResumePurchased = false,
-            isPremiumSubscribed = false,
+            isAutomationPackPurchased = isAutomationPackPurchased,
+            isPremiumSubscribed = isPremiumSubscribed,
             billingState = PremiumBillingState(
-                isAutoResumeLoading = false,
+                isAutomationPackLoading = false,
                 isSubscriptionLoading = false,
-                autoResumePriceLabel = "0,99 €",
+                automationPackPriceLabel = "0,99 €",
                 subscriptionPriceLabel = "2,99 € / Monat"
             ),
             onBack = {},
-            onBuyAutoResume = {},
+            onBuyAutomationPack = {},
             onSubscribe = {},
             onRestorePurchases = {},
             onManageSubscription = {}

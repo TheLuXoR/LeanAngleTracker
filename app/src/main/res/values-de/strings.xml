@@ -29,30 +29,37 @@
 
     <string name="screen_title_lean_angle">Schräglage</string>
     <string name="history_title">Verlauf</string>
+    <string name="history_speed_title">Geschwindigkeit</string>
     <string name="history_max_left">Links: %1$.1f°</string>
     <string name="history_max_right">Rechts: %1$.1f°</string>
+    <string name="history_max_speed">Max: %1$d km/h</string>
 
     <string name="settings_title">Einstellungen</string>
     <string name="action_back">Zurück</string>
-    <string name="settings_group_sensors_tracking">SENSOREN &amp; TRACKING</string>
+    <string name="settings_open_premium">Premium öffnen</string>
+    <string name="settings_group_sensors">SENSOREN</string>
+    <string name="settings_auto_pause_title">Auto Pause</string>
+    <string name="settings_auto_pause_subtitle">Pausiert eine laufende Aufzeichnung, wenn das Handy auf dem Kopf steht oder mindestens 60° Schräglage misst.</string>
+    <string name="settings_auto_resume_title">Auto Resume</string>
+    <string name="settings_auto_resume_subtitle">Setzt eine pausierte Aufzeichnung fort, sobald GPS zehn Sekunden lang mindestens 20 km/h erkennt.</string>
+    <string name="settings_no_ads_title">Keine Werbung mehr</string>
+    <string name="settings_no_ads_subtitle">Entfernt Banner- und Vollbildwerbung in der gesamten App. Im Premium-Abo enthalten.</string>
+    <string name="settings_recorder_tick_title">Recorder-Takt</string>
+    <string name="settings_recorder_tick_subtitle">Bestimmt den Abstand zwischen gespeicherten Messpunkten. Kürzer erfasst mehr Details, erzeugt aber mehr Daten.</string>
     <string name="settings_group_visuals">ANZEIGE</string>
     <string name="settings_history_window_title">Verlaufsfenster</string>
-    <string name="settings_history_window_subtitle">Im Verlaufsdiagramm angezeigte Zeit</string>
-    <string name="action_decrease">Verringern</string>
-    <string name="action_increase">Erhöhen</string>
+    <string name="settings_history_window_subtitle">Bestimmt, wie viele Sekunden Schräglage im Live-Diagramm sichtbar sind.</string>
+    <string name="settings_decrease_value">%1$s: verringern</string>
+    <string name="settings_increase_value">%1$s: erhöhen</string>
     <string name="settings_value_seconds">%1$ds</string>
-    <string name="settings_group_recording">RECORDING</string>
-    <string name="settings_recorder_tick_title">Recorder-Takt</string>
-    <string name="settings_recorder_tick_subtitle">50ms bis 1000ms in 50ms-Schritten</string>
     <string name="settings_value_milliseconds">%1$dms</string>
-    <string name="settings_reset_gauge_max_values">Tacho-Max-Werte zurücksetzen</string>
-    <string name="settings_reset_gauge_hint">Beide Werte lassen sich auch durch langes Drücken auf den Tacho zurücksetzen.</string>
-    <string name="settings_start_app_tour">App-Tour starten</string>
-    <string name="settings_recalibrate_device">Gerät neu kalibrieren</string>
-    <string name="settings_group_premium">PREMIUM-FEATURES</string>
-    <string name="settings_auto_resume_title">Auto Resume</string>
-    <string name="settings_auto_resume_subtitle">Setzt eine pausierte Aufzeichnung nach anhaltender Bewegung automatisch fort.</string>
-    <string name="settings_premium_open">Premium-Features ansehen</string>
+    <string name="settings_group_reset">RESET</string>
+    <string name="settings_reset_gauge_max_values">Tacho-Maxwerte zurücksetzen</string>
+    <string name="settings_reset_gauge_hint">Setzt nur MAX L und MAX R zurück; gespeicherte Fahrten bleiben unverändert. Auch per langem Druck auf den Tacho.</string>
+    <string name="settings_recalibrate_device">Neu kalibrieren</string>
+    <string name="settings_recalibrate_hint">Ermittelt die Einbaulage des Handys neu. Beim Start wird die bisherige Kalibrierung ersetzt.</string>
+    <string name="settings_start_app_tour">App-Tour erneut starten</string>
+    <string name="settings_start_app_tour_hint">Erklärt Tacho, Aufzeichnung, Live-Daten und Fahrthistorie noch einmal.</string>
 
     <string name="ride_history_selected_count">%1$d ausgewählt</string>
     <string name="ride_history_title">Fahrtenverlauf</string>
@@ -91,7 +98,7 @@
     <string name="app_tour_recording_title">Fahrt aufzeichnen</string>
     <string name="app_tour_recording_body">Beim ersten Aufnahmestart erklärt die App die Standort- und Benachrichtigungsberechtigungen und fragt sie an. GPS zeichnet Strecke, Geschwindigkeit und Distanz auf; Stop beendet und speichert die Fahrt.</string>
     <string name="app_tour_pause_title">Pause und Automatik</string>
-    <string name="app_tour_pause_body">Pausiere die Aufzeichnung, wenn ein Abschnitt nicht zur Fahrt gehören soll. Auto-Pause schützt die Aufzeichnung bei extremer Rotation; nach Kauf und Aktivierung kann Auto Resume sie bei erneuter Bewegung fortsetzen.</string>
+    <string name="app_tour_pause_body">Pausiere die Aufzeichnung, wenn ein Abschnitt nicht zur Fahrt gehören soll. Das Automatik-Paket kann beim Umkippen des Handys automatisch pausieren und nach anhaltender GPS-Fahrt fortsetzen.</string>
     <string name="app_tour_live_data_title">Live-Fahrdaten</string>
     <string name="app_tour_live_data_body">Das Verlaufsdiagramm zeigt die letzten Schräglagen. Während der GPS-Aufzeichnung zeigt das Dashboard zusätzlich Geschwindigkeit, Distanz und Fahrzeit.</string>
     <string name="app_tour_history_title">Historie und Details</string>
@@ -115,6 +122,8 @@
 
     <!-- Tracking Labels -->
     <string name="tracking_searching_gps">GPS wird gesucht…</string>
+    <string name="tracking_wait_gps">WARTE AUF GPS</string>
+    <string name="tracking_recording">AUFZEICHNUNG</string>
     <string name="tracking_permission_dialog_title">Fahrtaufzeichnung vorbereiten</string>
     <string name="tracking_permission_location_title">Standort</string>
     <string name="tracking_permission_location_body">GPS zeichnet deine Strecke auf und berechnet Geschwindigkeit und Distanz.</string>
@@ -123,8 +132,8 @@
     <string name="tracking_permission_continue">Weiter</string>
     <string name="tracking_permission_cancel">Abbrechen</string>
     <string name="auto_resume_premium_shortcut_title">Losfahren während der Pause erkannt</string>
-    <string name="auto_resume_premium_shortcut_body">Auto Resume kann pausierte Aufzeichnungen automatisch fortsetzen.</string>
-    <string name="auto_resume_premium_shortcut_action">Auto Resume ansehen</string>
+    <string name="auto_resume_premium_shortcut_body">Auto Resume ist Teil des Automatik-Pakets und kann pausierte Aufzeichnungen automatisch fortsetzen.</string>
+    <string name="auto_resume_premium_shortcut_action">Automatik-Paket ansehen</string>
     <string name="auto_resume_indicator_close">Auto-Resume-Hinweis schließen</string>
     <string name="debug_features_open">Debug-Features öffnen</string>
     <string name="debug_feature_auto_resume_indicator">Auto-Resume-Hinweis anzeigen</string>
@@ -134,15 +143,15 @@
     <string name="debug_sensor_sampling_highest">Highest · 200 Hz</string>
     <string name="action_close">Schließen</string>
     <string name="premium_title">Premium</string>
-    <string name="premium_single_purchases_title">Einzelkauf</string>
-    <string name="premium_single_purchases_body">Schalte einzelne Features dauerhaft und ohne Abo frei.</string>
+    <string name="premium_single_purchases_title">Einmalkauf</string>
+    <string name="premium_single_purchases_body">Schalte das Automatik-Paket dauerhaft und ohne Abo frei.</string>
     <string name="premium_subscription_section_title">Abo</string>
     <string name="premium_subscription_title">Premium-Abo</string>
-    <string name="premium_subscription_body">Schalte das komplette Premium-Paket frei - keine Werbung und alle Premiumfeatures inklusive.</string>
+    <string name="premium_subscription_body">Schalte das komplette Premium-Paket frei – keine Werbung und alle Premium-Funktionen inklusive.</string>
     <string name="premium_active_title">Premium ist aktiv</string>
-    <string name="premium_auto_resume_title">Auto Resume</string>
-    <string name="premium_auto_resume_body">Setzt eine pausierte Fahrt bei anhaltender Bewegung automatisch fort, damit der restliche Streckenverlauf nicht fehlt.</string>
-    <string name="premium_subscription_all_features_body">Enthält Auto Resume und jedes weitere einzeln verfügbare Premium-Feature.</string>
+    <string name="premium_automation_pack_title">Automatik-Paket</string>
+    <string name="premium_automation_pack_body">Schaltet Auto Pause und Auto Resume mit einem Kauf dauerhaft frei.</string>
+    <string name="premium_automation_pack_subscription_body">Enthält Auto Pause und Auto Resume für die Laufzeit des Abos.</string>
     <string name="premium_no_ads_title">Keine Werbung</string>
     <string name="premium_no_ads_body">Entfernt Banner- und Vollbildwerbung in der gesamten App.</string>
     <string name="premium_future_title">Zukünftige Premium-Features</string>
@@ -150,12 +159,13 @@
     <string name="premium_subscribe">Abo abschließen · %1$s</string>
     <string name="premium_buy_once">Einmalig kaufen · %1$s</string>
     <string name="premium_single_purchase_owned">Gekauft</string>
+    <string name="premium_included_in_subscription">Im Abo enthalten</string>
     <string name="premium_price_unavailable">Preis nicht verfügbar</string>
     <string name="premium_restore_purchases">Käufe wiederherstellen</string>
     <string name="premium_manage_subscription">Abo verwalten</string>
     <string name="premium_subscription_terms">Das Abo verlängert sich automatisch über Google Play, bis es gekündigt wird. Den genauen Preis und Abrechnungszeitraum zeigt der Google-Play-Kaufdialog. Das Abo kann jederzeit bei Google Play verwaltet oder gekündigt werden.</string>
     <string name="premium_purchase_pending">Der Kauf ist noch ausstehend. Premium wird aktiviert, sobald Google Play die Zahlung bestätigt.</string>
-    <string name="premium_product_unavailable">Das Abo ist momentan nicht verfügbar. Prüfe die Play-Store-Verbindung und versuche es erneut.</string>
+    <string name="premium_product_unavailable">Dieses Angebot ist momentan nicht verfügbar. Prüfe die Play-Store-Verbindung und versuche es erneut.</string>
     <string name="premium_billing_error">Google Play konnte die Anfrage nicht abschließen. Bitte versuche es erneut.</string>
     <string name="tracking_warning_upside_down">Das Handy steht gegenüber der Kalibrierung auf dem Kopf. Die Schräglagenwerte sind ungültig. Drehe es zurück oder kalibriere diese Montage neu.</string>
     <string name="tracking_warning_high_rotation">Starke Rotation erkannt. Die Ausrichtung des Handys könnte falsch sein.</string>
@@ -166,4 +176,10 @@
     <string name="dialog_extend_ride_message">Es wurde eine Fahrt von heute gefunden. Möchtest du diese fortsetzen oder eine neue Aufzeichnung starten?</string>
     <string name="dialog_extend_ride_confirm">Fortsetzen</string>
     <string name="dialog_extend_ride_dismiss">Neue Fahrt</string>
+
+    <!-- Recovery Dialog -->
+    <string name="dialog_recovery_title">Unvollständige Fahrt gefunden</string>
+    <string name="dialog_recovery_message">Die App wurde offenbar unerwartet geschlossen. Möchtest du die letzte Aufzeichnung fortsetzen oder als abgeschlossene Fahrt speichern?</string>
+    <string name="dialog_recovery_continue">Fortsetzen</string>
+    <string name="dialog_recovery_save">Speichern und beenden</string>
 </resources>

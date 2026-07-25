@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
 
         premiumBillingManager = PremiumBillingManager(this) { entitlements ->
             viewModel.setPremiumEntitlements(
-                isAutoResumePurchased = entitlements.isAutoResumePurchased,
+                isAutomationPackPurchased = entitlements.isAutomationPackPurchased,
                 isPremiumSubscribed = entitlements.isPremiumSubscribed
             )
         }
@@ -311,18 +311,38 @@ class MainActivity : ComponentActivity() {
                                     routeUiState = routeUiState.copy(showSettings = false)
                                     viewModel.startCalibration()
                                 },
-                                onToggleAutoResume = viewModel::setAutoResumeEnabled,
+                                onToggleAutoResume = { enabled ->
+                                    if (shouldOpenPremiumForAutomationToggle(
+                                            enabled = enabled,
+                                            hasAutomationAccess = state.settings.hasAutomationAccess
+                                        )
+                                    ) {
+                                        routeUiState = routeUiState.copy(showPremium = true)
+                                    } else {
+                                        viewModel.setAutoResumeEnabled(enabled)
+                                    }
+                                },
                                 onOpenPremium = { routeUiState = routeUiState.copy(showPremium = true) },
-                                onToggleAutoPause = viewModel::setAutoPauseEnabled
+                                onToggleAutoPause = { enabled ->
+                                    if (shouldOpenPremiumForAutomationToggle(
+                                            enabled = enabled,
+                                            hasAutomationAccess = state.settings.hasAutomationAccess
+                                        )
+                                    ) {
+                                        routeUiState = routeUiState.copy(showPremium = true)
+                                    } else {
+                                        viewModel.setAutoPauseEnabled(enabled)
+                                    }
+                                }
                             )
 
                             AppRoute.Premium -> PremiumScreen(
-                                isAutoResumePurchased = state.settings.isAutoResumePurchased,
+                                isAutomationPackPurchased = state.settings.isAutomationPackPurchased,
                                 isPremiumSubscribed = state.settings.isPremiumSubscribed,
                                 billingState = premiumBillingState,
                                 onBack = { routeUiState = routeUiState.copy(showPremium = false) },
-                                onBuyAutoResume = {
-                                    premiumBillingManager.launchAutoResumePurchase(this@MainActivity)
+                                onBuyAutomationPack = {
+                                    premiumBillingManager.launchAutomationPackPurchase(this@MainActivity)
                                 },
                                 onSubscribe = {
                                     premiumBillingManager.launchSubscriptionPurchase(this@MainActivity)
@@ -489,3 +509,8 @@ private data class RouteUiState(
         )
     }
 }
+
+internal fun shouldOpenPremiumForAutomationToggle(
+    enabled: Boolean,
+    hasAutomationAccess: Boolean
+): Boolean = enabled && !hasAutomationAccess

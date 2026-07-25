@@ -1,8 +1,10 @@
 package com.example.leanangletracker.ui.premium
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,8 +19,8 @@ class PremiumScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun availableSubscriptionStartsPurchaseAndExplainsBenefits() {
-        var autoResumePurchaseCount = 0
+    fun availableOffersStartPurchasesAndExplainAllBenefits() {
+        var automationPurchaseCount = 0
         var subscribeCount = 0
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val oneTimePrice = "0,99 €"
@@ -29,16 +31,16 @@ class PremiumScreenTest {
         composeRule.setContent {
             MaterialTheme {
                 PremiumScreen(
-                    isAutoResumePurchased = false,
+                    isAutomationPackPurchased = false,
                     isPremiumSubscribed = false,
                     billingState = PremiumBillingState(
-                        isAutoResumeLoading = false,
+                        isAutomationPackLoading = false,
                         isSubscriptionLoading = false,
-                        autoResumePriceLabel = oneTimePrice,
+                        automationPackPriceLabel = oneTimePrice,
                         subscriptionPriceLabel = subscriptionPrice
                     ),
                     onBack = {},
-                    onBuyAutoResume = { autoResumePurchaseCount++ },
+                    onBuyAutomationPack = { automationPurchaseCount++ },
                     onSubscribe = { subscribeCount++ },
                     onRestorePurchases = {},
                     onManageSubscription = {}
@@ -46,17 +48,52 @@ class PremiumScreenTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.premium_auto_resume_title)).assertExists()
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.premium_automation_pack_title)
+        ).assertCountEquals(2)
+        composeRule.onNodeWithText(context.getString(R.string.settings_auto_pause_title)).assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.settings_auto_resume_title)).assertExists()
         composeRule.onNodeWithText(context.getString(R.string.premium_no_ads_title)).assertExists()
         composeRule.onNodeWithText(context.getString(R.string.premium_future_title)).assertExists()
+
         composeRule.onNodeWithText(buyOnceLabel).performScrollTo().performClick()
-        composeRule.runOnIdle { assertEquals(1, autoResumePurchaseCount) }
+        composeRule.runOnIdle { assertEquals(1, automationPurchaseCount) }
         composeRule.onNodeWithText(subscribeLabel).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(1, subscribeCount) }
     }
 
     @Test
-    fun activeSubscriptionCanBeManaged() {
+    fun purchasedPackShowsPurchasedStatus() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            MaterialTheme {
+                PremiumScreen(
+                    isAutomationPackPurchased = true,
+                    isPremiumSubscribed = false,
+                    billingState = PremiumBillingState(
+                        isAutomationPackLoading = false,
+                        isSubscriptionLoading = false
+                    ),
+                    onBack = {},
+                    onBuyAutomationPack = {},
+                    onSubscribe = {},
+                    onRestorePurchases = {},
+                    onManageSubscription = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(
+            context.getString(R.string.premium_single_purchase_owned)
+        ).assertExists()
+        composeRule.onNodeWithText(
+            context.getString(R.string.premium_included_in_subscription)
+        ).assertDoesNotExist()
+    }
+
+    @Test
+    fun activeSubscriptionShowsIncludedStatusAndCanBeManaged() {
         var manageCount = 0
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val manageLabel = context.getString(R.string.premium_manage_subscription)
@@ -64,15 +101,15 @@ class PremiumScreenTest {
         composeRule.setContent {
             MaterialTheme {
                 PremiumScreen(
-                    isAutoResumePurchased = false,
+                    isAutomationPackPurchased = false,
                     isPremiumSubscribed = true,
                     billingState = PremiumBillingState(
-                        isAutoResumeLoading = false,
+                        isAutomationPackLoading = false,
                         isSubscriptionLoading = false,
                         isSubscribed = true
                     ),
                     onBack = {},
-                    onBuyAutoResume = {},
+                    onBuyAutomationPack = {},
                     onSubscribe = {},
                     onRestorePurchases = {},
                     onManageSubscription = { manageCount++ }
@@ -80,6 +117,9 @@ class PremiumScreenTest {
             }
         }
 
+        composeRule.onNodeWithText(
+            context.getString(R.string.premium_included_in_subscription)
+        ).assertExists()
         composeRule.onNodeWithText(manageLabel).performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals(1, manageCount) }
     }

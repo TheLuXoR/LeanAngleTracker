@@ -9,7 +9,7 @@ data class PersistedSettings(
     val historyWindowSeconds: Int,
     val recorderIntervalMs: Int,
     val autoResumeEnabled: Boolean,
-    val isAutoResumePurchased: Boolean,
+    val isAutomationPackPurchased: Boolean,
     val isPremiumSubscribed: Boolean,
     val autoPauseEnabled: Boolean
 )
@@ -44,7 +44,7 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_GYRO_BIAS_Y = "gyro_bias_y"
         const val KEY_GYRO_BIAS_Z = "gyro_bias_z"
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
-        const val KEY_AUTO_REWIND_PURCHASED = "auto_resume_purchased"
+        const val KEY_AUTOMATION_PACK_PURCHASED = "automation_pack_purchased"
         const val KEY_PREMIUM_SUBSCRIBED = "premium_subscribed"
         const val KEY_AUTO_PAUSE = "auto_pause_enabled"
         const val KEY_GAUGE_MAX_LEFT = "gauge_max_left_deg"
@@ -61,9 +61,9 @@ class SettingsStore(applicationContext: Context) {
             recorderIntervalMs = prefs.getInt(KEY_RECORDER_INTERVAL, 200)
                 .coerceIn(recorderIntervalMinMs, recorderIntervalMaxMs),
             autoResumeEnabled = prefs.getBoolean(KEY_AUTO_REWIND, false),
-            isAutoResumePurchased = prefs.getBoolean(KEY_AUTO_REWIND_PURCHASED, false),
+            isAutomationPackPurchased = prefs.getBoolean(KEY_AUTOMATION_PACK_PURCHASED, false),
             isPremiumSubscribed = prefs.getBoolean(KEY_PREMIUM_SUBSCRIBED, false),
-            autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, true)
+            autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, false)
         )
         val gaugeExtrema = LeanExtrema(
             maxLeftDeg = prefs.getFloat(KEY_GAUGE_MAX_LEFT, 0f).takeIf { it.isFinite() && it <= 0f } ?: 0f,
@@ -122,7 +122,7 @@ class SettingsStore(applicationContext: Context) {
             .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
-            .putBoolean(KEY_AUTO_REWIND_PURCHASED, settings.isAutoResumePurchased)
+            .putBoolean(KEY_AUTOMATION_PACK_PURCHASED, settings.isAutomationPackPurchased)
             .putBoolean(KEY_PREMIUM_SUBSCRIBED, settings.isPremiumSubscribed)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)
             .apply()

@@ -67,14 +67,16 @@ internal fun MainViewModel.loadPersistedState() {
             historyWindowSeconds = persistedSettings.historyWindowSeconds,
             recorderIntervalMs = persistedSettings.recorderIntervalMs,
             autoResumeEnabled = persistedSettings.autoResumeEnabled,
-            isAutoResumePurchased = persistedSettings.isAutoResumePurchased,
+            isAutomationPackPurchased = persistedSettings.isAutomationPackPurchased,
             isPremiumSubscribed = persistedSettings.isPremiumSubscribed,
             autoPauseEnabled = persistedSettings.autoPauseEnabled
         )
     }
+    val hasAutomationAccess =
+        persistedSettings.isAutomationPackPurchased || persistedSettings.isPremiumSubscribed
     updateTrackingState {
         it.copy(
-            autoPauseEnabled = persistedSettings.autoPauseEnabled,
+            autoPauseEnabled = persistedSettings.autoPauseEnabled && hasAutomationAccess,
             gaugeExtrema = persistedState.gaugeExtrema
         )
     }
@@ -334,6 +336,7 @@ internal fun MainViewModel.setRecorderIntervalMs(intervalMs: Int) {
 }
 
 internal fun MainViewModel.setAutoResumeEnabled(enabled: Boolean) {
+    if (enabled && !_uiState.value.settings.hasAutomationAccess) return
     updateSettingsState { it.copy(autoResumeEnabled = enabled) }
     autoResumeTimerStartMs = null
     updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
@@ -344,34 +347,70 @@ internal fun MainViewModel.setAutoResumeEnabled(enabled: Boolean) {
 }
 
 internal fun MainViewModel.setAutoPauseEnabled(enabled: Boolean) {
+    if (enabled && !_uiState.value.settings.hasAutomationAccess) return
     updateSettingsState { it.copy(autoPauseEnabled = enabled) }
-    updateTrackingState { it.copy(autoPauseEnabled = enabled) }
+    updateTrackingState {
+        it.copy(autoPauseEnabled = enabled && _uiState.value.settings.hasAutomationAccess)
+    }
     persistSettings()
 }
 
 internal fun MainViewModel.setPremiumEntitlements(
-    isAutoResumePurchased: Boolean,
+    isAutomationPackPurchased: Boolean,
     isPremiumSubscribed: Boolean
 ) {
-    val hadAutoResumeAccess = _uiState.value.settings.run {
-        this.isAutoResumePurchased || this.isPremiumSubscribed
-    }
-    val hasAutoResumeAccess = isAutoResumePurchased || isPremiumSubscribed
+    val previousSettings = _uiState.value.settings
+    val hasAutomationAccess = isAutomationPackPurchased || isPremiumSubscribed
+    val automationDecision = resolveAutomationSettings(
+        hadAccess = previousSettings.hasAutomationAccess,
+        hasAccess = hasAutomationAccess,
+        autoPauseEnabled = previousSettings.autoPauseEnabled,
+        autoResumeEnabled = previousSettings.autoResumeEnabled
+    )
     updateSettingsState {
         it.copy(
-            isAutoResumePurchased = isAutoResumePurchased,
+            isAutomationPackPurchased = isAutomationPackPurchased,
             isPremiumSubscribed = isPremiumSubscribed,
-            autoResumeEnabled = when {
-                !hasAutoResumeAccess -> false
-                !hadAutoResumeAccess -> true
-                else -> it.autoResumeEnabled
-            }
+            autoPauseEnabled = automationDecision.autoPauseEnabled,
+            autoResumeEnabled = automationDecision.autoResumeEnabled
         )
     }
     autoResumeTimerStartMs = null
-    updateTrackingState { it.copy(showAutoResumePremiumShortcut = false) }
-    if (!hasAutoResumeAccess) pausedPointsBuffer.clear()
+    updateTrackingState {
+        it.copy(
+            autoPauseEnabled = automationDecision.autoPauseEnabled && hasAutomationAccess,
+            showAutoResumePremiumShortcut = false
+        )
+    }
+    if (!hasAutomationAccess) pausedPointsBuffer.clear()
     persistSettings()
+}
+
+internal data class AutomationSettingsDecision(
+    val autoPauseEnabled: Boolean,
+    val autoResumeEnabled: Boolean
+)
+
+internal fun resolveAutomationSettings(
+    hadAccess: Boolean,
+    hasAccess: Boolean,
+    autoPauseEnabled: Boolean,
+    autoResumeEnabled: Boolean
+): AutomationSettingsDecision = when {
+    !hasAccess -> AutomationSettingsDecision(
+        autoPauseEnabled = false,
+        autoResumeEnabled = false
+    )
+
+    !hadAccess -> AutomationSettingsDecision(
+        autoPauseEnabled = true,
+        autoResumeEnabled = true
+    )
+
+    else -> AutomationSettingsDecision(
+        autoPauseEnabled = autoPauseEnabled,
+        autoResumeEnabled = autoResumeEnabled
+    )
 }
 
 internal fun MainViewModel.resetGaugeExtrema() {

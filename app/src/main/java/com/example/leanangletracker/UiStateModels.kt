@@ -95,7 +95,7 @@ data class TrackingUiState(
     val showHighRotationWarning: Boolean = false,
     val showAutoResumePremiumShortcut: Boolean = false,
     val recentPoints: List<TrackPoint> = emptyList(),
-    val autoPauseEnabled: Boolean = true,
+    val autoPauseEnabled: Boolean = false,
     val sensorSamplingRate: SensorSamplingRate = SensorSamplingRate.MEDIUM
 )
 
@@ -115,10 +115,13 @@ data class SettingsUiState(
     val recorderIntervalMs: Int = 200,
     val gyroscopeAvailable: Boolean = false,
     val autoResumeEnabled: Boolean = false,
-    val isAutoResumePurchased: Boolean = false,
+    val isAutomationPackPurchased: Boolean = false,
     val isPremiumSubscribed: Boolean = false,
-    val autoPauseEnabled: Boolean = true
-)
+    val autoPauseEnabled: Boolean = false
+) {
+    val hasAutomationAccess: Boolean
+        get() = isAutomationPackPurchased || isPremiumSubscribed
+}
 
 data class UiState(
     val calibration: CalibrationUiState = CalibrationUiState(),

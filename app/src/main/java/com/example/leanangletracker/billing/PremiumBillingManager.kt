@@ -26,16 +26,16 @@ internal enum class PremiumBillingMessage {
 }
 
 internal data class PremiumEntitlements(
-    val isAutoResumePurchased: Boolean = false,
+    val isAutomationPackPurchased: Boolean = false,
     val isPremiumSubscribed: Boolean = false
 )
 
 internal data class PremiumBillingState(
-    val isAutoResumeLoading: Boolean = true,
+    val isAutomationPackLoading: Boolean = true,
     val isSubscriptionLoading: Boolean = true,
-    val isAutoResumePurchased: Boolean = false,
+    val isAutomationPackPurchased: Boolean = false,
     val isSubscribed: Boolean = false,
-    val autoResumePriceLabel: String? = null,
+    val automationPackPriceLabel: String? = null,
     val subscriptionPriceLabel: String? = null,
     val message: PremiumBillingMessage? = null
 )
@@ -47,7 +47,7 @@ internal class PremiumBillingManager(
     private val _state = MutableStateFlow(PremiumBillingState())
     val state: StateFlow<PremiumBillingState> = _state.asStateFlow()
     private var isConnecting = false
-    private var isAutoResumePurchased = false
+    private var isAutomationPackPurchased = false
     private var isPremiumSubscribed = false
     private var isInAppQueryComplete = false
     private var isSubscriptionQueryComplete = false
@@ -99,10 +99,10 @@ internal class PremiumBillingManager(
         queryPurchases(BillingClient.ProductType.SUBS)
     }
 
-    fun launchAutoResumePurchase(activity: Activity) {
+    fun launchAutomationPackPurchase(activity: Activity) {
         launchPurchase(
             activity = activity,
-            productId = BuildConfig.AUTO_RESUME_PRODUCT_ID,
+            productId = BuildConfig.AUTOMATION_PACK_PRODUCT_ID,
             productType = BillingClient.ProductType.INAPP
         )
     }
@@ -121,7 +121,7 @@ internal class PremiumBillingManager(
             BillingClient.BillingResponseCode.USER_CANCELED -> {
                 _state.update {
                     it.copy(
-                        isAutoResumeLoading = false,
+                        isAutomationPackLoading = false,
                         isSubscriptionLoading = false,
                         message = null
                     )
@@ -137,14 +137,18 @@ internal class PremiumBillingManager(
 
     private fun queryAllProductDetails() {
         queryProductDetails(
-            productId = BuildConfig.AUTO_RESUME_PRODUCT_ID,
+            productId = BuildConfig.AUTOMATION_PACK_PRODUCT_ID,
             productType = BillingClient.ProductType.INAPP
         ) { details ->
             val price = details.oneTimePurchaseOfferDetailsList
                 ?.firstOrNull()
                 ?.formattedPrice
             _state.update {
-                it.copy(isAutoResumeLoading = false, autoResumePriceLabel = price, message = null)
+                it.copy(
+                    isAutomationPackLoading = false,
+                    automationPackPriceLabel = price,
+                    message = null
+                )
             }
         }
         queryProductDetails(
@@ -238,7 +242,8 @@ internal class PremiumBillingManager(
                 .flatMap(Purchase::getProducts)
                 .toSet()
             if (productType == BillingClient.ProductType.INAPP) {
-                isAutoResumePurchased = BuildConfig.AUTO_RESUME_PRODUCT_ID in purchasedProductIds
+                isAutomationPackPurchased =
+                    BuildConfig.AUTOMATION_PACK_PRODUCT_ID in purchasedProductIds
                 isInAppQueryComplete = true
             } else {
                 isPremiumSubscribed = BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in purchasedProductIds
@@ -256,8 +261,8 @@ internal class PremiumBillingManager(
         purchases
             .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
             .forEach { purchase ->
-                if (BuildConfig.AUTO_RESUME_PRODUCT_ID in purchase.products) {
-                    isAutoResumePurchased = true
+                if (BuildConfig.AUTOMATION_PACK_PRODUCT_ID in purchase.products) {
+                    isAutomationPackPurchased = true
                 }
                 if (BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in purchase.products) {
                     isPremiumSubscribed = true
@@ -271,15 +276,15 @@ internal class PremiumBillingManager(
     private fun updateEntitlements() {
         _state.update {
             it.copy(
-                isAutoResumeLoading = false,
+                isAutomationPackLoading = false,
                 isSubscriptionLoading = false,
-                isAutoResumePurchased = isAutoResumePurchased,
+                isAutomationPackPurchased = isAutomationPackPurchased,
                 isSubscribed = isPremiumSubscribed
             )
         }
         onEntitlementsChanged(
             PremiumEntitlements(
-                isAutoResumePurchased = isAutoResumePurchased,
+                isAutomationPackPurchased = isAutomationPackPurchased,
                 isPremiumSubscribed = isPremiumSubscribed
             )
         )
@@ -305,7 +310,7 @@ internal class PremiumBillingManager(
     private fun updatePendingMessage(purchases: List<Purchase>) {
         val hasPendingPurchase = purchases.any {
             it.purchaseState == Purchase.PurchaseState.PENDING &&
-                (BuildConfig.AUTO_RESUME_PRODUCT_ID in it.products ||
+                (BuildConfig.AUTOMATION_PACK_PRODUCT_ID in it.products ||
                     BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in it.products)
         }
         _state.update {
@@ -318,7 +323,7 @@ internal class PremiumBillingManager(
     private fun setProductLoading(productType: String, loading: Boolean) {
         _state.update {
             if (productType == BillingClient.ProductType.INAPP) {
-                it.copy(isAutoResumeLoading = loading, message = null)
+                it.copy(isAutomationPackLoading = loading, message = null)
             } else {
                 it.copy(isSubscriptionLoading = loading, message = null)
             }
@@ -329,7 +334,7 @@ internal class PremiumBillingManager(
         _state.update {
             if (productType == BillingClient.ProductType.INAPP) {
                 it.copy(
-                    isAutoResumeLoading = false,
+                    isAutomationPackLoading = false,
                     message = PremiumBillingMessage.PRODUCT_UNAVAILABLE
                 )
             } else {
@@ -344,7 +349,7 @@ internal class PremiumBillingManager(
     private fun showBillingError() {
         _state.update {
             it.copy(
-                isAutoResumeLoading = false,
+                isAutomationPackLoading = false,
                 isSubscriptionLoading = false,
                 message = PremiumBillingMessage.BILLING_ERROR
             )

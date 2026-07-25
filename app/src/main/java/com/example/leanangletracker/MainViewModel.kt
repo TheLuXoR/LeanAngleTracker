@@ -255,7 +255,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
             trackingStarted = state.tracking.trackingStarted,
             isPaused = state.tracking.isPaused,
             autoResumeEnabled = state.settings.autoResumeEnabled,
-            hasPremiumAccess = state.settings.isAutoResumePurchased || state.settings.isPremiumSubscribed,
+            hasPremiumAccess = state.settings.hasAutomationAccess,
             speedKmh = speedKmh,
             nowMs = System.currentTimeMillis(),
             timerStartMs = autoResumeTimerStartMs,

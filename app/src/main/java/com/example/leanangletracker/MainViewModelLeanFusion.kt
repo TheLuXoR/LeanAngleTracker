@@ -66,8 +66,10 @@ private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec
     if (!pose.isUpsideDown) registerRecentLeanSample(timestampNs, leanDeg)
     pruneHistory(timestampNs, _uiState.value.settings.historyWindowSeconds)
 
+    val settings = _uiState.value.settings
+    val effectiveAutoPauseEnabled = settings.autoPauseEnabled && settings.hasAutomationAccess
     if ((pose.isUpsideDown || abs(leanDeg) >= AUTO_PAUSE_LEAN_THRESHOLD) &&
-        _uiState.value.settings.autoPauseEnabled
+        effectiveAutoPauseEnabled
     ) {
         val state = _uiState.value.tracking
         if (state.trackingStarted && !state.isPaused) togglePauseTracking()
@@ -95,7 +97,7 @@ private fun MainViewModel.publishLeanAngle(timestampNs: Long, worldUpDevice: Vec
             isUpsideDown = pose.isUpsideDown,
             showHighRotationWarning = showHighRotationWarning,
             recentPoints = recentRidePoints.toList(),
-            autoPauseEnabled = _uiState.value.settings.autoPauseEnabled
+            autoPauseEnabled = effectiveAutoPauseEnabled
         )
     }
     updatedGaugeExtrema?.let(settingsStore::saveGaugeExtrema)
