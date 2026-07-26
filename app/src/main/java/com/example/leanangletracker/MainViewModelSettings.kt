@@ -5,6 +5,7 @@ import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MAX_MS
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_MIN_MS
 import com.example.leanangletracker.MainViewModelConfig.RECORDER_INTERVAL_STEP_MS
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import com.example.leanangletracker.data.Vec3
@@ -14,6 +15,7 @@ import com.example.leanangletracker.ui.animation.BikeLean
 
 private const val APP_TOUR_VERSION = 1
 private const val APP_TOUR_PAGE_COUNT = 6
+private const val APP_TOUR_TRANSITION_DELAY_MS = 450L
 
 internal fun MainViewModel.checkForUnfinishedRides() {
     viewModelScope.launch(Dispatchers.IO) {
@@ -116,8 +118,10 @@ internal fun MainViewModel.loadPersistedState() {
         it.copy(
             calibrationStep = BikeLean.DONE,
             isCalibrated = true,
-            currentStepIndex = 3,
-            totalSteps = 3,
+            completionPending = false,
+            uprightMeasurementStarted = false,
+            currentStepIndex = 4,
+            totalSteps = 4,
             currentProgress = 1f,
             maximumTiltProgress = 0f,
             errorResId = null
@@ -200,13 +204,30 @@ internal fun MainViewModel.startCalibration() {
         it.copy(
             calibrationStep = BikeLean.UPRIGHT,
             isCalibrated = false,
+            completionPending = false,
+            uprightMeasurementStarted = false,
             currentProgress = 0f,
             maximumTiltProgress = 0f,
             leanDetected = false,
             currentTiltDeg = 0f,
             errorResId = null,
             currentStepIndex = 1,
-            totalSteps = 3
+            totalSteps = 4
+        )
+    }
+}
+
+internal fun MainViewModel.startUprightMeasurement() {
+    val state = _uiState.value.calibration
+    if (state.calibrationStep != BikeLean.UPRIGHT || state.uprightMeasurementStarted) return
+
+    staticCalibrationCollector.reset()
+    pendingStableCalibrationSample = null
+    updateCalibrationState {
+        it.copy(
+            uprightMeasurementStarted = true,
+            currentProgress = 0f,
+            errorResId = null
         )
     }
 }
@@ -230,6 +251,7 @@ internal fun MainViewModel.captureUpright() {
     updateCalibrationState {
         it.copy(
             calibrationStep = BikeLean.LEFT,
+            uprightMeasurementStarted = false,
             currentProgress = 0f,
             maximumTiltProgress = 0f,
             leanDetected = false,
@@ -298,10 +320,12 @@ internal fun MainViewModel.completeAutomaticTiltCalibration(step: BikeLean, capt
                 it.copy(
                     calibrationStep = BikeLean.DONE,
                     isCalibrated = true,
+                    completionPending = true,
                     currentProgress = 1f,
                     maximumTiltProgress = 0f,
                     leanDetected = false,
                     currentTiltDeg = 0f,
+                    currentStepIndex = 4,
                     errorResId = null
                 )
             }
@@ -309,6 +333,41 @@ internal fun MainViewModel.completeAutomaticTiltCalibration(step: BikeLean, capt
         }
 
         else -> Unit
+    }
+}
+
+internal fun MainViewModel.finishCalibrationFlow(startAppTour: Boolean) {
+    val state = _uiState.value
+    if (!state.calibration.completionPending) return
+
+    val shouldStartTour = startAppTour && state.appTour.offerPending
+    if (!shouldStartTour && state.appTour.offerPending) {
+        settingsStore.saveCompletedAppTourVersion(APP_TOUR_VERSION)
+    }
+
+    _uiState.update { current ->
+        current.copy(
+            calibration = current.calibration.copy(completionPending = false),
+            appTour = current.appTour.copy(
+                offerPending = false,
+                isActive = false,
+                currentPage = 0
+            )
+        )
+    }
+
+    if (shouldStartTour) {
+        viewModelScope.launch {
+            delay(APP_TOUR_TRANSITION_DELAY_MS)
+            _uiState.update { current ->
+                current.copy(
+                    appTour = current.appTour.copy(
+                        isActive = true,
+                        currentPage = 0
+                    )
+                )
+            }
+        }
     }
 }
 

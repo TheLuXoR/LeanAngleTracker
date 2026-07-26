@@ -3,6 +3,7 @@ package com.example.leanangletracker.ui.calibration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
@@ -23,6 +28,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,14 +41,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.CalibrationUiState
 import com.example.leanangletracker.R
 import com.example.leanangletracker.sensor.CalibrationTiltProgress
 import com.example.leanangletracker.ui.animation.BikeLean
 import com.example.leanangletracker.ui.animation.CalibrationBikeLeanAnimation
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.theme.TextSecondary
 
 private val CalibrationSuccessGreen = Color(0xFF22C55E)
@@ -50,7 +59,9 @@ private val CalibrationSuccessGreen = Color(0xFF22C55E)
 @Composable
 fun CalibrationWizardLandscape(
     state: CalibrationUiState,
-    onCaptureUpright: () -> Unit
+    offerAppTour: Boolean,
+    onStartUprightMeasurement: () -> Unit,
+    onFinishCalibration: (startAppTour: Boolean) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -65,38 +76,42 @@ fun CalibrationWizardLandscape(
         ) {
             HeaderWithSteps(state)
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    CalibrationBikeLeanAnimation(
-                        modifier = Modifier.fillMaxHeight(0.7f).aspectRatio(1f),
-                        measuredAngleDeg = state.currentTiltDeg,
-                        targetDirection = state.calibrationStep.takeIf {
-                            !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
-                        }
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1.5f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    CalibrationStatusCard(state)
-                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                        CalibrationProgressIndicator(state)
+            if (state.calibrationStep == BikeLean.DONE) {
+                CalibrationCompletionStep(
+                    offerAppTour = offerAppTour,
+                    onFinishCalibration = onFinishCalibration,
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        CalibrationBikeLeanAnimation(
+                            modifier = Modifier.fillMaxHeight(0.7f).aspectRatio(1f),
+                            measuredAngleDeg = state.currentTiltDeg,
+                            targetDirection = state.calibrationStep.takeIf {
+                                !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
+                            },
+                            showReturnUpright = state.leanDetected
+                        )
                     }
 
-                    if (shouldShowActionButton(state)) {
-                        Button(
-                            onClick = onCaptureUpright,
-                            enabled = state.currentProgress >= 1f && state.errorResId == null,
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (state.currentProgress >= 1f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            )
+                    Column(
+                        modifier = Modifier.weight(1.5f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CalibrationStatusCard(state)
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(text = getButtonText(state), fontWeight = FontWeight.Bold)
+                            CalibrationProgressIndicator(state)
+                        }
+                        if (state.calibrationStep == BikeLean.UPRIGHT) {
+                            UprightMeasurementButton(
+                                measurementStarted = state.uprightMeasurementStarted,
+                                onStartMeasurement = onStartUprightMeasurement
+                            )
                         }
                     }
                 }
@@ -108,7 +123,9 @@ fun CalibrationWizardLandscape(
 @Composable
 fun CalibrationWizardPortrait(
     state: CalibrationUiState,
-    onCaptureUpright: () -> Unit
+    offerAppTour: Boolean,
+    onStartUprightMeasurement: () -> Unit,
+    onFinishCalibration: (startAppTour: Boolean) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -123,44 +140,74 @@ fun CalibrationWizardPortrait(
         ) {
             HeaderWithSteps(state)
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.2f)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CalibrationBikeLeanAnimation(
-                    modifier = Modifier.fillMaxSize(0.7f),
-                    measuredAngleDeg = state.currentTiltDeg,
-                    targetDirection = state.calibrationStep.takeIf {
-                        !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
-                    }
+            if (state.calibrationStep == BikeLean.DONE) {
+                CalibrationCompletionStep(
+                    offerAppTour = offerAppTour,
+                    onFinishCalibration = onFinishCalibration,
+                    modifier = Modifier.fillMaxWidth().weight(1f)
                 )
-
+            } else {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    contentAlignment = Alignment.BottomCenter
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.2f)
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    CalibrationProgressIndicator(state)
+                    CalibrationBikeLeanAnimation(
+                        modifier = Modifier.fillMaxSize(0.7f),
+                        measuredAngleDeg = state.currentTiltDeg,
+                        targetDirection = state.calibrationStep.takeIf {
+                            !state.leanDetected && (it == BikeLean.LEFT || it == BikeLean.RIGHT)
+                        },
+                        showReturnUpright = state.leanDetected
+                    )
+
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        CalibrationProgressIndicator(state)
+                    }
                 }
-            }
 
-            CalibrationStatusCard(state)
+                CalibrationStatusCard(state)
 
-            if (shouldShowActionButton(state)) {
-                Button(
-                    onClick = onCaptureUpright,
-                    enabled = state.currentProgress >= 1f && state.errorResId == null,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
-                ) {
-                    Text(text = getButtonText(state), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                if (state.calibrationStep == BikeLean.UPRIGHT) {
+                    UprightMeasurementButton(
+                        measurementStarted = state.uprightMeasurementStarted,
+                        onStartMeasurement = onStartUprightMeasurement
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UprightMeasurementButton(
+    measurementStarted: Boolean,
+    onStartMeasurement: () -> Unit
+) {
+    Button(
+        onClick = onStartMeasurement,
+        enabled = !measurementStarted,
+        modifier = Modifier.fillMaxWidth().height(64.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+    ) {
+        Text(
+            text = stringResource(
+                if (measurementStarted) {
+                    R.string.calibration_action_measurement_running
+                } else {
+                    R.string.calibration_action_start_measurement
+                }
+            ),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }
 
@@ -172,30 +219,90 @@ private fun HeaderWithSteps(state: CalibrationUiState) {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        if (state.calibrationStep != BikeLean.DONE) {
-            Text(
-                text = stringResource(
-                    R.string.calibration_step_indicator,
-                    state.currentStepIndex,
-                    state.totalSteps
-                ),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Text(
+            text = stringResource(
+                R.string.calibration_step_indicator,
+                state.currentStepIndex,
+                state.totalSteps
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (state.calibrationStep == BikeLean.DONE) {
+                CalibrationSuccessGreen
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
-private fun shouldShowActionButton(state: CalibrationUiState): Boolean {
-    return state.calibrationStep == BikeLean.UPRIGHT
-}
-
 @Composable
-private fun getButtonText(state: CalibrationUiState): String {
-    return when (state.calibrationStep) {
-        BikeLean.UPRIGHT -> stringResource(R.string.calibration_action_fix_center)
-        else -> ""
+private fun CalibrationCompletionStep(
+    offerAppTour: Boolean,
+    onFinishCalibration: (startAppTour: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.testTag("calibrationCompletionStep"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(104.dp)
+                .clip(CircleShape)
+                .background(CalibrationSuccessGreen.copy(alpha = 0.16f))
+                .border(2.dp, CalibrationSuccessGreen.copy(alpha = 0.75f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = CalibrationSuccessGreen,
+                modifier = Modifier.size(68.dp)
+            )
+        }
+        Text(
+            text = stringResource(R.string.calibration_success_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = stringResource(
+                if (offerAppTour) {
+                    R.string.calibration_success_body_tour
+                } else {
+                    R.string.calibration_success_body_ready
+                }
+            ),
+            modifier = Modifier.widthIn(max = 520.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextSecondary,
+            textAlign = TextAlign.Center
+        )
+        Button(
+            onClick = { onFinishCalibration(offerAppTour) },
+            modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp).height(60.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = CalibrationSuccessGreen)
+        ) {
+            Text(
+                text = stringResource(
+                    if (offerAppTour) {
+                        R.string.calibration_action_start_tour
+                    } else {
+                        R.string.calibration_action_continue
+                    }
+                ),
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+        if (offerAppTour) {
+            TextButton(onClick = { onFinishCalibration(false) }) {
+                Text(stringResource(R.string.calibration_action_skip_tour))
+            }
+        }
     }
 }
 
@@ -204,7 +311,7 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
     val backgroundColor by animateColorAsState(
         targetValue = when {
             state.errorResId != null -> Color(0xFF8B0000).copy(alpha = 0.2f)
-            state.calibrationStep == BikeLean.DONE -> Color.Green.copy(alpha = 0.1f)
+            state.leanDetected -> CalibrationSuccessGreen.copy(alpha = 0.20f)
             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         },
         label = "statusColor"
@@ -213,8 +320,26 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (state.leanDetected) {
+                    Modifier.testTag("calibrationReturnUprightFeedback")
+                } else {
+                    Modifier
+                }
+            )
             .clip(RoundedCornerShape(20.dp))
             .background(backgroundColor)
+            .then(
+                if (state.leanDetected) {
+                    Modifier.border(
+                        width = 2.dp,
+                        color = CalibrationSuccessGreen.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -231,8 +356,13 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
             }
         }
 
-        if (state.calibrationStep == BikeLean.DONE) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Green, modifier = Modifier.padding(bottom = 4.dp))
+        if (state.leanDetected) {
+            Icon(
+                Icons.Default.ArrowUpward,
+                contentDescription = null,
+                tint = CalibrationSuccessGreen,
+                modifier = Modifier.size(36.dp)
+            )
         }
 
         val instructionText = when {
@@ -247,12 +377,16 @@ private fun CalibrationStatusCard(state: CalibrationUiState) {
             text = instructionText,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold
+            fontWeight = if (state.leanDetected) FontWeight.ExtraBold else FontWeight.Bold,
+            color = if (state.leanDetected) CalibrationSuccessGreen else Color.Unspecified
         )
 
         Text(
             text = when {
                 state.leanDetected -> stringResource(R.string.calibration_hint_return_upright)
+                state.calibrationStep == BikeLean.UPRIGHT &&
+                    !state.uprightMeasurementStarted ->
+                    stringResource(R.string.calibration_hint_upright_ready)
                 state.calibrationStep == BikeLean.UPRIGHT -> stringResource(R.string.calibration_hint_upright)
                 state.calibrationStep == BikeLean.LEFT -> stringResource(R.string.calibration_hint_left)
                 state.calibrationStep == BikeLean.RIGHT -> stringResource(R.string.calibration_hint_right)
@@ -303,21 +437,31 @@ private fun CalibrationProgressIndicator(state: CalibrationUiState) {
             )
         }
 
-        if (state.calibrationStep != BikeLean.DONE) {
-            Text(
-                text = when {
-                    state.calibrationStep == BikeLean.UPRIGHT -> stringResource(
-                        R.string.calibration_progress_label,
-                        (state.currentProgress * 100).toInt()
-                    )
-                    state.leanDetected -> stringResource(R.string.calibration_status_return_upright)
-                    else -> stringResource(R.string.calibration_status_auto_capture)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (state.leanDetected || state.currentProgress > 0.8f) Color.Green else TextSecondary,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+        Text(
+            text = when {
+                state.calibrationStep == BikeLean.UPRIGHT &&
+                    !state.uprightMeasurementStarted ->
+                    stringResource(R.string.calibration_status_ready_to_measure)
+                state.calibrationStep == BikeLean.UPRIGHT -> stringResource(
+                    R.string.calibration_progress_label,
+                    (state.currentProgress * 100).toInt()
+                )
+                state.leanDetected -> stringResource(R.string.calibration_status_return_upright)
+                else -> stringResource(R.string.calibration_status_auto_capture)
+            },
+            style = if (state.leanDetected) {
+                MaterialTheme.typography.labelLarge
+            } else {
+                MaterialTheme.typography.labelSmall
+            },
+            fontWeight = if (state.leanDetected) FontWeight.ExtraBold else FontWeight.Normal,
+            color = if (state.leanDetected || state.currentProgress > 0.8f) {
+                CalibrationSuccessGreen
+            } else {
+                TextSecondary
+            },
+            modifier = Modifier.padding(top = if (state.leanDetected) 8.dp else 4.dp)
+        )
     }
 }
 
@@ -369,6 +513,58 @@ private fun CalibrationProgressBar(
             brush = fillBrush,
             size = Size(fillWidth, size.height),
             cornerRadius = cornerRadius
+        )
+    }
+}
+
+@Preview(name = "Kalibrierung – Messung starten", showBackground = true, heightDp = 780)
+@Composable
+private fun CalibrationStartMeasurementPreview() {
+    LeanAngleTrackerTheme {
+        CalibrationWizardPortrait(
+            state = CalibrationUiState(),
+            offerAppTour = true,
+            onStartUprightMeasurement = {},
+            onFinishCalibration = {}
+        )
+    }
+}
+
+@Preview(name = "Kalibrierung – wieder aufrichten", showBackground = true, heightDp = 780)
+@Composable
+private fun CalibrationReturnPreview() {
+    LeanAngleTrackerTheme {
+        CalibrationWizardPortrait(
+            state = CalibrationUiState(
+                calibrationStep = BikeLean.LEFT,
+                currentProgress = 0.5f,
+                maximumTiltProgress = 0.78f,
+                leanDetected = true,
+                currentTiltDeg = -11f,
+                currentStepIndex = 2
+            ),
+            offerAppTour = true,
+            onStartUprightMeasurement = {},
+            onFinishCalibration = {}
+        )
+    }
+}
+
+@Preview(name = "Kalibrierung – erfolgreich", showBackground = true, heightDp = 780)
+@Composable
+private fun CalibrationCompletionPreview() {
+    LeanAngleTrackerTheme {
+        CalibrationWizardPortrait(
+            state = CalibrationUiState(
+                calibrationStep = BikeLean.DONE,
+                isCalibrated = true,
+                completionPending = true,
+                currentProgress = 1f,
+                currentStepIndex = 4
+            ),
+            offerAppTour = true,
+            onStartUprightMeasurement = {},
+            onFinishCalibration = {}
         )
     }
 }

@@ -1,9 +1,13 @@
 package com.example.leanangletracker.ui.animation
 
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -94,7 +98,8 @@ duration: Float = 600f
 fun CalibrationBikeLeanAnimation(
     modifier: Modifier = Modifier,
     measuredAngleDeg: Float,
-    targetDirection: BikeLean? = null
+    targetDirection: BikeLean? = null,
+    showReturnUpright: Boolean = false
 ) {
     val angle by animateFloatAsState(
         targetValue = (measuredAngleDeg * CALIBRATION_ANGLE_VISUAL_SCALE).coerceIn(-45f, 45f),
@@ -103,10 +108,16 @@ fun CalibrationBikeLeanAnimation(
     )
 
     Box(modifier = modifier) {
-        if (targetDirection == BikeLean.LEFT || targetDirection == BikeLean.RIGHT) {
+        if (showReturnUpright) {
+            CalibrationReturnUprightGuidance(
+                modifier = Modifier.fillMaxSize(),
+                measuredAngleDeg = measuredAngleDeg
+            )
+        } else if (targetDirection == BikeLean.LEFT || targetDirection == BikeLean.RIGHT) {
             CalibrationDirectionArrow(
                 modifier = Modifier.fillMaxSize(),
-                direction = targetDirection
+                direction = targetDirection,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
             )
         }
 
@@ -120,12 +131,53 @@ fun CalibrationBikeLeanAnimation(
 }
 
 @Composable
+private fun CalibrationReturnUprightGuidance(
+    modifier: Modifier,
+    measuredAngleDeg: Float
+) {
+    val pulseTransition = rememberInfiniteTransition(label = "returnUprightPulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "returnUprightAlpha"
+    )
+    val successColor = Color(0xFF22C55E)
+    val returnDirection = if (measuredAngleDeg <= 0f) BikeLean.RIGHT else BikeLean.LEFT
+
+    Canvas(modifier = modifier) {
+        val centerX = size.width / 2f
+        drawLine(
+            color = successColor.copy(alpha = pulseAlpha * 0.65f),
+            start = Offset(centerX, size.height * 0.17f),
+            end = Offset(centerX, size.height * 0.88f),
+            strokeWidth = size.minDimension * 0.018f,
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = successColor.copy(alpha = pulseAlpha * 0.18f),
+            radius = size.minDimension * 0.38f,
+            center = Offset(centerX, size.height * 0.56f),
+            style = Stroke(width = size.minDimension * 0.035f)
+        )
+    }
+
+    CalibrationDirectionArrow(
+        modifier = modifier,
+        direction = returnDirection,
+        color = successColor.copy(alpha = pulseAlpha)
+    )
+}
+
+@Composable
 private fun CalibrationDirectionArrow(
     modifier: Modifier,
-    direction: BikeLean
+    direction: BikeLean,
+    color: Color
 ) {
-    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-
     Canvas(modifier = modifier) {
         val radius = size.minDimension * 0.34f
         val center = Offset(size.width / 2f, size.height * 0.62f)

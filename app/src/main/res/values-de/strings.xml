@@ -4,7 +4,8 @@
     <string name="instructions_sensor_missing">Beschleunigungssensor fehlt</string>
 
     <string name="calibration_title">Kalibrierung</string>
-    <string name="calibration_action_fix_center">Mitte fixieren</string>
+    <string name="calibration_action_start_measurement">Messung starten</string>
+    <string name="calibration_action_measurement_running">Messung läuft…</string>
     <string name="calibration_step_indicator">Schritt %1$d von %2$d</string>
     <string name="calibration_error_unstable">Halte Motorrad und Handy ruhig, bis die Messung abgeschlossen ist.</string>
     <string name="calibration_error_too_little">Die Bewegung wurde nicht eindeutig erkannt. Wiederhole sie nur, wenn du dich dabei sicher fühlst, und gehe nie über deine Wohlfühlgrenze.</string>
@@ -17,14 +18,22 @@
     <string name="calibration_instr_return_upright">Neigung erkannt – wieder aufrichten</string>
     <string name="calibration_instr_ready">Bereit!</string>
 
-    <string name="calibration_hint_upright">Motorrad aufrecht und ruhig halten, bis die Messung 100 Prozent erreicht.</string>
+    <string name="calibration_hint_upright_ready">Richte das Motorrad auf und starte dann die Messung. Die Touch-Bewegung passiert, bevor die Sensoraufnahme beginnt.</string>
+    <string name="calibration_hint_upright">Halte das Motorrad aufrecht und ruhig. Die Mitte wird automatisch übernommen – Hände weg vom Handy.</string>
     <string name="calibration_hint_left">Langsam nur so weit nach links neigen, wie du es sicher halten kannst, dann wieder aufrichten. Das Handy nicht berühren. Du bist für sicheren Stand und dein Handeln selbst verantwortlich.</string>
     <string name="calibration_hint_right">Langsam nur so weit nach rechts neigen, wie du es sicher halten kannst, dann wieder aufrichten. Das Handy nicht berühren. Du bist für sicheren Stand und dein Handeln selbst verantwortlich.</string>
-    <string name="calibration_hint_return_upright">Richte das Motorrad kontrolliert wieder auf. Die App übernimmt die Neigung automatisch.</string>
+    <string name="calibration_hint_return_upright">Richte das Motorrad jetzt kontrolliert wieder auf und halte es ruhig. Die App übernimmt die Neigung automatisch.</string>
     <string name="calibration_hint_ready">Gute Fahrt!</string>
     <string name="calibration_progress_label">Fortschritt: %1$d%%</string>
-    <string name="calibration_status_auto_capture">Automatische Erkennung – kein Tastendruck nötig</string>
-    <string name="calibration_status_return_upright">Neigung erkannt – aufrichten und ruhig halten</string>
+    <string name="calibration_status_auto_capture">Automatische Übernahme – Hände weg vom Handy</string>
+    <string name="calibration_status_ready_to_measure">Bereit – starte die Messung, wenn das Motorrad aufrecht steht</string>
+    <string name="calibration_status_return_upright">JETZT AUFRICHTEN UND RUHIG HALTEN</string>
+    <string name="calibration_success_title">Kalibrierung erfolgreich</string>
+    <string name="calibration_success_body_tour">Handy und Motorrad sind ausgerichtet. Als Nächstes zeigt dir eine kurze Tour die wichtigsten Funktionen.</string>
+    <string name="calibration_success_body_ready">Handy und Motorrad sind ausgerichtet. Die Schräglagenmessung ist bereit.</string>
+    <string name="calibration_action_start_tour">App-Tour starten</string>
+    <string name="calibration_action_skip_tour">Tour überspringen</string>
+    <string name="calibration_action_continue">Weiter zur App</string>
     <string name="calibration_error_wrong_direction">Die andere Richtung wurde erkannt. Richte das Motorrad zuerst wieder auf.</string>
 
     <string name="screen_title_lean_angle">Schräglage</string>

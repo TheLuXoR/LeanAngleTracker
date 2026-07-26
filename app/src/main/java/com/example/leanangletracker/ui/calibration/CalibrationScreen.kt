@@ -12,7 +12,9 @@ import com.example.leanangletracker.CalibrationUiState
 @Composable
 internal fun CalibrationScreen(
     calibrationState: CalibrationUiState,
-    onCaptureUpright: () -> Unit,
+    offerAppTour: Boolean,
+    onStartUprightMeasurement: () -> Unit,
+    onFinishCalibration: (startAppTour: Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -26,12 +28,16 @@ internal fun CalibrationScreen(
         if (isLandscape) {
             CalibrationWizardLandscape(
                 state = calibrationState,
-                onCaptureUpright = onCaptureUpright
+                offerAppTour = offerAppTour,
+                onStartUprightMeasurement = onStartUprightMeasurement,
+                onFinishCalibration = onFinishCalibration
             )
         } else {
             CalibrationWizardPortrait(
                 state = calibrationState,
-                onCaptureUpright = onCaptureUpright
+                offerAppTour = offerAppTour,
+                onStartUprightMeasurement = onStartUprightMeasurement,
+                onFinishCalibration = onFinishCalibration
             )
         }
     }

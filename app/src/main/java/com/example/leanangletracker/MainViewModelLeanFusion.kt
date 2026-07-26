@@ -176,6 +176,8 @@ private fun MainViewModel.updateStaticCalibrationProgress(timestampNs: Long) {
     }
 
     if (step == BikeLean.UPRIGHT) {
+        if (!_uiState.value.calibration.uprightMeasurementStarted) return
+
         val sampleProgress = staticCalibrationCollector.update(
             timestampNs = timestampNs,
             accelerationMs2 = filteredGravity,
@@ -192,6 +194,9 @@ private fun MainViewModel.updateStaticCalibrationProgress(timestampNs: Long) {
                 currentTiltDeg = 0f,
                 errorResId = null
             )
+        }
+        if (sampleProgress.readySample != null) {
+            captureUpright()
         }
         return
     }

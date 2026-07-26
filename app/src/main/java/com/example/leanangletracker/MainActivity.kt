@@ -144,7 +144,8 @@ class MainActivity : ComponentActivity() {
                         showPremium = routeUiState.showPremium,
                         showHistory = routeUiState.showHistory,
                         selectedRideId = routeUiState.selectedRideId,
-                        isCalibrated = state.calibration.isCalibrated
+                        isCalibrated = state.calibration.isCalibrated,
+                        calibrationCompletionPending = state.calibration.completionPending
                     )
 
                     // Keep screen on while on the tracking screen
@@ -183,7 +184,13 @@ class MainActivity : ComponentActivity() {
                                 initialState.screen.screenEntryDirection
                             }
 
-                            if (effectiveDirection == ScreenDirection.HORIZONTAL) {
+                            if (
+                                initialState is AppRoute.Calibration &&
+                                targetState is AppRoute.Tracking
+                            ) {
+                                fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 100)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 300))
+                            } else if (effectiveDirection == ScreenDirection.HORIZONTAL) {
                                 slideInHorizontally(
                                     animationSpec = tween(300),
                                     initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth }
@@ -291,7 +298,9 @@ class MainActivity : ComponentActivity() {
 
                             AppRoute.Calibration -> CalibrationScreen(
                                 calibrationState = state.calibration,
-                                onCaptureUpright = viewModel::captureUpright
+                                offerAppTour = state.appTour.offerPending,
+                                onStartUprightMeasurement = viewModel::startUprightMeasurement,
+                                onFinishCalibration = viewModel::finishCalibrationFlow
                             )
 
                             AppRoute.Settings -> SettingsScreen(
@@ -442,11 +451,19 @@ class MainActivity : ComponentActivity() {
         }
     }.toTypedArray()
 
-    private fun resolveRoute(introStage: IntroStage, showSettings: Boolean, showPremium: Boolean, showHistory: Boolean, selectedRideId: Long?, isCalibrated: Boolean): AppRoute {
+    private fun resolveRoute(
+        introStage: IntroStage,
+        showSettings: Boolean,
+        showPremium: Boolean,
+        showHistory: Boolean,
+        selectedRideId: Long?,
+        isCalibrated: Boolean,
+        calibrationCompletionPending: Boolean
+    ): AppRoute {
         if (introStage != IntroStage.DONE) {
             return AppRoute.Intro(introStage)
         }
-        if (!isCalibrated) {
+        if (!isCalibrated || calibrationCompletionPending) {
             return AppRoute.Calibration
         }
         if (selectedRideId != null) {
