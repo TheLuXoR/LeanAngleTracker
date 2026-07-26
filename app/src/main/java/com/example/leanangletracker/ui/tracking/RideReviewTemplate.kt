@@ -262,21 +262,19 @@ private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) ->
     val stats = remember(rideSession) {
         val points = rideSession.points
         if (points.isEmpty()) return@remember null
+        val maxLeanPoint = findMaxLeanPoint(points) ?: return@remember null
 
         // Use pre-calculated stats if available (non-zero)
         if (rideSession.trackLengthMeters > 0) {
-            val maxAbsLean = max(abs(rideSession.maxLeftDeg), abs(rideSession.maxRightDeg))
             val avgSpeed = if (points.isNotEmpty()) rideSession.sumSpeedKmh / points.size else 0f
             
-            // Still need to find indices for "Jump to" functionality
-            val maxLeanIdx = points.indexOfFirst { abs(it.leanAngleDeg - rideSession.maxLeftDeg) < 0.1f || abs(it.leanAngleDeg - rideSession.maxRightDeg) < 0.1f }.coerceAtLeast(0)
             val maxSpeed = points.maxOfOrNull { it.speedKmh } ?: 0f
             val maxSpeedIdx = points.indexOfFirst { it.speedKmh == maxSpeed }.coerceAtLeast(0)
 
             RideStats(
                 distanceKm = rideSession.trackLengthMeters / 1000.0,
-                maxLeanIndex = maxLeanIdx,
-                maxLeanVal = maxAbsLean,
+                maxLeanIndex = maxLeanPoint.index,
+                maxLeanVal = maxLeanPoint.absoluteAngleDeg,
                 maxSpeedIndex = maxSpeedIdx,
                 maxSpeedVal = maxSpeed,
                 avgSpeed = avgSpeed
@@ -284,7 +282,6 @@ private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) ->
         } else {
             // Fallback for legacy rides: Manual calculation
             var totalDist = 0.0
-            var maxLeanIdx = 0
             var maxSpeedIdx = 0
             var speedSum = 0.0
             
@@ -296,15 +293,14 @@ private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) ->
                     val y = Math.toRadians(p2.latitude - p.latitude)
                     totalDist += sqrt(x * x + y * y) * 6371000.0
                 }
-                if (abs(p.leanAngleDeg) > abs(points[maxLeanIdx].leanAngleDeg)) maxLeanIdx = i
                 if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
                 speedSum += p.speedKmh
             }
 
             RideStats(
                 distanceKm = totalDist / 1000.0,
-                maxLeanIndex = maxLeanIdx,
-                maxLeanVal = abs(points[maxLeanIdx].leanAngleDeg),
+                maxLeanIndex = maxLeanPoint.index,
+                maxLeanVal = maxLeanPoint.absoluteAngleDeg,
                 maxSpeedIndex = maxSpeedIdx,
                 maxSpeedVal = points[maxSpeedIdx].speedKmh,
                 avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
