@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Lean Angle Tracker</string>
+    <string name="map_attribution">© OpenStreetMap contributors</string>
 
     <string name="screen_title_lean_angle">Lean Angle</string>
     <string name="history_title">Lean</string>

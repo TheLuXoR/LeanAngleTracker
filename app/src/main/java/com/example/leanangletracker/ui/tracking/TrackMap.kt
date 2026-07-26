@@ -4,17 +4,32 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Point
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
+import com.example.leanangletracker.map.OpenStreetMapConfig
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -33,6 +48,7 @@ internal fun OSMTrackMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val points = rideSession.points
 
     var isFirstPositioning by remember(rideSession.startedAtMs) {
@@ -41,7 +57,7 @@ internal fun OSMTrackMap(
 
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(OpenStreetMapConfig.tileSource)
             setMultiTouchControls(true)
             controller.setZoom(16.0)
 
@@ -102,32 +118,49 @@ internal fun OSMTrackMap(
 
     val lastSelectedIndex = remember { mutableIntStateOf(-1) }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = modifier,
-        update = { map ->
-            if (points.isEmpty()) return@AndroidView
-            val p = points.getOrNull(selectedIndex) ?: points.last()
-            val geoPoint = GeoPoint(p.latitude, p.longitude)
-            
-            if (marker.position?.latitude != geoPoint.latitude || marker.position?.longitude != geoPoint.longitude) {
-                marker.position = geoPoint
-                // Performance: Only invalidate if the index changed ( scrubbing )
-                if (lastSelectedIndex.intValue != selectedIndex) {
-                    map.invalidate()
-                    lastSelectedIndex.intValue = selectedIndex
+    Box(modifier = modifier) {
+        AndroidView(
+            factory = { mapView },
+            modifier = Modifier.fillMaxSize(),
+            update = { map ->
+                if (points.isEmpty()) return@AndroidView
+                val p = points.getOrNull(selectedIndex) ?: points.last()
+                val geoPoint = GeoPoint(p.latitude, p.longitude)
+
+                if (marker.position?.latitude != geoPoint.latitude || marker.position?.longitude != geoPoint.longitude) {
+                    marker.position = geoPoint
+                    // Performance: Only invalidate if the index changed ( scrubbing )
+                    if (lastSelectedIndex.intValue != selectedIndex) {
+                        map.invalidate()
+                        lastSelectedIndex.intValue = selectedIndex
+                    }
+                }
+
+                if (isFirstPositioning) {
+                    map.controller.setCenter(geoPoint)
+                    isFirstPositioning = false
+                    onZoomChanged(map.zoomLevelDouble)
+                } else {
+                    keepPointAwayFromBorder(map, geoPoint)
                 }
             }
+        )
 
-            if (isFirstPositioning) {
-                map.controller.setCenter(geoPoint)
-                isFirstPositioning = false
-                onZoomChanged(map.zoomLevelDouble)
-            } else {
-                keepPointAwayFromBorder(map, geoPoint)
-            }
-        }
-    )
+        Text(
+            text = stringResource(R.string.map_attribution),
+            color = ComposeColor(0xFF263238),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(ComposeColor.White.copy(alpha = 0.9f))
+                .clickable {
+                    uriHandler.openUri(OpenStreetMapConfig.COPYRIGHT_URL)
+                }
+                .padding(horizontal = 6.dp, vertical = 3.dp)
+        )
+    }
 }
 
 /**

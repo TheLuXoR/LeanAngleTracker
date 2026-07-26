@@ -49,9 +49,8 @@ import com.example.leanangletracker.ui.tracking.TrackingPermissionDialog
 import com.example.leanangletracker.ui.calibration.CalibrationScreen
 import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
-import org.osmdroid.config.Configuration
-import android.preference.PreferenceManager
 import com.example.leanangletracker.billing.PremiumBillingManager
+import com.example.leanangletracker.map.OpenStreetMapConfig
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -61,9 +60,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // Initialize osmdroid configuration (Cache, User-Agent)
-        Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
-        Configuration.getInstance().userAgentValue = packageName
+        OpenStreetMapConfig.initialize(this)
 
         premiumBillingManager = PremiumBillingManager(this) { entitlements ->
             viewModel.setPremiumEntitlements(
