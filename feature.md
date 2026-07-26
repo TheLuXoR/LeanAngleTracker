@@ -27,6 +27,12 @@ This file tracks planned features and improvements. When developing a feature, r
 
 ## Feature History (For Context)
 
+### Interactive App Tour
+- **Status**: Implemented
+- **Flow**: The gauge demonstrates a zero-to-right-to-left measurement before requiring a long-press reset. Recording combines start, the real rainbow GPS-waiting state, pause, resume, and stop/save in one guided sequence.
+- **Ride details**: The history preview includes V-max and lets the user tap both V-max and max lean to preview jumping to important route points.
+- **Navigation**: The tour has five pages. Next remains disabled on interactive pages until the demonstrated actions are completed; Skip is always available.
+
 ### Premium Features and Play Billing
 - **Status**: Implemented
 - **Products**: `auto_resume_unlock` is a permanent one-time Auto Resume unlock; `premium_subscription` is the subscription that unlocks all premium features and removes ads.

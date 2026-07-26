@@ -21,6 +21,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -41,7 +45,6 @@ private data class AppTourPage(
 private val appTourPages = listOf(
     AppTourPage(R.string.app_tour_gauge_title, R.string.app_tour_gauge_body),
     AppTourPage(R.string.app_tour_recording_title, R.string.app_tour_recording_body),
-    AppTourPage(R.string.app_tour_pause_title, R.string.app_tour_pause_body),
     AppTourPage(R.string.app_tour_live_data_title, R.string.app_tour_live_data_body),
     AppTourPage(R.string.app_tour_history_title, R.string.app_tour_history_body),
     AppTourPage(R.string.app_tour_manage_title, R.string.app_tour_manage_body)
@@ -81,6 +84,11 @@ internal fun AppTourDialogs(
     val page = appTourPages[pageIndex]
     val isLastPage = pageIndex == appTourPages.lastIndex
     val bodyScrollState = rememberScrollState()
+    var completedInteractivePages by remember(state.isActive) {
+        mutableStateOf(emptySet<Int>())
+    }
+    val canAdvance = pageIndex !in INTERACTIVE_APP_TOUR_PAGES ||
+        pageIndex in completedInteractivePages
 
     LaunchedEffect(pageIndex) {
         bodyScrollState.scrollTo(0)
@@ -108,6 +116,10 @@ internal fun AppTourDialogs(
                 ) {
                     AppTourPagePreview(
                         pageIndex = pageIndex,
+                        isCompleted = pageIndex in completedInteractivePages,
+                        onInteractionCompleted = {
+                            completedInteractivePages += pageIndex
+                        },
                         modifier = Modifier.weight(1.2f).fillMaxHeight()
                     )
                     Column(
@@ -123,6 +135,7 @@ internal fun AppTourDialogs(
                         AppTourNavigation(
                             pageIndex = pageIndex,
                             isLastPage = isLastPage,
+                            canAdvance = canAdvance,
                             onPreviousPage = onPreviousPage,
                             onNextPage = onNextPage,
                             onFinish = onFinish
@@ -138,6 +151,10 @@ internal fun AppTourDialogs(
                     AppTourHeader(pageIndex = pageIndex, page = page)
                     AppTourPagePreview(
                         pageIndex = pageIndex,
+                        isCompleted = pageIndex in completedInteractivePages,
+                        onInteractionCompleted = {
+                            completedInteractivePages += pageIndex
+                        },
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     )
                     Text(
@@ -151,6 +168,7 @@ internal fun AppTourDialogs(
                     AppTourNavigation(
                         pageIndex = pageIndex,
                         isLastPage = isLastPage,
+                        canAdvance = canAdvance,
                         onPreviousPage = onPreviousPage,
                         onNextPage = onNextPage,
                         onFinish = onFinish
@@ -190,6 +208,7 @@ private fun AppTourHeader(pageIndex: Int, page: AppTourPage) {
 private fun AppTourNavigation(
     pageIndex: Int,
     isLastPage: Boolean,
+    canAdvance: Boolean,
     onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
     onFinish: () -> Unit
@@ -211,8 +230,13 @@ private fun AppTourNavigation(
             Text(stringResource(R.string.app_tour_skip))
         }
 
-        Button(onClick = if (isLastPage) onFinish else onNextPage) {
+        Button(
+            onClick = if (isLastPage) onFinish else onNextPage,
+            enabled = canAdvance
+        ) {
             Text(stringResource(if (isLastPage) R.string.app_tour_finish else R.string.app_tour_next))
         }
     }
 }
+
+private val INTERACTIVE_APP_TOUR_PAGES = setOf(0, 1, 3)

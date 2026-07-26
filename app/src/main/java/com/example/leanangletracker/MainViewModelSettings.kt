@@ -13,8 +13,8 @@ import com.example.leanangletracker.sensor.BikeFrameFailure
 import com.example.leanangletracker.sensor.BikeFrameMath
 import com.example.leanangletracker.ui.animation.BikeLean
 
-private const val APP_TOUR_VERSION = 1
-private const val APP_TOUR_PAGE_COUNT = 6
+private const val APP_TOUR_VERSION = 2
+private const val APP_TOUR_PAGE_COUNT = 5
 private const val APP_TOUR_TRANSITION_DELAY_MS = 450L
 
 internal fun MainViewModel.checkForUnfinishedRides() {
