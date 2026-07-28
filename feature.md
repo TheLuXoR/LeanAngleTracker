@@ -27,6 +27,17 @@ This file tracks planned features and improvements. When developing a feature, r
 
 ## Feature History (For Context)
 
+### GPX Ride Import
+- **Status**: Implemented
+- **Overview**: The ride history imports standard GPX 1.0/1.1 tracks as permanently stored rides and opens them in the existing detail review.
+- **Compatibility**: LeanAngleTracker speed and lean extensions round-trip through the shared GPX codec; missing speed is derived from track distance and time where possible.
+- **Safety**: Parsing is streaming and bounded to 250,000 track points, while Room stores each imported ride atomically.
+
+### Track Review Quick Navigation
+- **Status**: Implemented
+- **Overview**: A full-track scrubber jumps directly to any recorded point while keeping the complete route stable on the map.
+- **Detail navigation**: Dragging either detail graph returns to a centered map view and smoothly restores the last detail zoom (default: 17).
+
 ### Interactive App Tour
 - **Status**: Implemented
 - **Flow**: The gauge demonstrates a zero-to-right-to-left measurement before requiring a long-press reset. Recording combines start, the real rainbow GPS-waiting state, pause, resume, and stop/save in one guided sequence.

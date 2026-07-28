@@ -88,6 +88,11 @@ class MainActivity : ComponentActivity() {
                         viewModel.onLocationPermissionResult(locationGranted)
                         if (locationGranted) viewModel.startTracking()
                     }
+                    val gpxImportLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        uri?.let(viewModel::importGpx)
+                    }
 
                     if (showTrackingPermissionDialog) {
                         TrackingPermissionDialog(
@@ -365,6 +370,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onBack = { routeUiState = routeUiState.copy(showHistory = false) },
                                 onDeleteRide = viewModel::deleteRide,
+                                onImportGpx = { gpxImportLauncher.launch("*/*") },
+                                importState = state.gpxImport,
+                                onImportErrorConsumed = viewModel::consumeGpxImportError,
                                 onCombineRides = viewModel::combineRides
                             )
 

@@ -8,6 +8,9 @@
     <string name="history_max_left">Left: %1$.1f°</string>
     <string name="history_max_right">Right: %1$.1f°</string>
     <string name="history_max_speed">Max: %1$d km/h</string>
+    <string name="track_review_start">Start</string>
+    <string name="track_review_end">Finish</string>
+    <string name="track_review_scrubber_description">Position on the complete track</string>
 
     <string name="settings_title">Settings</string>
     <string name="action_back">Back</string>
@@ -39,6 +42,7 @@
     <string name="ride_history_selected_count">%1$d selected</string>
     <string name="ride_history_title">Ride History</string>
     <string name="ride_history_action_combine">Combine</string>
+    <string name="ride_history_action_import_gpx">Import GPX</string>
     <string name="ride_history_empty">No rides recorded yet.</string>
     <string name="ride_history_selected">Selected</string>
     <string name="ride_history_name_placeholder">Ride Name</string>
@@ -50,6 +54,12 @@
     <string name="ride_history_action_details">Details</string>
     <string name="ride_history_default_name">Ride %1$d</string>
     <string name="ride_history_export_filename">ride-%1$d.gpx</string>
+    <string name="ride_history_import_default_name">Imported ride</string>
+    <string name="ride_history_import_error_invalid">The selected file is not a valid GPX file.</string>
+    <string name="ride_history_import_error_empty">The GPX file does not contain valid track points.</string>
+    <string name="ride_history_import_error_too_large">The GPX file contains more than 250,000 track points.</string>
+    <string name="ride_history_import_error_read">The selected file could not be read.</string>
+    <string name="ride_history_import_error_save">The GPX ride could not be saved.</string>
 
     <string name="intro_legal_title">Important Notice</string>
     <string name="intro_attach_title">Mount Phone</string>

@@ -39,6 +39,8 @@ internal fun LeanHistoryGraph(
     isScrollable: Boolean = false,
     showCursorLine: Boolean = true,
     scrollSensitivity: Float = 0.2f,
+    onScrollStarted: (() -> Unit)? = null,
+    onScrollFinished: (() -> Unit)? = null,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -145,6 +147,9 @@ internal fun LeanHistoryGraph(
                         if (isScrollable && onSelectedIndexChange != null && selectedIndex != null) {
                             Modifier.draggable(
                                 orientation = Orientation.Horizontal,
+                                onDragStarted = {
+                                    onScrollStarted?.invoke()
+                                },
                                 state = rememberDraggableState { delta ->
                                     showScrollHint = false
                                     var effectiveDelta = -delta * scrollSensitivity
@@ -164,6 +169,7 @@ internal fun LeanHistoryGraph(
                                     }
                                 },
                                 onDragStopped = { velocity ->
+                                    onScrollFinished?.invoke()
                                     scope.launch {
                                         if (scrollOffset.value < minBound || scrollOffset.value > maxBound) {
                                             scrollOffset.animateTo(

@@ -26,7 +26,14 @@ fun calculateRouteDescription(context: Context, session: RideSession): String? {
     for (i in 0 until points.size - distSkip step distSkip) {
         val p1 = points[i]
         val p2 = points[i + distSkip]
-        totalDistanceMeters += fastDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
+        if (p1.lapIndex == p2.lapIndex) {
+            totalDistanceMeters += fastDistanceMeters(
+                p1.latitude,
+                p1.longitude,
+                p2.latitude,
+                p2.longitude
+            )
+        }
     }
     
     val distanceKm = totalDistanceMeters / 1000.0

@@ -32,6 +32,8 @@ internal fun SpeedHistoryGraph(
     visibleRangePoints: Int? = null,
     isScrollable: Boolean = false,
     scrollSensitivity: Float = 0.2f,
+    onScrollStarted: (() -> Unit)? = null,
+    onScrollFinished: (() -> Unit)? = null,
     onSelectedIndexChange: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -130,6 +132,9 @@ internal fun SpeedHistoryGraph(
                     if (isScrollable && onSelectedIndexChange != null && selectedIndex != null) {
                         Modifier.draggable(
                             orientation = Orientation.Horizontal,
+                            onDragStarted = {
+                                onScrollStarted?.invoke()
+                            },
                             state = rememberDraggableState { delta ->
                                 var effectiveDelta = -delta * scrollSensitivity
                                 val current = scrollOffset.value
@@ -147,6 +152,7 @@ internal fun SpeedHistoryGraph(
                                 }
                             },
                             onDragStopped = { velocity ->
+                                onScrollFinished?.invoke()
                                 scope.launch {
                                     if (scrollOffset.value < minBound || scrollOffset.value > maxBound) {
                                         scrollOffset.animateTo(

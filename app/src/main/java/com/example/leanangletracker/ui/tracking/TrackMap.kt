@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Point
+import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.doOnLayout
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
@@ -38,33 +42,50 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import kotlin.math.abs
 
+private const val MAP_ZOOM_ANIMATION_DURATION_MS = 800L
+internal const val TRACK_MAP_TAG = "trackMap"
+internal const val TRACK_MAP_ATTRIBUTION_TAG = "trackMapAttribution"
+
 @Composable
 internal fun OSMTrackMap(
     rideSession: RideSession,
     selectedIndex: Int,
     onMapPointSelected: (Int) -> Unit,
     onZoomChanged: (Double) -> Unit = {},
-    forceCenterKey: Any? = null,
+    navigationMode: TrackMapNavigationMode = TrackMapNavigationMode.IDLE,
+    navigationRequestKey: Int = 0,
+    detailZoom: Double = DEFAULT_TRACK_DETAIL_ZOOM,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val overviewPaddingPx = with(LocalDensity.current) { 48.dp.roundToPx() }
     val points = rideSession.points
+    val currentOnZoomChanged by rememberUpdatedState(onZoomChanged)
 
     var isFirstPositioning by remember(rideSession.startedAtMs) {
         mutableStateOf(true)
     }
 
     val mapView = remember {
-        MapView(context).apply {
+        object : MapView(context) {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> parent?.requestDisallowInterceptTouchEvent(true)
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
+                }
+                return super.dispatchTouchEvent(event)
+            }
+        }.apply {
             setTileSource(OpenStreetMapConfig.tileSource)
             setMultiTouchControls(true)
-            controller.setZoom(16.0)
+            controller.setZoom(DEFAULT_TRACK_DETAIL_ZOOM)
 
             addMapListener(object : MapListener {
                 override fun onScroll(event: ScrollEvent?): Boolean = false
                 override fun onZoom(event: ZoomEvent?): Boolean {
-                    event?.let { onZoomChanged(it.zoomLevel) }
+                    event?.let { currentOnZoomChanged(it.zoomLevel) }
                     return false
                 }
             })
@@ -108,41 +129,67 @@ internal fun OSMTrackMap(
         onDispose { mapView.onPause() }
     }
 
-    LaunchedEffect(forceCenterKey) {
-        if (forceCenterKey != null) {
-            points.getOrNull(selectedIndex)?.let {
-                mapView.controller.animateTo(GeoPoint(it.latitude, it.longitude))
+    val lastSelectedIndex = remember { mutableIntStateOf(-1) }
+
+    LaunchedEffect(navigationRequestKey, navigationMode, points) {
+        if (navigationRequestKey <= 0 || points.isEmpty()) return@LaunchedEffect
+
+        mapView.doOnLayout {
+            when (navigationMode) {
+                TrackMapNavigationMode.OVERVIEW -> {
+                    fitTrackOverview(
+                        map = mapView,
+                        points = points,
+                        paddingPx = overviewPaddingPx
+                    )
+                }
+
+                TrackMapNavigationMode.DETAIL -> {
+                    points.getOrNull(selectedIndex)?.let { point ->
+                        mapView.controller.setCenter(GeoPoint(point.latitude, point.longitude))
+                        animateMapZoom(mapView, detailZoom)
+                    }
+                }
+
+                TrackMapNavigationMode.IDLE -> Unit
             }
         }
     }
 
-    val lastSelectedIndex = remember { mutableIntStateOf(-1) }
-
     Box(modifier = modifier) {
         AndroidView(
             factory = { mapView },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(TRACK_MAP_TAG),
             update = { map ->
                 if (points.isEmpty()) return@AndroidView
                 val p = points.getOrNull(selectedIndex) ?: points.last()
                 val geoPoint = GeoPoint(p.latitude, p.longitude)
+                val selectionChanged = lastSelectedIndex.intValue != selectedIndex
 
                 if (marker.position?.latitude != geoPoint.latitude || marker.position?.longitude != geoPoint.longitude) {
                     marker.position = geoPoint
-                    // Performance: Only invalidate if the index changed ( scrubbing )
-                    if (lastSelectedIndex.intValue != selectedIndex) {
+                    // Performance: Only invalidate if the index changed (scrubbing).
+                    if (selectionChanged) {
                         map.invalidate()
-                        lastSelectedIndex.intValue = selectedIndex
                     }
                 }
 
                 if (isFirstPositioning) {
                     map.controller.setCenter(geoPoint)
                     isFirstPositioning = false
-                    onZoomChanged(map.zoomLevelDouble)
-                } else {
-                    keepPointAwayFromBorder(map, geoPoint)
+                    currentOnZoomChanged(map.zoomLevelDouble)
+                } else if (selectionChanged) {
+                    when (navigationMode) {
+                        TrackMapNavigationMode.OVERVIEW -> Unit
+                        TrackMapNavigationMode.DETAIL -> {
+                            map.controller.setCenter(geoPoint)
+                        }
+                        TrackMapNavigationMode.IDLE -> keepPointAwayFromBorder(map, geoPoint)
+                    }
                 }
+                lastSelectedIndex.intValue = selectedIndex
             }
         )
 
@@ -152,7 +199,7 @@ internal fun OSMTrackMap(
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(6.dp)
+                .testTag(TRACK_MAP_ATTRIBUTION_TAG)
                 .clip(RoundedCornerShape(4.dp))
                 .background(ComposeColor.White.copy(alpha = 0.9f))
                 .clickable {
@@ -160,6 +207,73 @@ internal fun OSMTrackMap(
                 }
                 .padding(horizontal = 6.dp, vertical = 3.dp)
         )
+    }
+}
+
+private fun fitTrackOverview(
+    map: MapView,
+    points: List<TrackPoint>,
+    paddingPx: Int
+) {
+    if (points.isEmpty()) return
+
+    var minLatitude = Double.POSITIVE_INFINITY
+    var maxLatitude = Double.NEGATIVE_INFINITY
+    var minLongitude = Double.POSITIVE_INFINITY
+    var maxLongitude = Double.NEGATIVE_INFINITY
+
+    points.forEach { point ->
+        if (!point.latitude.isFinite() || !point.longitude.isFinite()) return@forEach
+        minLatitude = minOf(minLatitude, point.latitude)
+        maxLatitude = maxOf(maxLatitude, point.latitude)
+        minLongitude = minOf(minLongitude, point.longitude)
+        maxLongitude = maxOf(maxLongitude, point.longitude)
+    }
+
+    if (!minLatitude.isFinite() || !minLongitude.isFinite()) return
+
+    val center = GeoPoint(
+        (minLatitude + maxLatitude) / 2.0,
+        (minLongitude + maxLongitude) / 2.0
+    )
+    val latitudeSpan = maxLatitude - minLatitude
+    val longitudeSpan = maxLongitude - minLongitude
+
+    if (latitudeSpan < 1e-7 && longitudeSpan < 1e-7) {
+        map.controller.animateTo(
+            center,
+            DEFAULT_TRACK_DETAIL_ZOOM,
+            MAP_ZOOM_ANIMATION_DURATION_MS
+        )
+        return
+    }
+
+    val minimumSpan = 1e-5
+    val latitudePadding = if (latitudeSpan < minimumSpan) (minimumSpan - latitudeSpan) / 2.0 else 0.0
+    val longitudePadding = if (longitudeSpan < minimumSpan) (minimumSpan - longitudeSpan) / 2.0 else 0.0
+    val bounds = BoundingBox(
+        maxLatitude + latitudePadding,
+        maxLongitude + longitudePadding,
+        minLatitude - latitudePadding,
+        minLongitude - longitudePadding
+    )
+    map.zoomToBoundingBox(
+        bounds,
+        true,
+        paddingPx,
+        map.maxZoomLevel,
+        MAP_ZOOM_ANIMATION_DURATION_MS
+    )
+}
+
+private fun animateMapZoom(map: MapView, targetZoom: Double) {
+    val safeTargetZoom = if (targetZoom.isFinite()) {
+        targetZoom.coerceIn(map.minZoomLevel, map.maxZoomLevel)
+    } else {
+        DEFAULT_TRACK_DETAIL_ZOOM
+    }
+    if (abs(map.zoomLevelDouble - safeTargetZoom) > 0.01) {
+        map.controller.zoomTo(safeTargetZoom, MAP_ZOOM_ANIMATION_DURATION_MS)
     }
 }
 

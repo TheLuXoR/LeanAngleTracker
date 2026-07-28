@@ -6,13 +6,31 @@ import com.example.leanangletracker.RideSummary
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.data.RideRepository
 import com.example.leanangletracker.data.RideStats
+import com.example.leanangletracker.data.gpx.GpxCodec
 import com.example.leanangletracker.ui.tracking.calculateRouteDescription
+import java.io.InputStream
 
 class RideSessionUseCases(
     private val application: Application,
     private val rideRepository: RideRepository
 ) {
     suspend fun loadRideHistory(): List<RideSummary> = rideRepository.loadRideHistory()
+
+    suspend fun importGpx(
+        inputStream: InputStream,
+        sourceFileName: String?,
+        fallbackName: String,
+        importedAtMs: Long
+    ): RideSession {
+        val parsedSession = GpxCodec.decode(
+            inputStream = inputStream,
+            sourceFileName = sourceFileName,
+            fallbackName = fallbackName,
+            importedAtMs = importedAtMs
+        )
+        val routeDescription = calculateRouteDescription(application, parsedSession)
+        return rideRepository.importRide(parsedSession.copy(routeDescription = routeDescription))
+    }
 
     /**
      * Finds a ride that was started but not properly finished.

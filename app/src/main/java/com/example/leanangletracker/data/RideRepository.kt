@@ -4,16 +4,21 @@ import android.content.Context
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.TrackPoint
 import com.example.leanangletracker.RideSummary
+import androidx.room.withTransaction
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class RideRepository(context: Context) {
+class RideRepository internal constructor(
+    private val db: RideDatabase
+) {
+    constructor(context: Context) : this(RideDatabase.getDatabase(context))
+
     companion object {
         private const val POINT_BATCH_SIZE = 20
         private const val POINT_BATCH_INTERVAL_MS = 2_000L
+        private const val IMPORT_POINT_BATCH_SIZE = 1_000
     }
 
-    private val db = RideDatabase.getDatabase(context)
     private val rideDao = db.rideDao()
     private val pointBufferLock = Mutex()
     private val pointBuffersByRideId = mutableMapOf<Long, MutableList<TrackPointEntity>>()
@@ -224,6 +229,55 @@ class RideRepository(context: Context) {
 
     suspend fun deleteRide(rideId: Long) {
         rideDao.deleteRide(rideId)
+    }
+
+    /**
+     * Stores a parsed GPX ride and all of its points as one atomic operation.
+     */
+    suspend fun importRide(session: RideSession): RideSession = db.withTransaction {
+        require(session.points.isNotEmpty()) { "An imported ride must contain track points." }
+
+        val rideId = rideDao.insertRide(
+            RideEntity(
+                startTime = session.startedAtMs,
+                endTime = session.endedAtMs,
+                name = session.name,
+                routeDescription = session.routeDescription,
+                isFinished = true,
+                accumulatedTimeMs = session.accumulatedTimeMs,
+                trackLengthMeters = session.trackLengthMeters,
+                maxLeftDeg = session.maxLeftDeg,
+                maxRightDeg = session.maxRightDeg,
+                sumSpeedKmh = session.sumSpeedKmh,
+                sumAbsLeanDeg = session.sumAbsLeanDeg,
+                pointCount = session.points.size
+            )
+        )
+
+        session.points.chunked(IMPORT_POINT_BATCH_SIZE).forEach { pointBatch ->
+            require(
+                pointBatch.all {
+                    it.latitude.isFinite() &&
+                        it.longitude.isFinite() &&
+                        it.speedKmh.isFinite() &&
+                        it.leanAngleDeg.isFinite()
+                }
+            ) { "Imported track points must contain finite values." }
+            rideDao.insertPoints(
+                pointBatch.map { point ->
+                    TrackPointEntity(
+                        rideId = rideId,
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                        speed = point.speedKmh,
+                        leanAngle = point.leanAngleDeg,
+                        timestamp = point.timestampMs
+                    )
+                }
+            )
+        }
+
+        session.copy(rideId = rideId)
     }
 }
 

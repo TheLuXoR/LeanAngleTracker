@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,12 +34,22 @@ internal fun RideReviewTemplate(
     rideSession: RideSession,
     modifier: Modifier = Modifier
 ) {
-    var selectedIndex by remember(rideSession.startedAtMs) { 
+    var selectedIndex by rememberSaveable(rideSession.rideId, rideSession.startedAtMs) {
         mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) 
     }
-    
-    var centerTrigger by remember { mutableIntStateOf(0) }
-    var currentZoom by remember { mutableDoubleStateOf(16.0) }
+
+    var mapNavigationMode by remember(rideSession.rideId, rideSession.startedAtMs) {
+        mutableStateOf(TrackMapNavigationMode.IDLE)
+    }
+    var mapNavigationRequestKey by remember(rideSession.rideId, rideSession.startedAtMs) {
+        mutableIntStateOf(0)
+    }
+    var isOverviewScrubbing by remember { mutableStateOf(false) }
+    var isDetailScrolling by remember { mutableStateOf(false) }
+    var currentZoom by remember { mutableDoubleStateOf(DEFAULT_TRACK_DETAIL_ZOOM) }
+    var lastDetailZoom by rememberSaveable(rideSession.rideId, rideSession.startedAtMs) {
+        mutableDoubleStateOf(DEFAULT_TRACK_DETAIL_ZOOM)
+    }
     
     if (rideSession.points.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
@@ -65,10 +76,37 @@ internal fun RideReviewTemplate(
     val selectedPoint = rideSession.points[selectedIndex]
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    val requestMapNavigation: (TrackMapNavigationMode) -> Unit = { mode ->
+        mapNavigationMode = mode
+        mapNavigationRequestKey++
+    }
+
+    val onMapZoomChanged: (Double) -> Unit = { zoom ->
+        currentZoom = zoom
+        if (mapNavigationMode != TrackMapNavigationMode.OVERVIEW) {
+            lastDetailZoom = zoom
+        }
+    }
+
+    val onOverviewIndexChange: (Int) -> Unit = { index ->
+        if (!isOverviewScrubbing) {
+            isOverviewScrubbing = true
+            requestMapNavigation(TrackMapNavigationMode.OVERVIEW)
+        }
+        selectedIndex = index.coerceIn(rideSession.points.indices)
+    }
+
+    val onDetailScrollStarted: () -> Unit = {
+        if (!isDetailScrolling) {
+            isDetailScrolling = true
+            requestMapNavigation(TrackMapNavigationMode.DETAIL)
+        }
+    }
+
     val onStatSelected: (Int) -> Unit = { index ->
         if (index in rideSession.points.indices) {
             selectedIndex = index
-            centerTrigger++
+            requestMapNavigation(TrackMapNavigationMode.DETAIL)
         }
     }
 
@@ -87,9 +125,14 @@ internal fun RideReviewTemplate(
                     OSMTrackMap(
                         rideSession = rideSession,
                         selectedIndex = selectedIndex,
-                        onMapPointSelected = { selectedIndex = it },
-                        onZoomChanged = { currentZoom = it },
-                        forceCenterKey = centerTrigger.takeIf { it > 0 },
+                        onMapPointSelected = {
+                            mapNavigationMode = TrackMapNavigationMode.IDLE
+                            selectedIndex = it
+                        },
+                        onZoomChanged = onMapZoomChanged,
+                        navigationMode = mapNavigationMode,
+                        navigationRequestKey = mapNavigationRequestKey,
+                        detailZoom = lastDetailZoom,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -109,6 +152,14 @@ internal fun RideReviewTemplate(
                     StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
                 }
 
+                TrackOverviewScrubber(
+                    pointCount = rideSession.points.size,
+                    selectedIndex = selectedIndex,
+                    onSelectedIndexChange = onOverviewIndexChange,
+                    onScrubFinished = { isOverviewScrubbing = false },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LeanHistoryGraph(
                         values = allLeanValues,
@@ -116,6 +167,8 @@ internal fun RideReviewTemplate(
                         visibleRangePoints = visibleRangeCount,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         isScrollable = true,
+                        onScrollStarted = onDetailScrollStarted,
+                        onScrollFinished = { isDetailScrolling = false },
                         onSelectedIndexChange = { selectedIndex = it }
                     )
 
@@ -125,6 +178,8 @@ internal fun RideReviewTemplate(
                         visibleRangePoints = visibleRangeCount,
                         modifier = Modifier.weight(0.7f).fillMaxWidth(),
                         isScrollable = true,
+                        onScrollStarted = onDetailScrollStarted,
+                        onScrollFinished = { isDetailScrolling = false },
                         onSelectedIndexChange = { selectedIndex = it }
                     )
                 }
@@ -141,12 +196,25 @@ internal fun RideReviewTemplate(
                 OSMTrackMap(
                     rideSession = rideSession,
                     selectedIndex = selectedIndex,
-                    onMapPointSelected = { selectedIndex = it },
-                    onZoomChanged = { currentZoom = it },
-                    forceCenterKey = centerTrigger.takeIf { it > 0 },
+                    onMapPointSelected = {
+                        mapNavigationMode = TrackMapNavigationMode.IDLE
+                        selectedIndex = it
+                    },
+                    onZoomChanged = onMapZoomChanged,
+                    navigationMode = mapNavigationMode,
+                    navigationRequestKey = mapNavigationRequestKey,
+                    detailZoom = lastDetailZoom,
                     modifier = Modifier.fillMaxSize()
                 )
             }
+
+            TrackOverviewScrubber(
+                pointCount = rideSession.points.size,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChange = onOverviewIndexChange,
+                onScrubFinished = { isOverviewScrubbing = false },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -164,6 +232,8 @@ internal fun RideReviewTemplate(
                 visibleRangePoints = visibleRangeCount,
                 modifier = Modifier.fillMaxWidth().height(180.dp),
                 isScrollable = true,
+                onScrollStarted = onDetailScrollStarted,
+                onScrollFinished = { isDetailScrolling = false },
                 onSelectedIndexChange = { selectedIndex = it }
             )
 
@@ -173,6 +243,8 @@ internal fun RideReviewTemplate(
                 visibleRangePoints = visibleRangeCount,
                 modifier = Modifier.fillMaxWidth().height(140.dp),
                 isScrollable = true,
+                onScrollStarted = onDetailScrollStarted,
+                onScrollFinished = { isDetailScrolling = false },
                 onSelectedIndexChange = { selectedIndex = it }
             )
         }

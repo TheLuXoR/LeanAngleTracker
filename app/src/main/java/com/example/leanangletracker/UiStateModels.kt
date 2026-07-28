@@ -112,6 +112,11 @@ data class AppTourUiState(
     val currentPage: Int = 0
 )
 
+data class GpxImportUiState(
+    val isImporting: Boolean = false,
+    @param:StringRes val errorResId: Int? = null
+)
+
 data class SettingsUiState(
     val historyWindowSeconds: Int = 20,
     val recorderIntervalMs: Int = 200,
@@ -133,6 +138,7 @@ data class UiState(
     val rideHistory: List<RideSummary> = emptyList(),
     val expandedRides: Map<Long, RideSession> = emptyMap(),
     val lastSavedRideId: Long? = null,
+    val gpxImport: GpxImportUiState = GpxImportUiState(),
     val offerExtendSession: RideSession? = null,
     val pendingRecovery: RideSession? = null,
     val appTour: AppTourUiState = AppTourUiState()

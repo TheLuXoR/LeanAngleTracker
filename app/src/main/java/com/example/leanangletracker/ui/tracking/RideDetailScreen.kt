@@ -20,6 +20,7 @@ import androidx.core.content.FileProvider
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSession
 import com.example.leanangletracker.RideSummary
+import com.example.leanangletracker.data.gpx.GpxCodec
 import com.example.leanangletracker.ui.components.admob.loadInterstitial
 import com.example.leanangletracker.ui.components.admob.showInterstitial
 import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
@@ -192,26 +193,11 @@ private fun shareGpxFile(context: Context, session: RideSession) {
 }
 
 private fun buildGpxString(context: Context, rideSession: RideSession): String {
-    return buildString {
-        appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-        appendLine("<gpx version=\"1.1\" creator=\"LeanAngleTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">")
-        appendLine("  <trk>")
-        appendLine("    <name>${rideSession.name ?: context.getString(R.string.ride_history_default_name, rideSession.startedAtMs)}</name>")
-        appendLine("    <trkseg>")
-        rideSession.points.forEach { point ->
-            appendLine("      <trkpt lat=\"${point.latitude}\" lon=\"${point.longitude}\">")
-            appendLine("        <time>${iso8601(point.timestampMs)}</time>")
-            appendLine("        <extensions>")
-            appendLine("          <speedKmh>${point.speedKmh}</speedKmh>")
-            appendLine("          <leanDeg>${point.leanAngleDeg}</leanDeg>")
-            appendLine("        </extensions>")
-            appendLine("      </trkpt>")
-        }
-        appendLine("    </trkseg>")
-        appendLine("  </trk>")
-        appendLine("</gpx>")
-    }
+    return GpxCodec.encode(
+        rideSession = rideSession,
+        defaultName = context.getString(
+            R.string.ride_history_default_name,
+            rideSession.startedAtMs
+        )
+    )
 }
-
-private fun iso8601(timestampMs: Long): String =
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(timestampMs))

@@ -15,12 +15,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.leanangletracker.GpxImportUiState
 import com.example.leanangletracker.R
 import com.example.leanangletracker.RideSummary
+import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 import com.example.leanangletracker.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.*
@@ -33,11 +37,23 @@ internal fun RideHistoryScreen(
     onSelectRide: (Long) -> Unit,
     onBack: () -> Unit,
     onDeleteRide: (RideSummary) -> Unit,
+    onImportGpx: () -> Unit,
+    importState: GpxImportUiState = GpxImportUiState(),
+    onImportErrorConsumed: () -> Unit = {},
     onCombineRides: (List<RideSummary>) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var selectedSessionIds by remember { mutableStateOf(setOf<Long>()) }
     val isSelectionMode = selectedSessionIds.isNotEmpty()
+    val importErrorMessage = importState.errorResId?.let { stringResource(it) }
+
+    LaunchedEffect(importState.errorResId, importErrorMessage) {
+        if (importErrorMessage != null) {
+            snackbarHostState.showSnackbar(importErrorMessage)
+            onImportErrorConsumed()
+        }
+    }
 
     BackHandler(isSelectionMode) {
         selectedSessionIds = emptySet()
@@ -76,15 +92,65 @@ internal fun RideHistoryScreen(
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.ride_history_action_combine))
                         }
+                    } else if (!isSelectionMode) {
+                        IconButton(
+                            onClick = onImportGpx,
+                            enabled = !importState.isImporting,
+                            modifier = Modifier.testTag(RIDE_HISTORY_IMPORT_ACTION_TAG)
+                        ) {
+                            if (importState.isImporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.UploadFile,
+                                    contentDescription = stringResource(
+                                        R.string.ride_history_action_import_gpx
+                                    )
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (rideHistory.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.ride_history_empty), style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    stringResource(R.string.ride_history_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextSecondary
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onImportGpx,
+                    enabled = !importState.isImporting,
+                    modifier = Modifier.testTag(RIDE_HISTORY_EMPTY_IMPORT_ACTION_TAG)
+                ) {
+                    if (importState.isImporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(Icons.Default.UploadFile, contentDescription = null)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.ride_history_action_import_gpx))
+                }
             }
         } else {
             LazyColumn(
@@ -234,3 +300,31 @@ private fun RideHistoryItem(
 
 private fun formatDate(timestampMs: Long): String =
     SimpleDateFormat("EEE, MMM d, HH:mm", Locale.getDefault()).format(Date(timestampMs))
+
+internal const val RIDE_HISTORY_IMPORT_ACTION_TAG = "ride_history_import_action"
+internal const val RIDE_HISTORY_EMPTY_IMPORT_ACTION_TAG = "ride_history_empty_import_action"
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 800)
+@Composable
+private fun RideHistoryScreenPreview() {
+    LeanAngleTrackerTheme {
+        RideHistoryScreen(
+            rideHistory = listOf(
+                RideSummary(
+                    rideId = 1L,
+                    startedAtMs = 1_720_000_000_000L,
+                    endedAtMs = 1_720_003_600_000L,
+                    name = "Alpenrunde",
+                    pointCount = 1_200,
+                    trackLengthMeters = 82_400f,
+                    maxLeftDeg = -42f,
+                    maxRightDeg = 47f
+                )
+            ),
+            onSelectRide = {},
+            onBack = {},
+            onDeleteRide = {},
+            onImportGpx = {}
+        )
+    }
+}
