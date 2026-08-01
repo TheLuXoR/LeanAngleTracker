@@ -1,6 +1,7 @@
 package com.example.leanangletracker.ui.animation
 
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
@@ -24,17 +25,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 
 enum class BikeLean(val angle: Float) {
@@ -49,28 +53,37 @@ private val SineEaseInOut = Easing { fraction ->
 }
 
 private const val CALIBRATION_ANGLE_VISUAL_SCALE = 3.25f
+private const val INTRO_BIKE_FADE_IN_FRACTION = 0.25f
 
 
+@Preview(widthDp = 288, heightDp = 288)
 @Composable
 fun IntroBikeLeanAnimation(
 modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-duration: Float = 600f
+duration: Float = 600f,
+startAnimation: Boolean = true,
 ) {
 
-    var start by remember { mutableStateOf(false) }
+    var roadRevealStarted by remember { mutableStateOf(false) }
+    var bikeAnimationStarted by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        start = true
+        roadRevealStarted = true
+    }
+    LaunchedEffect(startAnimation) {
+        if (startAnimation) {
+            bikeAnimationStarted = true
+        }
     }
     val scale by animateFloatAsState(
-        targetValue = if (start) 1f else 0.2f,
+        targetValue = if (bikeAnimationStarted) 1f else 0.2f,
         animationSpec = keyframes {
             durationMillis= duration.toInt()
         }
     )
 
     val angle by animateFloatAsState(
-        targetValue = if (start) BikeLean.UPRIGHT.angle else BikeLean.RIGHT.angle,
+        targetValue = if (bikeAnimationStarted) BikeLean.UPRIGHT.angle else BikeLean.RIGHT.angle,
         animationSpec = keyframes {
             durationMillis= duration.toInt()
             BikeLean.RIGHT.angle    at (duration*0.3f).toInt()
@@ -79,19 +92,44 @@ duration: Float = 600f
     )
 
     val offset by animateOffsetAsState(
-        targetValue = if (start)Offset(0f,0.0f) else Offset(0.5f, -2.15f),
+        targetValue = if (bikeAnimationStarted)Offset(0f,0.0f) else Offset(0.5f, -2.15f),
         animationSpec = keyframes {
             durationMillis= duration.toInt()
             Offset(-0.2f, -0.5f) at (duration*0.4f).toInt()
             Offset(-0.05f, -0.1f) at (duration*0.7f).toInt()
         }
     )
+    val bikeAlpha by animateFloatAsState(
+        targetValue = if (bikeAnimationStarted) 1f else 0f,
+        animationSpec = keyframes {
+            durationMillis = duration.toInt()
+            1f at (duration * INTRO_BIKE_FADE_IN_FRACTION).toInt()
+        },
+        label = "introBikeAlpha"
+    )
+    val roadRevealProgress by animateFloatAsState(
+        targetValue = if (roadRevealStarted) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = (duration * 1.25f).toInt(),
+            easing = FastOutSlowInEasing
+        ),
+        label = "introRoadReveal"
+    )
 
-    val primary = MaterialTheme.colorScheme.primary
     val onSurface = MaterialTheme.colorScheme.onSurface
 
-    Road(modifier = modifier, onSurface = onSurface)
-    Bike(modifier = modifier, scale = scale, angle= angle, offset = offset)
+    Road(
+        modifier = modifier,
+        onSurface = onSurface,
+        revealProgress = roadRevealProgress
+    )
+    Bike(
+        modifier = modifier,
+        scale = scale,
+        angle = angle,
+        offset = offset,
+        alpha = bikeAlpha
+    )
 }
 
 @Composable
@@ -240,7 +278,8 @@ private fun Bike(
     angle: Float = 0f,
     offset: Offset = Offset(0f,0f),
     transformOrigin: TransformOrigin = TransformOrigin.Center,
-    primary: Color = MaterialTheme.colorScheme.primary
+    primary: Color = MaterialTheme.colorScheme.primary,
+    alpha: Float = 1f,
 ) {
 
 
@@ -249,6 +288,7 @@ private fun Bike(
             scaleX = scale
             scaleY = scale
             rotationZ = angle
+            this.alpha = alpha
             this.transformOrigin = transformOrigin
         }
     ) {
@@ -345,6 +385,7 @@ private fun Bike(
 private fun Road(
     modifier: Modifier = Modifier,
     onSurface: Color = Color.Black,
+    revealProgress: Float = 1f,
 ) {
     Canvas(modifier = modifier) {
         fun x(p: Float) = p * size.width
@@ -373,18 +414,34 @@ private fun Road(
             close()
         }
 
-        drawPath(
-            path = roadPath,
-            brush = Brush.verticalGradient(
-                listOf(
-                    onSurface.copy(alpha = 0.15f),
-                    onSurface.copy(alpha = 0.9f),
-                    onSurface.copy(alpha = 0.9f),
-                    onSurface.copy(alpha = 0.9f),
-                    onSurface.copy(alpha = 0.0f)
+        val startRadius = size.minDimension / 3f
+        val endRadius = hypot(size.width, size.height) / 2f
+        val revealRadius = startRadius + (endRadius - startRadius) * revealProgress
+        val revealPath = Path().apply {
+            addOval(
+                Rect(
+                    left = size.width / 2f - revealRadius,
+                    top = size.height / 2f - revealRadius,
+                    right = size.width / 2f + revealRadius,
+                    bottom = size.height / 2f + revealRadius
                 )
             )
-        )
+        }
+
+        clipPath(revealPath) {
+            drawPath(
+                path = roadPath,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        onSurface.copy(alpha = 0.15f),
+                        onSurface.copy(alpha = 0.9f),
+                        onSurface.copy(alpha = 0.9f),
+                        onSurface.copy(alpha = 0.9f),
+                        onSurface.copy(alpha = 0.0f)
+                    )
+                )
+            )
+        }
     }
 }
 

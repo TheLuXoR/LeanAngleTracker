@@ -69,8 +69,14 @@ class MainActivity : ComponentActivity() {
     private var pendingEntitlementDowngrade: PremiumEntitlements? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        var splashScreenExited by mutableStateOf(false)
+
+        splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
+            splashScreenViewProvider.remove()
+            splashScreenExited = true
+        }
 
         OpenStreetMapConfig.initialize(this)
         adsConsentManager = GoogleMobileAdsConsentManager(this)
@@ -330,6 +336,7 @@ class MainActivity : ComponentActivity() {
 
                             is AppRoute.Intro -> renderIntroRoute(
                                 stage = currentRoute.stage,
+                                animationReady = splashScreenExited,
                                 onAction = {
                                     when (currentRoute.stage) {
                                         IntroStage.LEGAL -> {
@@ -721,10 +728,16 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun renderIntroRoute(
         stage: IntroStage,
+        animationReady: Boolean,
         onAction: () -> Unit,
         onTransitionFinished: () -> Unit
     ) {
-        IntroScreen(stage = stage, onAction = onAction, onTransitionFinished = onTransitionFinished)
+        IntroScreen(
+            stage = stage,
+            animationReady = animationReady,
+            onAction = onAction,
+            onTransitionFinished = onTransitionFinished
+        )
     }
 }
 
