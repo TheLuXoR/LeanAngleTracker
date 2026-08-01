@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Mirrors Road() in BikeLeanAnimation.kt so the first Compose frame lines up. -->
+    <path
+        android:pathData="M41.04,108 Q41.04,108 39.42,94.5 Q37.8,81 35.1,62.1 Q32.4,43.2 43.2,37.8 Q54,32.4 64.8,29.7 Q75.6,27 86.4,24.3 Q97.2,21.6 91.8,16.2 Q86.4,10.8 78.3,5.4 Q70.2,0 71.82,0 Q73.44,0 86.4,8.1 Q99.36,16.2 99.9,20.52 Q100.44,24.84 88.02,28.62 Q75.6,32.4 64.8,36.72 Q54,41.04 54,46.44 Q54,51.84 62.1,79.92 L70.2,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="0"
+                android:endX="54"
+                android:endY="108"
+                android:type="linear">
+                <item android:offset="0" android:color="#26F0F0F0" />
+                <item android:offset="0.25" android:color="#E6F0F0F0" />
+                <item android:offset="0.5" android:color="#E6F0F0F0" />
+                <item android:offset="0.75" android:color="#E6F0F0F0" />
+                <item android:offset="1" android:color="#00F0F0F0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

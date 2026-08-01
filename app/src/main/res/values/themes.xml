@@ -10,8 +10,7 @@
 
     <style name="Theme.LeanAngleTracker.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bike_animated</item>
-        <item name="windowSplashScreenAnimationDuration">600</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_road_art</item>
         <item name="postSplashScreenTheme">@style/Theme.LeanAngleTracker</item>
     </style>
 </resources>
