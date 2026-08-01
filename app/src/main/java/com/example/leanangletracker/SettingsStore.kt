@@ -2,6 +2,9 @@ package com.example.leanangletracker
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.leanangletracker.billing.BillingEntitlementCache
+import com.example.leanangletracker.billing.PREMIUM_CACHE_GRACE_MS
+import com.example.leanangletracker.billing.evaluatePremiumCache
 import com.example.leanangletracker.data.Vec3
 import com.example.leanangletracker.sensor.BikeFrameMath
 
@@ -46,6 +49,10 @@ class SettingsStore(applicationContext: Context) {
         const val KEY_AUTO_REWIND = "auto_resume_enabled"
         const val KEY_AUTOMATION_PACK_PURCHASED = "automation_pack_purchased"
         const val KEY_PREMIUM_SUBSCRIBED = "premium_subscribed"
+        const val KEY_AUTOMATION_PACK_VERIFIED_AT = "automation_pack_verified_at_ms"
+        const val KEY_PREMIUM_VERIFIED_AT = "premium_verified_at_ms"
+        const val KEY_ENTITLEMENT_CACHE_VERSION = "entitlement_cache_version"
+        const val ENTITLEMENT_CACHE_VERSION = 1
         const val KEY_AUTO_PAUSE = "auto_pause_enabled"
         const val KEY_GAUGE_MAX_LEFT = "gauge_max_left_deg"
         const val KEY_GAUGE_MAX_RIGHT = "gauge_max_right_deg"
@@ -56,13 +63,18 @@ class SettingsStore(applicationContext: Context) {
         applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun load(recorderIntervalMinMs: Int, recorderIntervalMaxMs: Int): PersistedState {
+        val entitlementCache = loadBillingEntitlementCache()
+        val premiumDecision = evaluatePremiumCache(
+            cache = entitlementCache,
+            nowMs = System.currentTimeMillis()
+        )
         val settings = PersistedSettings(
             historyWindowSeconds = prefs.getInt(KEY_HISTORY_WINDOW, 20).coerceIn(5, 120),
             recorderIntervalMs = prefs.getInt(KEY_RECORDER_INTERVAL, 200)
                 .coerceIn(recorderIntervalMinMs, recorderIntervalMaxMs),
             autoResumeEnabled = prefs.getBoolean(KEY_AUTO_REWIND, false),
-            isAutomationPackPurchased = prefs.getBoolean(KEY_AUTOMATION_PACK_PURCHASED, false),
-            isPremiumSubscribed = prefs.getBoolean(KEY_PREMIUM_SUBSCRIBED, false),
+            isAutomationPackPurchased = entitlementCache.isAutomationPackPurchased,
+            isPremiumSubscribed = premiumDecision.grantsPremium,
             autoPauseEnabled = prefs.getBoolean(KEY_AUTO_PAUSE, false)
         )
         val gaugeExtrema = LeanExtrema(
@@ -122,10 +134,70 @@ class SettingsStore(applicationContext: Context) {
             .putInt(KEY_HISTORY_WINDOW, settings.historyWindowSeconds)
             .putInt(KEY_RECORDER_INTERVAL, settings.recorderIntervalMs)
             .putBoolean(KEY_AUTO_REWIND, settings.autoResumeEnabled)
-            .putBoolean(KEY_AUTOMATION_PACK_PURCHASED, settings.isAutomationPackPurchased)
-            .putBoolean(KEY_PREMIUM_SUBSCRIBED, settings.isPremiumSubscribed)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPauseEnabled)
             .apply()
+    }
+
+    internal fun loadBillingEntitlementCache(
+        nowMs: Long = System.currentTimeMillis()
+    ): BillingEntitlementCache {
+        migrateLegacyEntitlementCache(nowMs)
+        return BillingEntitlementCache(
+            isAutomationPackPurchased =
+                prefs.getBoolean(KEY_AUTOMATION_PACK_PURCHASED, false),
+            automationPackVerifiedAtMs = prefs.readPositiveLong(KEY_AUTOMATION_PACK_VERIFIED_AT),
+            isPremiumSubscribed = prefs.getBoolean(KEY_PREMIUM_SUBSCRIBED, false),
+            premiumVerifiedAtMs = prefs.readPositiveLong(KEY_PREMIUM_VERIFIED_AT)
+        )
+    }
+
+    internal fun saveVerifiedAutomationPack(isPurchased: Boolean, verifiedAtMs: Long) {
+        prefs.edit()
+            .putInt(KEY_ENTITLEMENT_CACHE_VERSION, ENTITLEMENT_CACHE_VERSION)
+            .putBoolean(KEY_AUTOMATION_PACK_PURCHASED, isPurchased)
+            .putLong(KEY_AUTOMATION_PACK_VERIFIED_AT, verifiedAtMs)
+            .apply()
+    }
+
+    internal fun saveVerifiedPremium(isSubscribed: Boolean, verifiedAtMs: Long) {
+        prefs.edit()
+            .putInt(KEY_ENTITLEMENT_CACHE_VERSION, ENTITLEMENT_CACHE_VERSION)
+            .putBoolean(KEY_PREMIUM_SUBSCRIBED, isSubscribed)
+            .putLong(KEY_PREMIUM_VERIFIED_AT, verifiedAtMs)
+            .apply()
+    }
+
+    internal fun debugClearBillingEntitlementCache(): Boolean = prefs.edit()
+        .remove(KEY_ENTITLEMENT_CACHE_VERSION)
+        .remove(KEY_AUTOMATION_PACK_PURCHASED)
+        .remove(KEY_AUTOMATION_PACK_VERIFIED_AT)
+        .remove(KEY_PREMIUM_SUBSCRIBED)
+        .remove(KEY_PREMIUM_VERIFIED_AT)
+        .commit()
+
+    internal fun debugAgeBillingEntitlementCacheBeyondGrace(
+        nowMs: Long = System.currentTimeMillis()
+    ): Boolean {
+        val expiredAtMs = (nowMs - PREMIUM_CACHE_GRACE_MS - 1L).coerceAtLeast(1L)
+        return prefs.edit()
+            .putInt(KEY_ENTITLEMENT_CACHE_VERSION, ENTITLEMENT_CACHE_VERSION)
+            .putLong(KEY_AUTOMATION_PACK_VERIFIED_AT, expiredAtMs)
+            .putLong(KEY_PREMIUM_VERIFIED_AT, expiredAtMs)
+            .commit()
+    }
+
+    private fun migrateLegacyEntitlementCache(nowMs: Long) {
+        if (prefs.getInt(KEY_ENTITLEMENT_CACHE_VERSION, 0) >= ENTITLEMENT_CACHE_VERSION) return
+
+        val editor = prefs.edit()
+            .putInt(KEY_ENTITLEMENT_CACHE_VERSION, ENTITLEMENT_CACHE_VERSION)
+        if (prefs.getBoolean(KEY_AUTOMATION_PACK_PURCHASED, false)) {
+            editor.putLong(KEY_AUTOMATION_PACK_VERIFIED_AT, nowMs)
+        }
+        if (prefs.getBoolean(KEY_PREMIUM_SUBSCRIBED, false)) {
+            editor.putLong(KEY_PREMIUM_VERIFIED_AT, nowMs)
+        }
+        editor.apply()
     }
 
     fun saveGaugeExtrema(extrema: LeanExtrema) {
@@ -189,4 +261,7 @@ class SettingsStore(applicationContext: Context) {
             prefs.getFloat(zKey, 0f)
         )
     }
+
+    private fun SharedPreferences.readPositiveLong(key: String): Long? =
+        getLong(key, 0L).takeIf { it > 0L }
 }

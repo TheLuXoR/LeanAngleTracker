@@ -3,7 +3,23 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("com.google.android.gms.oss-licenses-plugin")
 }
+
+fun String.asBuildConfigString(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+
+val legalProviderName = providers.gradleProperty("LEGAL_PROVIDER_NAME")
+    .orElse("NOT CONFIGURED — RELEASE BLOCKED")
+val legalProviderAddress = providers.gradleProperty("LEGAL_PROVIDER_ADDRESS")
+    .orElse("NOT CONFIGURED — RELEASE BLOCKED")
+val legalProviderEmail = providers.gradleProperty("LEGAL_PROVIDER_EMAIL")
+    .orElse("NOT CONFIGURED — RELEASE BLOCKED")
+val privacyPolicyUrl = providers.gradleProperty("PRIVACY_POLICY_URL")
+    .orElse("")
+val configuredMapTileUrl = providers.gradleProperty("MAP_TILE_URL")
+val mapTileUrl = configuredMapTileUrl
+    .orElse("https://tile.openstreetmap.org/")
 
 android {
     namespace = "com.example.leanangletracker"
@@ -21,6 +37,11 @@ android {
         buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"ca-app-pub-3940256099942544/1033173712\"")
         buildConfigField("String", "AUTOMATION_PACK_PRODUCT_ID", "\"automation_pack_unlock\"")
         buildConfigField("String", "PREMIUM_SUBSCRIPTION_PRODUCT_ID", "\"premium_subscription\"")
+        buildConfigField("String", "LEGAL_PROVIDER_NAME", legalProviderName.get().asBuildConfigString())
+        buildConfigField("String", "LEGAL_PROVIDER_ADDRESS", legalProviderAddress.get().asBuildConfigString())
+        buildConfigField("String", "LEGAL_PROVIDER_EMAIL", legalProviderEmail.get().asBuildConfigString())
+        buildConfigField("String", "PRIVACY_POLICY_URL", privacyPolicyUrl.get().asBuildConfigString())
+        buildConfigField("String", "MAP_TILE_URL", mapTileUrl.get().asBuildConfigString())
         manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
     }
 
@@ -58,11 +79,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
 }
 
 dependencies {
@@ -83,8 +99,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("com.google.code.gson:gson:2.14.0")
-    implementation("com.google.android.gms:play-services-ads:25.2.0")
+    implementation("com.google.android.gms:play-services-ads:25.4.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
     implementation("com.android.billingclient:billing:9.1.0")
+    implementation("com.google.android.gms:play-services-oss-licenses:17.5.1")
 
     val roomVersion = "2.8.4"
     implementation("androidx.room:room-runtime:$roomVersion")
@@ -98,4 +116,32 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}
+
+val verifyReleaseLegalConfiguration by tasks.registering {
+    group = "verification"
+    description = "Fails release builds until real provider and privacy-policy details are configured."
+
+    doLast {
+        val requiredProperties = mapOf(
+            "LEGAL_PROVIDER_NAME" to legalProviderName.get(),
+            "LEGAL_PROVIDER_ADDRESS" to legalProviderAddress.get(),
+            "LEGAL_PROVIDER_EMAIL" to legalProviderEmail.get(),
+            "PRIVACY_POLICY_URL" to privacyPolicyUrl.get(),
+            "MAP_TILE_URL" to configuredMapTileUrl.orNull.orEmpty()
+        )
+        val missing = requiredProperties
+            .filterValues { it.isBlank() || it.startsWith("NOT CONFIGURED") }
+            .keys
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Release blocked. Configure these Gradle properties with real legal details: " +
+                    missing.joinToString()
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyReleaseLegalConfiguration)
 }

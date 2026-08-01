@@ -40,12 +40,13 @@ internal fun RideHistoryScreen(
     onImportGpx: () -> Unit,
     importState: GpxImportUiState = GpxImportUiState(),
     onImportErrorConsumed: () -> Unit = {},
-    onCombineRides: (List<RideSummary>) -> Unit = {}
+    onCombineRides: (List<RideSummary>) -> Unit = {},
+    restrictedToDataManagement: Boolean = false
 ) {
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedSessionIds by remember { mutableStateOf(setOf<Long>()) }
-    val isSelectionMode = selectedSessionIds.isNotEmpty()
+    val isSelectionMode = !restrictedToDataManagement && selectedSessionIds.isNotEmpty()
     val importErrorMessage = importState.errorResId?.let { stringResource(it) }
 
     LaunchedEffect(importState.errorResId, importErrorMessage) {
@@ -92,7 +93,7 @@ internal fun RideHistoryScreen(
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.ride_history_action_combine))
                         }
-                    } else if (!isSelectionMode) {
+                    } else if (!isSelectionMode && !restrictedToDataManagement) {
                         IconButton(
                             onClick = onImportGpx,
                             enabled = !importState.isImporting,
@@ -133,23 +134,25 @@ internal fun RideHistoryScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = TextSecondary
                 )
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onImportGpx,
-                    enabled = !importState.isImporting,
-                    modifier = Modifier.testTag(RIDE_HISTORY_EMPTY_IMPORT_ACTION_TAG)
-                ) {
-                    if (importState.isImporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(Icons.Default.UploadFile, contentDescription = null)
+                if (!restrictedToDataManagement) {
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = onImportGpx,
+                        enabled = !importState.isImporting,
+                        modifier = Modifier.testTag(RIDE_HISTORY_EMPTY_IMPORT_ACTION_TAG)
+                    ) {
+                        if (importState.isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(Icons.Default.UploadFile, contentDescription = null)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.ride_history_action_import_gpx))
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.ride_history_action_import_gpx))
                 }
             }
         } else {
@@ -176,6 +179,7 @@ internal fun RideHistoryScreen(
                             }
                         },
                         onLongClick = {
+                            if (restrictedToDataManagement) return@RideHistoryItem
                             if (!summary.isFinished) return@RideHistoryItem
                             if (!isSelectionMode) {
                                 selectedSessionIds = setOf(summary.rideId)

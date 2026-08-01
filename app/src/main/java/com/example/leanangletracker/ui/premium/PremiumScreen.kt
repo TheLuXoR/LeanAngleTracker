@@ -37,7 +37,9 @@ internal fun PremiumScreen(
     onBuyAutomationPack: () -> Unit,
     onSubscribe: () -> Unit,
     onRestorePurchases: () -> Unit,
-    onManageSubscription: () -> Unit
+    onManageSubscription: () -> Unit,
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -102,6 +104,17 @@ internal fun PremiumScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TextButton(onClick = onOpenTerms) {
+                    Text(stringResource(R.string.legal_terms_title))
+                }
+                TextButton(onClick = onOpenPrivacyPolicy) {
+                    Text(stringResource(R.string.legal_privacy_title))
+                }
+            }
         }
     }
 }

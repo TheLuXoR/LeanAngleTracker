@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.leanangletracker.BuildConfig
+import com.example.leanangletracker.privacy.AdsConsentGate
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -31,6 +32,8 @@ fun AdMobBanner(
     modifier: Modifier = Modifier.fillMaxWidth(),
     adUnitId: String = BuildConfig.ADMOB_BANNER_ID
 ) {
+    if (!AdsConsentGate.canRequestAds()) return
+
     val context = LocalContext.current
     var isAdLoaded by remember { mutableStateOf(false) }
 
@@ -78,6 +81,11 @@ fun AdMobBanner(
 }
 
 fun loadInterstitial(context: Context, onAdLoaded: (InterstitialAd?) -> Unit) {
+    if (!AdsConsentGate.canRequestAds()) {
+        onAdLoaded(null)
+        return
+    }
+
     val adRequest = AdRequest.Builder().build()
     InterstitialAd.load(
         context,
@@ -96,9 +104,13 @@ fun loadInterstitial(context: Context, onAdLoaded: (InterstitialAd?) -> Unit) {
 }
 
 fun showInterstitial(context: Context, interstitialAd: InterstitialAd?, onAdDismissed: () -> Unit) {
+    if (interstitialAd == null) {
+        onAdDismissed()
+        return
+    }
     val activity = context.findActivity()
     if (activity != null) {
-        interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+        interstitialAd.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 onAdDismissed()
             }
@@ -107,7 +119,7 @@ fun showInterstitial(context: Context, interstitialAd: InterstitialAd?, onAdDism
                 onAdDismissed()
             }
         }
-        interstitialAd?.show(activity)
+        interstitialAd.show(activity)
     } else {
         onAdDismissed()
     }

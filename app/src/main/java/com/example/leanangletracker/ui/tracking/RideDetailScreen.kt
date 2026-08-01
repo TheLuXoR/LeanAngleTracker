@@ -36,7 +36,8 @@ internal fun RideDetailScreen(
     onBack: () -> Unit,
     onUpdateName: (String) -> Unit,
     onDelete: () -> Unit,
-    isPremiumSubscribed: Boolean = false
+    isPremiumSubscribed: Boolean = false,
+    restrictedToDataManagement: Boolean = false
 ) {
     val context = LocalContext.current
     var isEditingName by remember { mutableStateOf(false) }
@@ -64,8 +65,15 @@ internal fun RideDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { isEditingName = !isEditingName }) {
-                        Icon(if (isEditingName) Icons.Default.Check else Icons.Default.Edit, contentDescription = "Edit Name")
+                    if (!restrictedToDataManagement) {
+                        IconButton(onClick = { isEditingName = !isEditingName }) {
+                            Icon(
+                                if (isEditingName) Icons.Default.Check else Icons.Default.Edit,
+                                contentDescription = stringResource(
+                                    R.string.ride_history_action_edit_name
+                                )
+                            )
+                        }
                     }
                     IconButton(
                         enabled = fullSession != null,
@@ -99,7 +107,7 @@ internal fun RideDetailScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
-            if (isEditingName) {
+            if (isEditingName && !restrictedToDataManagement) {
                 TextField(
                     value = editedName,
                     onValueChange = { editedName = it },

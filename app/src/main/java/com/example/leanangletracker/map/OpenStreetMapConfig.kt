@@ -16,7 +16,7 @@ internal object OpenStreetMapConfig {
         19,
         256,
         ".png",
-        arrayOf("https://tile.openstreetmap.org/"),
+        arrayOf(BuildConfig.MAP_TILE_URL),
         "© OpenStreetMap contributors",
         TileSourcePolicy(
             2,
@@ -37,10 +37,22 @@ internal object OpenStreetMapConfig {
         )
         configuration.userAgentValue = userAgent(
             versionName = BuildConfig.VERSION_NAME,
-            applicationId = BuildConfig.APPLICATION_ID
+            applicationId = BuildConfig.APPLICATION_ID,
+            contactEmail = BuildConfig.LEGAL_PROVIDER_EMAIL
+                .takeUnless { it.startsWith("NOT CONFIGURED") }
+                .orEmpty()
         )
     }
 
-    internal fun userAgent(versionName: String, applicationId: String): String =
-        "LeanAngleTracker/$versionName (Android; $applicationId)"
+    internal fun userAgent(
+        versionName: String,
+        applicationId: String,
+        contactEmail: String = ""
+    ): String {
+        val contact = contactEmail
+            .takeIf(String::isNotBlank)
+            ?.let { "; contact=$it" }
+            .orEmpty()
+        return "LeanAngleTracker/$versionName (Android; $applicationId$contact)"
+    }
 }

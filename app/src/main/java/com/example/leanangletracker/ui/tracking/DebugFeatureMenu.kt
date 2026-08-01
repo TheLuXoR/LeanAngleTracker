@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
@@ -30,10 +32,14 @@ import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 internal fun DebugFeatureMenu(
     sensorSamplingRate: SensorSamplingRate,
     onShowAutoResumeIndicator: () -> Unit,
-    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit
+    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit,
+    cacheActionsEnabled: Boolean = true,
+    onClearEntitlementCache: () -> Unit = {},
+    onExpireEntitlementCache: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showSamplingRateDialog by remember { mutableStateOf(false) }
+    var pendingCacheAction by remember { mutableStateOf<DebugCacheAction?>(null) }
 
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -76,6 +82,29 @@ internal fun DebugFeatureMenu(
                     showSamplingRateDialog = true
                 }
             )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.debug_entitlement_cache_clear)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null)
+                },
+                enabled = cacheActionsEnabled,
+                onClick = {
+                    expanded = false
+                    pendingCacheAction = DebugCacheAction.CLEAR
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.debug_entitlement_cache_expire)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.AccessTime, contentDescription = null)
+                },
+                enabled = cacheActionsEnabled,
+                onClick = {
+                    expanded = false
+                    pendingCacheAction = DebugCacheAction.EXPIRE
+                }
+            )
         }
     }
 
@@ -86,6 +115,61 @@ internal fun DebugFeatureMenu(
             onDismiss = { showSamplingRateDialog = false }
         )
     }
+
+    pendingCacheAction?.let { action ->
+        DebugCacheActionDialog(
+            action = action,
+            onConfirm = {
+                pendingCacheAction = null
+                when (action) {
+                    DebugCacheAction.CLEAR -> onClearEntitlementCache()
+                    DebugCacheAction.EXPIRE -> onExpireEntitlementCache()
+                }
+            },
+            onDismiss = { pendingCacheAction = null }
+        )
+    }
+}
+
+private enum class DebugCacheAction {
+    CLEAR,
+    EXPIRE
+}
+
+@Composable
+private fun DebugCacheActionDialog(
+    action: DebugCacheAction,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val title = when (action) {
+        DebugCacheAction.CLEAR -> R.string.debug_entitlement_cache_clear_title
+        DebugCacheAction.EXPIRE -> R.string.debug_entitlement_cache_expire_title
+    }
+    val body = when (action) {
+        DebugCacheAction.CLEAR -> R.string.debug_entitlement_cache_clear_body
+        DebugCacheAction.EXPIRE -> R.string.debug_entitlement_cache_expire_body
+    }
+    val confirmation = when (action) {
+        DebugCacheAction.CLEAR -> R.string.debug_entitlement_cache_clear_confirm
+        DebugCacheAction.EXPIRE -> R.string.debug_entitlement_cache_expire_confirm
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(title)) },
+        text = { Text(stringResource(body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(confirmation))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.tracking_permission_cancel))
+            }
+        }
+    )
 }
 
 @Composable
@@ -152,7 +236,9 @@ private fun DebugFeatureMenuPreview() {
         DebugFeatureMenu(
             sensorSamplingRate = SensorSamplingRate.MEDIUM,
             onShowAutoResumeIndicator = {},
-            onSetSensorSamplingRate = {}
+            onSetSensorSamplingRate = {},
+            onClearEntitlementCache = {},
+            onExpireEntitlementCache = {}
         )
     }
 }

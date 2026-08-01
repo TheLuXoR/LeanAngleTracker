@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -58,6 +59,7 @@ internal fun OSMTrackMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val uriHandler = LocalUriHandler.current
     val overviewPaddingPx = with(LocalDensity.current) { 48.dp.roundToPx() }
     val points = rideSession.points
@@ -97,10 +99,10 @@ internal fun OSMTrackMap(
         LeanAngleOverlay(points)
     }
 
-    val marker = remember(mapView) {
+    val marker = remember(mapView, resources) {
         Marker(mapView).apply {
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            icon = context.getDrawable(android.R.drawable.presence_online)
+            icon = resources.getDrawable(android.R.drawable.presence_online, null)
         }
     }
 

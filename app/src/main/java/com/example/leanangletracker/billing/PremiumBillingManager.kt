@@ -2,6 +2,8 @@ package com.example.leanangletracker.billing
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -14,6 +16,7 @@ import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import com.example.leanangletracker.BuildConfig
+import com.example.leanangletracker.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,8 +34,12 @@ internal data class PremiumEntitlements(
 )
 
 internal data class PremiumBillingState(
-    val isAutomationPackLoading: Boolean = true,
-    val isSubscriptionLoading: Boolean = true,
+    // These loading flags describe product/price loading only. Entitlement refresh is separate.
+    val isAutomationPackLoading: Boolean = false,
+    val isSubscriptionLoading: Boolean = false,
+    val isEntitlementRefreshing: Boolean = true,
+    val entitlementRefreshTimedOut: Boolean = false,
+    val premiumCacheFreshness: PremiumCacheFreshness = PremiumCacheFreshness.MISSING,
     val isAutomationPackPurchased: Boolean = false,
     val isSubscribed: Boolean = false,
     val automationPackPriceLabel: String? = null,
@@ -44,13 +51,30 @@ internal class PremiumBillingManager(
     context: Context,
     private val onEntitlementsChanged: (PremiumEntitlements) -> Unit
 ) : PurchasesUpdatedListener {
-    private val _state = MutableStateFlow(PremiumBillingState())
+    private val settingsStore = SettingsStore(context.applicationContext)
+    private val initialCache = settingsStore.loadBillingEntitlementCache()
+    private val initialPremiumDecision = evaluatePremiumCache(
+        cache = initialCache,
+        nowMs = System.currentTimeMillis()
+    )
+    private var isAutomationPackPurchased = initialCache.isAutomationPackPurchased
+    private var isPremiumSubscribed = initialPremiumDecision.grantsPremium
+    private val _state = MutableStateFlow(
+        PremiumBillingState(
+            premiumCacheFreshness = initialPremiumDecision.freshness,
+            isAutomationPackPurchased = isAutomationPackPurchased,
+            isSubscribed = isPremiumSubscribed
+        )
+    )
     val state: StateFlow<PremiumBillingState> = _state.asStateFlow()
+
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var isConnecting = false
-    private var isAutomationPackPurchased = false
-    private var isPremiumSubscribed = false
-    private var isInAppQueryComplete = false
-    private var isSubscriptionQueryComplete = false
+    private var isClosed = false
+    private var pendingProductDetailsLoad = false
+    private var refreshGeneration = 0
+    private var activeRefreshGeneration: Int? = null
+    private var pendingPurchaseQueries = emptySet<String>()
 
     private val billingClient = BillingClient.newBuilder(context.applicationContext)
         .setListener(this)
@@ -63,11 +87,13 @@ internal class PremiumBillingManager(
         .build()
 
     fun start() {
+        if (isClosed) return
         if (billingClient.isReady) {
             refreshPurchases()
-            queryAllProductDetails()
+            if (pendingProductDetailsLoad) queryAllProductDetails()
             return
         }
+        ensureRefreshPending()
         if (isConnecting) return
         isConnecting = true
 
@@ -75,28 +101,46 @@ internal class PremiumBillingManager(
             override fun onBillingSetupFinished(billingResult: BillingResult) {
                 isConnecting = false
                 if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                    refreshPurchases()
-                    queryAllProductDetails()
+                    val generation = activeRefreshGeneration ?: beginRefresh()
+                    queryPurchasesForRefresh(generation)
+                    if (pendingProductDetailsLoad) queryAllProductDetails()
                 } else {
-                    showBillingError()
+                    finishRefreshWithError(activeRefreshGeneration)
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 isConnecting = false
+                // Auto reconnect is enabled. The five-second refresh timeout makes the UI actionable.
             }
         })
     }
 
     fun refreshPurchases() {
+        if (isClosed) return
+        if (activeRefreshGeneration != null) return
+        val generation = beginRefresh()
         if (!billingClient.isReady) {
             start()
             return
         }
-        isInAppQueryComplete = false
-        isSubscriptionQueryComplete = false
-        queryPurchases(BillingClient.ProductType.INAPP)
-        queryPurchases(BillingClient.ProductType.SUBS)
+        queryPurchasesForRefresh(generation)
+    }
+
+    fun loadProductDetails() {
+        if (isClosed) return
+        if (
+            _state.value.automationPackPriceLabel != null &&
+            _state.value.subscriptionPriceLabel != null
+        ) {
+            return
+        }
+        pendingProductDetailsLoad = true
+        if (!billingClient.isReady) {
+            start()
+            return
+        }
+        queryAllProductDetails()
     }
 
     fun launchAutomationPackPurchase(activity: Activity) {
@@ -127,15 +171,71 @@ internal class PremiumBillingManager(
                     )
                 }
             }
-            else -> showBillingError()
+            else -> showProductBillingError()
         }
     }
 
     fun close() {
+        if (isClosed) return
+        isClosed = true
+        mainHandler.removeCallbacksAndMessages(null)
         billingClient.endConnection()
     }
 
+    private fun ensureRefreshPending() {
+        if (activeRefreshGeneration == null) beginRefresh()
+    }
+
+    private fun beginRefresh(): Int {
+        val generation = ++refreshGeneration
+        activeRefreshGeneration = generation
+        pendingPurchaseQueries = emptySet()
+        _state.update {
+            it.copy(
+                isEntitlementRefreshing = true,
+                entitlementRefreshTimedOut = false,
+                message = null
+            )
+        }
+        mainHandler.postDelayed(
+            { onRefreshTimeout(generation) },
+            ENTITLEMENT_REFRESH_TIMEOUT_MS
+        )
+        return generation
+    }
+
+    private fun onRefreshTimeout(generation: Int) {
+        if (activeRefreshGeneration != generation) return
+        activeRefreshGeneration = null
+        pendingPurchaseQueries = emptySet()
+        _state.update {
+            it.copy(
+                isEntitlementRefreshing = false,
+                entitlementRefreshTimedOut = true,
+                message = PremiumBillingMessage.BILLING_ERROR
+            )
+        }
+    }
+
+    private fun queryPurchasesForRefresh(generation: Int) {
+        if (activeRefreshGeneration != generation) return
+        pendingPurchaseQueries = setOf(
+            BillingClient.ProductType.INAPP,
+            BillingClient.ProductType.SUBS
+        )
+        queryPurchases(BillingClient.ProductType.INAPP, generation)
+        queryPurchases(BillingClient.ProductType.SUBS, generation)
+    }
+
     private fun queryAllProductDetails() {
+        if (!billingClient.isReady) return
+        pendingProductDetailsLoad = false
+        _state.update {
+            it.copy(
+                isAutomationPackLoading = true,
+                isSubscriptionLoading = true
+            )
+        }
         queryProductDetails(
             productId = BuildConfig.AUTOMATION_PACK_PRODUCT_ID,
             productType = BillingClient.ProductType.INAPP
@@ -162,13 +262,18 @@ internal class PremiumBillingManager(
                 ?.lastOrNull()
                 ?.formattedPrice
             _state.update {
-                it.copy(isSubscriptionLoading = false, subscriptionPriceLabel = price, message = null)
+                it.copy(
+                    isSubscriptionLoading = false,
+                    subscriptionPriceLabel = price,
+                    message = null
+                )
             }
         }
     }
 
     private fun launchPurchase(activity: Activity, productId: String, productType: String) {
         if (!billingClient.isReady) {
+            pendingProductDetailsLoad = true
             start()
             return
         }
@@ -199,7 +304,7 @@ internal class PremiumBillingManager(
                     .build()
             )
             if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                showBillingError()
+                showProductBillingError()
             }
         }
     }
@@ -227,13 +332,13 @@ internal class PremiumBillingManager(
         }
     }
 
-    private fun queryPurchases(productType: String) {
+    private fun queryPurchases(productType: String, generation: Int) {
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(productType)
             .build()
         billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
             if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
-                showBillingError()
+                completePurchaseQuery(generation, productType, hadError = true)
                 return@queryPurchasesAsync
             }
 
@@ -241,43 +346,96 @@ internal class PremiumBillingManager(
                 .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
                 .flatMap(Purchase::getProducts)
                 .toSet()
+            val verifiedAtMs = System.currentTimeMillis()
             if (productType == BillingClient.ProductType.INAPP) {
                 isAutomationPackPurchased =
                     BuildConfig.AUTOMATION_PACK_PRODUCT_ID in purchasedProductIds
-                isInAppQueryComplete = true
+                settingsStore.saveVerifiedAutomationPack(
+                    isPurchased = isAutomationPackPurchased,
+                    verifiedAtMs = verifiedAtMs
+                )
             } else {
-                isPremiumSubscribed = BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in purchasedProductIds
-                isSubscriptionQueryComplete = true
+                isPremiumSubscribed =
+                    BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in purchasedProductIds
+                settingsStore.saveVerifiedPremium(
+                    isSubscribed = isPremiumSubscribed,
+                    verifiedAtMs = verifiedAtMs
+                )
             }
-            if (isInAppQueryComplete && isSubscriptionQueryComplete) {
-                updateEntitlements()
+            val premiumFreshness = if (productType == BillingClient.ProductType.SUBS) {
+                if (isPremiumSubscribed) {
+                    PremiumCacheFreshness.FRESH
+                } else {
+                    PremiumCacheFreshness.MISSING
+                }
+            } else {
+                _state.value.premiumCacheFreshness
             }
+            publishEntitlements(premiumFreshness = premiumFreshness)
             acknowledgeCompletedPurchases(purchases)
             updatePendingMessage(purchases)
+            completePurchaseQuery(generation, productType, hadError = false)
+        }
+    }
+
+    private fun completePurchaseQuery(generation: Int, productType: String, hadError: Boolean) {
+        if (activeRefreshGeneration != generation) return
+        pendingPurchaseQueries = pendingPurchaseQueries - productType
+        if (hadError) {
+            _state.update { it.copy(message = PremiumBillingMessage.BILLING_ERROR) }
+        }
+        if (pendingPurchaseQueries.isNotEmpty()) return
+
+        activeRefreshGeneration = null
+        _state.update {
+            it.copy(
+                isEntitlementRefreshing = false,
+                entitlementRefreshTimedOut = false
+            )
+        }
+    }
+
+    private fun finishRefreshWithError(generation: Int?) {
+        if (generation == null || activeRefreshGeneration != generation) return
+        activeRefreshGeneration = null
+        pendingPurchaseQueries = emptySet()
+        _state.update {
+            it.copy(
+                isEntitlementRefreshing = false,
+                message = PremiumBillingMessage.BILLING_ERROR
+            )
         }
     }
 
     private fun processPurchaseUpdate(purchases: List<Purchase>) {
+        val verifiedAtMs = System.currentTimeMillis()
         purchases
             .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
             .forEach { purchase ->
                 if (BuildConfig.AUTOMATION_PACK_PRODUCT_ID in purchase.products) {
                     isAutomationPackPurchased = true
+                    settingsStore.saveVerifiedAutomationPack(true, verifiedAtMs)
                 }
                 if (BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in purchase.products) {
                     isPremiumSubscribed = true
+                    settingsStore.saveVerifiedPremium(true, verifiedAtMs)
                 }
             }
-        updateEntitlements()
+        publishEntitlements(
+            premiumFreshness = if (isPremiumSubscribed) {
+                PremiumCacheFreshness.FRESH
+            } else {
+                _state.value.premiumCacheFreshness
+            }
+        )
         acknowledgeCompletedPurchases(purchases)
         updatePendingMessage(purchases)
     }
 
-    private fun updateEntitlements() {
+    private fun publishEntitlements(premiumFreshness: PremiumCacheFreshness) {
         _state.update {
             it.copy(
-                isAutomationPackLoading = false,
-                isSubscriptionLoading = false,
+                premiumCacheFreshness = premiumFreshness,
                 isAutomationPackPurchased = isAutomationPackPurchased,
                 isSubscribed = isPremiumSubscribed
             )
@@ -302,7 +460,7 @@ internal class PremiumBillingManager(
             .build()
         billingClient.acknowledgePurchase(params) { billingResult ->
             if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
-                showBillingError()
+                _state.update { it.copy(message = PremiumBillingMessage.BILLING_ERROR) }
             }
         }
     }
@@ -313,11 +471,8 @@ internal class PremiumBillingManager(
                 (BuildConfig.AUTOMATION_PACK_PRODUCT_ID in it.products ||
                     BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID in it.products)
         }
-        _state.update {
-            it.copy(
-                message = if (hasPendingPurchase) PremiumBillingMessage.PURCHASE_PENDING else null
-            )
-        }
+        if (!hasPendingPurchase) return
+        _state.update { it.copy(message = PremiumBillingMessage.PURCHASE_PENDING) }
     }
 
     private fun setProductLoading(productType: String, loading: Boolean) {
@@ -346,7 +501,7 @@ internal class PremiumBillingManager(
         }
     }
 
-    private fun showBillingError() {
+    private fun showProductBillingError() {
         _state.update {
             it.copy(
                 isAutomationPackLoading = false,
@@ -354,5 +509,9 @@ internal class PremiumBillingManager(
                 message = PremiumBillingMessage.BILLING_ERROR
             )
         }
+    }
+
+    private companion object {
+        const val ENTITLEMENT_REFRESH_TIMEOUT_MS = 5_000L
     }
 }

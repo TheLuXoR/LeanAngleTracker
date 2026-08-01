@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.example.leanangletracker.R
 import com.example.leanangletracker.SettingsUiState
 import com.example.leanangletracker.ui.components.Minus
+import com.example.leanangletracker.ui.legal.LegalDocument
 import com.example.leanangletracker.ui.theme.AccentGreen
 import com.example.leanangletracker.ui.theme.LeanAngleTrackerTheme
 
@@ -76,7 +77,10 @@ internal fun SettingsScreen(
     onStartCalibration: () -> Unit,
     onToggleAutoResume: (Boolean) -> Unit,
     onOpenPremium: () -> Unit,
-    onToggleAutoPause: (Boolean) -> Unit
+    onToggleAutoPause: (Boolean) -> Unit,
+    privacyOptionsRequired: Boolean = false,
+    onOpenPrivacyOptions: () -> Unit = {},
+    onOpenLegalDocument: (LegalDocument) -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -204,6 +208,52 @@ internal fun SettingsScreen(
                     title = stringResource(R.string.settings_start_app_tour),
                     subtitle = stringResource(R.string.settings_start_app_tour_hint),
                     onClick = onStartAppTour
+                )
+            }
+
+            SettingsGroup(title = stringResource(R.string.settings_group_legal)) {
+                if (privacyOptionsRequired) {
+                    SettingsActionItem(
+                        title = stringResource(R.string.settings_privacy_choices),
+                        subtitle = stringResource(R.string.settings_privacy_choices_available),
+                        onClick = onOpenPrivacyOptions
+                    )
+                    SettingsDivider()
+                }
+                SettingsActionItem(
+                    title = stringResource(R.string.legal_privacy_title),
+                    subtitle = stringResource(R.string.settings_privacy_policy_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.PRIVACY) }
+                )
+                SettingsDivider()
+                SettingsActionItem(
+                    title = stringResource(R.string.legal_terms_title),
+                    subtitle = stringResource(R.string.settings_terms_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.TERMS) }
+                )
+                SettingsDivider()
+                SettingsActionItem(
+                    title = stringResource(R.string.legal_notice_title),
+                    subtitle = stringResource(R.string.settings_legal_notice_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.LEGAL_NOTICE) }
+                )
+                SettingsDivider()
+                SettingsActionItem(
+                    title = stringResource(R.string.legal_safety_title),
+                    subtitle = stringResource(R.string.settings_safety_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.SAFETY) }
+                )
+                SettingsDivider()
+                SettingsActionItem(
+                    title = stringResource(R.string.settings_open_source_licenses),
+                    subtitle = stringResource(R.string.settings_open_source_licenses_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.OPEN_SOURCE) }
+                )
+                SettingsDivider()
+                SettingsActionItem(
+                    title = stringResource(R.string.legal_graphics_title),
+                    subtitle = stringResource(R.string.settings_graphics_hint),
+                    onClick = { onOpenLegalDocument(LegalDocument.GRAPHICS) }
                 )
             }
 

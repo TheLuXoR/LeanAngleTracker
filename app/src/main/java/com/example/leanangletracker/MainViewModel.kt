@@ -1,5 +1,6 @@
 package com.example.leanangletracker
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
@@ -11,7 +12,6 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
-import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -169,8 +169,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), S
                 ) == PackageManager.PERMISSION_GRANTED
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @SuppressLint("MissingPermission")
     internal fun startLocationUpdates() {
+        // The permission is checked again here immediately before the protected call.
         if (!hasLocationPermission() || locationUpdatesRunning) return
 
         val provider = when {

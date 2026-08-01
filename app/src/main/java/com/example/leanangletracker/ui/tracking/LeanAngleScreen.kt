@@ -62,6 +62,8 @@ internal fun LeanAngleScreen(
     onTogglePause: () -> Unit = {},
     onResetGaugeExtrema: () -> Unit = {},
     onSetSensorSamplingRate: (SensorSamplingRate) -> Unit = {},
+    onDebugClearEntitlementCache: () -> Unit = {},
+    onDebugExpireEntitlementCache: () -> Unit = {},
     onAutoResumeIndicatorDismissed: () -> Unit = {},
     appTourState: AppTourUiState = AppTourUiState(),
     onAcceptAppTourOffer: () -> Unit = {},
@@ -128,7 +130,10 @@ internal fun LeanAngleScreen(
                 showDebugFeatures = isDebugBuild,
                 sensorSamplingRate = trackingState.sensorSamplingRate,
                 onShowAutoResumeIndicator = { autoResumeIndicatorRequestId++ },
-                onSetSensorSamplingRate = onSetSensorSamplingRate
+                onSetSensorSamplingRate = onSetSensorSamplingRate,
+                debugCacheActionsEnabled = !trackingState.trackingStarted,
+                onDebugClearEntitlementCache = onDebugClearEntitlementCache,
+                onDebugExpireEntitlementCache = onDebugExpireEntitlementCache
             )
 
             MountOrientationWarning(
@@ -253,7 +258,10 @@ private fun TrackingHeader(
     showDebugFeatures: Boolean,
     sensorSamplingRate: SensorSamplingRate,
     onShowAutoResumeIndicator: () -> Unit,
-    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit
+    onSetSensorSamplingRate: (SensorSamplingRate) -> Unit,
+    debugCacheActionsEnabled: Boolean,
+    onDebugClearEntitlementCache: () -> Unit,
+    onDebugExpireEntitlementCache: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -317,7 +325,10 @@ private fun TrackingHeader(
                 DebugFeatureMenu(
                     sensorSamplingRate = sensorSamplingRate,
                     onShowAutoResumeIndicator = onShowAutoResumeIndicator,
-                    onSetSensorSamplingRate = onSetSensorSamplingRate
+                    onSetSensorSamplingRate = onSetSensorSamplingRate,
+                    cacheActionsEnabled = debugCacheActionsEnabled,
+                    onClearEntitlementCache = onDebugClearEntitlementCache,
+                    onExpireEntitlementCache = onDebugExpireEntitlementCache
                 )
             }
             
