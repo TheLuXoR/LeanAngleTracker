@@ -1,0 +1,15 @@
+- `[x]` Update build configuration files
+    - `[x]` Update `app/build.gradle.kts`
+    - `[x]` Update `app/proguard-rules.pro`
+    - `[x]` Update `app/src/main/AndroidManifest.xml`
+- `[x]` Refactor source code (`src/main/java`)
+    - `[x]` Move directories to `de/hasselmeyer/leanangle`
+    - `[x]` Update package declarations and imports in all files
+    - `[x]` Update hardcoded package strings
+- `[x]` Refactor test code (`src/test/java` and `src/androidTest/java`)
+    - `[x]` Move directories to `de/hasselmeyer/leanangle`
+    - `[x]` Update package declarations and imports in all files
+- `[x]` Verification
+    - `[x]` Run Gradle sync
+    - `[x]` Run clean build
+    - `[x]` Run unit tests

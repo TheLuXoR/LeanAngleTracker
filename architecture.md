@@ -26,7 +26,7 @@ The goal is to move towards a decoupled architecture to improve testability and 
 - **UI Components**: Purely visual, observing `StateFlow`.
 
 ## Package Structure
-- `com.example.leanangletracker`
+- `de.hasselmeyer.leanangle`
   - `data/`: Repositories, Data Sources, DTOs.
   - `domain/`: Use Cases, Entities (Domain Models).
   - `ui/`: Compose screens, ViewModels, UI State.

@@ -1,0 +1,434 @@
+package de.hasselmeyer.leanangle.ui.tracking
+
+import android.content.res.Configuration
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import de.hasselmeyer.leanangle.RideSession
+import de.hasselmeyer.leanangle.TrackPoint
+import de.hasselmeyer.leanangle.ui.components.LeanHistoryGraph
+import de.hasselmeyer.leanangle.ui.components.SpeedHistoryGraph
+import de.hasselmeyer.leanangle.ui.theme.TextPrimary
+import de.hasselmeyer.leanangle.ui.theme.TextSecondary
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.math.*
+
+@Composable
+internal fun RideReviewTemplate(
+    rideSession: RideSession,
+    modifier: Modifier = Modifier
+) {
+    var selectedIndex by rememberSaveable(rideSession.rideId, rideSession.startedAtMs) {
+        mutableIntStateOf(rideSession.points.lastIndex.coerceAtLeast(0)) 
+    }
+
+    var mapNavigationMode by remember(rideSession.rideId, rideSession.startedAtMs) {
+        mutableStateOf(TrackMapNavigationMode.IDLE)
+    }
+    var mapNavigationRequestKey by remember(rideSession.rideId, rideSession.startedAtMs) {
+        mutableIntStateOf(0)
+    }
+    var isOverviewScrubbing by remember { mutableStateOf(false) }
+    var isDetailScrolling by remember { mutableStateOf(false) }
+    var currentZoom by remember { mutableDoubleStateOf(DEFAULT_TRACK_DETAIL_ZOOM) }
+    var lastDetailZoom by rememberSaveable(rideSession.rideId, rideSession.startedAtMs) {
+        mutableDoubleStateOf(DEFAULT_TRACK_DETAIL_ZOOM)
+    }
+    
+    if (rideSession.points.isEmpty()) {
+        Box(modifier = modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+            Text("Keine GPS-Daten verfügbar", style = MaterialTheme.typography.bodyMedium)
+        }
+        return
+    }
+
+    val allLeanValues = remember(rideSession.points) { rideSession.points.map { it.leanAngleDeg } }
+    val allSpeedValues = remember(rideSession.points) { rideSession.points.map { it.speedKmh } }
+
+    val visibleRangeCount = remember(currentZoom, rideSession.points.size) {
+        val basePoints = 200.0
+        val zoomFactor = 2.0.pow(16.0 - currentZoom)
+        val desired = (basePoints * zoomFactor).toInt()
+        
+        val minP = min(60, rideSession.points.size)
+        val maxP = min(500, rideSession.points.size)
+        
+        if (minP >= maxP) rideSession.points.size
+        else desired.coerceIn(minP, maxP)
+    }
+
+    val selectedPoint = rideSession.points[selectedIndex]
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val requestMapNavigation: (TrackMapNavigationMode) -> Unit = { mode ->
+        mapNavigationMode = mode
+        mapNavigationRequestKey++
+    }
+
+    val onMapZoomChanged: (Double) -> Unit = { zoom ->
+        currentZoom = zoom
+        if (mapNavigationMode != TrackMapNavigationMode.OVERVIEW) {
+            lastDetailZoom = zoom
+        }
+    }
+
+    val onOverviewIndexChange: (Int) -> Unit = { index ->
+        if (!isOverviewScrubbing) {
+            isOverviewScrubbing = true
+            requestMapNavigation(TrackMapNavigationMode.OVERVIEW)
+        }
+        selectedIndex = index.coerceIn(rideSession.points.indices)
+    }
+
+    val onDetailScrollStarted: () -> Unit = {
+        if (!isDetailScrolling) {
+            isDetailScrolling = true
+            requestMapNavigation(TrackMapNavigationMode.DETAIL)
+        }
+    }
+
+    val onStatSelected: (Int) -> Unit = { index ->
+        if (index in rideSession.points.indices) {
+            selectedIndex = index
+            requestMapNavigation(TrackMapNavigationMode.DETAIL)
+        }
+    }
+
+    if (isLandscape) {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1.2f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
+
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp))) {
+                    OSMTrackMap(
+                        rideSession = rideSession,
+                        selectedIndex = selectedIndex,
+                        onMapPointSelected = {
+                            mapNavigationMode = TrackMapNavigationMode.IDLE
+                            selectedIndex = it
+                        },
+                        onZoomChanged = onMapZoomChanged,
+                        navigationMode = mapNavigationMode,
+                        navigationRequestKey = mapNavigationRequestKey,
+                        detailZoom = lastDetailZoom,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatItem(label = "TIME", value = formatTimeWithTick(selectedIndex, rideSession.points))
+                    StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
+                    StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
+                }
+
+                TrackOverviewScrubber(
+                    pointCount = rideSession.points.size,
+                    selectedIndex = selectedIndex,
+                    onSelectedIndexChange = onOverviewIndexChange,
+                    onScrubFinished = { isOverviewScrubbing = false },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LeanHistoryGraph(
+                        values = allLeanValues,
+                        selectedIndex = selectedIndex,
+                        visibleRangePoints = visibleRangeCount,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        isScrollable = true,
+                        onScrollStarted = onDetailScrollStarted,
+                        onScrollFinished = { isDetailScrolling = false },
+                        onSelectedIndexChange = { selectedIndex = it }
+                    )
+
+                    SpeedHistoryGraph(
+                        values = allSpeedValues,
+                        selectedIndex = selectedIndex,
+                        visibleRangePoints = visibleRangeCount,
+                        modifier = Modifier.weight(0.7f).fillMaxWidth(),
+                        isScrollable = true,
+                        onScrollStarted = onDetailScrollStarted,
+                        onScrollFinished = { isDetailScrolling = false },
+                        onSelectedIndexChange = { selectedIndex = it }
+                    )
+                }
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            RideSessionSummary(rideSession, onSelectIndex = onStatSelected)
+
+            Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp))) {
+                OSMTrackMap(
+                    rideSession = rideSession,
+                    selectedIndex = selectedIndex,
+                    onMapPointSelected = {
+                        mapNavigationMode = TrackMapNavigationMode.IDLE
+                        selectedIndex = it
+                    },
+                    onZoomChanged = onMapZoomChanged,
+                    navigationMode = mapNavigationMode,
+                    navigationRequestKey = mapNavigationRequestKey,
+                    detailZoom = lastDetailZoom,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            TrackOverviewScrubber(
+                pointCount = rideSession.points.size,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChange = onOverviewIndexChange,
+                onScrubFinished = { isOverviewScrubbing = false },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatItem(label = "TIME", value = formatTimeWithTick(selectedIndex, rideSession.points))
+                StatItem(label = "SPEED", value = "${selectedPoint.speedKmh.toInt()} km/h")
+                StatItem(label = "LEAN", value = "${"%.1f".format(selectedPoint.leanAngleDeg)}°")
+            }
+
+            LeanHistoryGraph(
+                values = allLeanValues,
+                selectedIndex = selectedIndex,
+                visibleRangePoints = visibleRangeCount,
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                isScrollable = true,
+                onScrollStarted = onDetailScrollStarted,
+                onScrollFinished = { isDetailScrolling = false },
+                onSelectedIndexChange = { selectedIndex = it }
+            )
+
+            SpeedHistoryGraph(
+                values = allSpeedValues,
+                selectedIndex = selectedIndex,
+                visibleRangePoints = visibleRangeCount,
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+                isScrollable = true,
+                onScrollStarted = onDetailScrollStarted,
+                onScrollFinished = { isDetailScrolling = false },
+                onSelectedIndexChange = { selectedIndex = it }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun RideReviewSkeleton(modifier: Modifier = Modifier) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_offset"
+    )
+
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+    )
+
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset.Zero,
+        end = Offset(x = translateAnim, y = translateAnim)
+    )
+
+    if (isLandscape) {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1.2f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    repeat(4) { SkeletonStatItem(brush) }
+                }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+            }
+
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    repeat(3) { SkeletonStatItem(brush) }
+                }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                repeat(4) { SkeletonStatItem(brush) }
+            }
+            Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp)).background(brush))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                repeat(3) { SkeletonStatItem(brush) }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1.3f).clip(RoundedCornerShape(16.dp)).background(brush))
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(brush))
+        }
+    }
+}
+
+@Composable
+private fun SkeletonStatItem(brush: Brush) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(modifier = Modifier.width(40.dp).height(10.dp).clip(RoundedCornerShape(2.dp)).background(brush))
+        Box(modifier = Modifier.width(60.dp).height(20.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+    }
+}
+
+@Composable
+private fun RideSessionSummary(rideSession: RideSession, onSelectIndex: (Int) -> Unit) {
+    val stats = remember(rideSession) {
+        val points = rideSession.points
+        if (points.isEmpty()) return@remember null
+        val maxLeanPoint = findMaxLeanPoint(points) ?: return@remember null
+
+        // Use pre-calculated stats if available (non-zero)
+        if (rideSession.trackLengthMeters > 0) {
+            val avgSpeed = if (points.isNotEmpty()) rideSession.sumSpeedKmh / points.size else 0f
+            
+            val maxSpeed = points.maxOfOrNull { it.speedKmh } ?: 0f
+            val maxSpeedIdx = points.indexOfFirst { it.speedKmh == maxSpeed }.coerceAtLeast(0)
+
+            RideStats(
+                distanceKm = rideSession.trackLengthMeters / 1000.0,
+                maxLeanIndex = maxLeanPoint.index,
+                maxLeanVal = maxLeanPoint.absoluteAngleDeg,
+                maxSpeedIndex = maxSpeedIdx,
+                maxSpeedVal = maxSpeed,
+                avgSpeed = avgSpeed
+            )
+        } else {
+            // Fallback for legacy rides: Manual calculation
+            var totalDist = 0.0
+            var maxSpeedIdx = 0
+            var speedSum = 0.0
+            
+            for (i in points.indices) {
+                val p = points[i]
+                if (i < points.size - 1) {
+                    val p2 = points[i + 1]
+                    val x = Math.toRadians(p2.longitude - p.longitude) * cos(Math.toRadians((p.latitude + p2.latitude) / 2.0))
+                    val y = Math.toRadians(p2.latitude - p.latitude)
+                    totalDist += sqrt(x * x + y * y) * 6371000.0
+                }
+                if (p.speedKmh > points[maxSpeedIdx].speedKmh) maxSpeedIdx = i
+                speedSum += p.speedKmh
+            }
+
+            RideStats(
+                distanceKm = totalDist / 1000.0,
+                maxLeanIndex = maxLeanPoint.index,
+                maxLeanVal = maxLeanPoint.absoluteAngleDeg,
+                maxSpeedIndex = maxSpeedIdx,
+                maxSpeedVal = points[maxSpeedIdx].speedKmh,
+                avgSpeed = if (points.isEmpty()) 0f else (speedSum / points.size).toFloat()
+            )
+        }
+    }
+
+    if (stats == null) return
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StatItem(label = "DISTANCE", value = "%.2f km".format(stats.distanceKm))
+        StatItem(
+            label = "MAX LEAN", 
+            value = "%.1f°".format(stats.maxLeanVal),
+            onClick = { onSelectIndex(stats.maxLeanIndex) }
+        )
+        StatItem(
+            label = "MAX SPEED", 
+            value = "${stats.maxSpeedVal.toInt()} km/h",
+            onClick = { onSelectIndex(stats.maxSpeedIndex) }
+        )
+        StatItem(label = "AVG SPEED", value = "${stats.avgSpeed.toInt()} km/h")
+    }
+}
+
+@Composable
+private fun StatItem(label: String, value: String, onClick: (() -> Unit)? = null) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) {
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(4.dp)
+        } else {
+            Modifier.padding(4.dp)
+        }
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        Text(value, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+    }
+}
+
+public fun formatTimeWithTick(index: Int, points: List<TrackPoint>): String {
+    if (index !in points.indices) return "--:--:--"
+    val point = points[index]
+    val baseTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(point.timestampMs))
+    var tick = 1
+    val currentSecond = point.timestampMs / 1000
+    for (i in index - 1 downTo 0) {
+        if (points[i].timestampMs / 1000 == currentSecond) {
+            tick++
+        } else {
+            break
+        }
+    }
+    return "$baseTime.$tick"
+}

@@ -1,0 +1,795 @@
+package de.hasselmeyer.leanangle
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.view.OrientationEventListener
+import android.view.Surface
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface as ComposeSurface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import de.hasselmeyer.leanangle.ui.intro.IntroScreen
+import de.hasselmeyer.leanangle.ui.intro.IntroStage
+import de.hasselmeyer.leanangle.ui.navigation.AppRoute
+import de.hasselmeyer.leanangle.ui.navigation.ScreenDirection
+import de.hasselmeyer.leanangle.ui.premium.PremiumScreen
+import de.hasselmeyer.leanangle.ui.settings.SettingsScreen
+import de.hasselmeyer.leanangle.ui.theme.LeanAngleTrackerTheme
+import de.hasselmeyer.leanangle.ui.tracking.LeanAngleScreen
+import de.hasselmeyer.leanangle.ui.tracking.RideHistoryScreen
+import de.hasselmeyer.leanangle.ui.tracking.RideDetailScreen
+import de.hasselmeyer.leanangle.ui.tracking.TrackingPermissionDialog
+import de.hasselmeyer.leanangle.ui.calibration.CalibrationScreen
+import kotlinx.coroutines.delay
+import androidx.core.content.ContextCompat
+import de.hasselmeyer.leanangle.billing.PremiumBillingManager
+import de.hasselmeyer.leanangle.billing.PremiumEntitlements
+import de.hasselmeyer.leanangle.map.OpenStreetMapConfig
+import de.hasselmeyer.leanangle.privacy.AdSupportedAccessState
+import de.hasselmeyer.leanangle.privacy.AdSupportedAccessStore
+import de.hasselmeyer.leanangle.privacy.GoogleMobileAdsConsentManager
+import de.hasselmeyer.leanangle.privacy.resolveAdSupportedAccessState
+import de.hasselmeyer.leanangle.ui.access.AdSupportedAccessScreen
+import de.hasselmeyer.leanangle.ui.legal.LegalDocument
+import de.hasselmeyer.leanangle.ui.legal.LegalDocumentScreen
+import com.google.android.gms.oss.licenses.v2.OssLicensesMenuActivity
+
+class MainActivity : ComponentActivity() {
+    private val viewModel: MainViewModel by viewModels()
+    private lateinit var premiumBillingManager: PremiumBillingManager
+    private lateinit var adsConsentManager: GoogleMobileAdsConsentManager
+    private lateinit var adSupportedAccessStore: AdSupportedAccessStore
+    private var pendingEntitlementDowngrade: PremiumEntitlements? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
+        super.onCreate(savedInstanceState)
+        var splashScreenExited by mutableStateOf(false)
+
+        splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
+            splashScreenViewProvider.remove()
+            splashScreenExited = true
+        }
+
+        OpenStreetMapConfig.initialize(this)
+        adsConsentManager = GoogleMobileAdsConsentManager(this)
+        adSupportedAccessStore = AdSupportedAccessStore(this)
+
+        premiumBillingManager = PremiumBillingManager(this, ::applyOrDeferEntitlements)
+        adsConsentManager.refreshConsentInfo(this)
+        premiumBillingManager.start()
+
+        enableEdgeToEdge()
+        setContent {
+            LeanAngleTrackerTheme {
+                ComposeSurface(modifier = Modifier.fillMaxSize()) {
+                    val state by viewModel.uiState.collectAsStateWithLifecycle()
+                    val premiumBillingState by premiumBillingManager.state.collectAsStateWithLifecycle()
+                    val adsConsentState by adsConsentManager.state.collectAsStateWithLifecycle()
+                    var routeUiState by rememberSaveable(stateSaver = RouteUiState.Saver) {
+                        mutableStateOf(RouteUiState())
+                    }
+                    var showTrackingPermissionDialog by rememberSaveable { mutableStateOf(false) }
+                    var hasChosenAdSupportedAccess by rememberSaveable {
+                        mutableStateOf(adSupportedAccessStore.hasChosenAdSupportedAccess())
+                    }
+                    val adsConsentRequestStarted = true
+
+                    val permissionsLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestMultiplePermissions()
+                    ) {
+                        val locationGranted = hasLocationPermission()
+                        viewModel.onLocationPermissionResult(locationGranted)
+                        if (locationGranted) viewModel.startTracking()
+                    }
+                    val gpxImportLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        uri?.let(viewModel::importGpx)
+                    }
+
+                    if (showTrackingPermissionDialog) {
+                        TrackingPermissionDialog(
+                            onConfirm = {
+                                showTrackingPermissionDialog = false
+                                val missingPermissions = missingTrackingPermissions()
+                                if (missingPermissions.isEmpty()) {
+                                    viewModel.onLocationPermissionResult(true)
+                                    viewModel.startTracking()
+                                } else {
+                                    permissionsLauncher.launch(missingPermissions)
+                                }
+                            },
+                            onDismiss = { showTrackingPermissionDialog = false }
+                        )
+                    }
+
+                    // Handle Foreground Service for tracking
+                    LaunchedEffect(
+                        state.tracking.trackingStarted,
+                        state.tracking.trackLengthKm,
+                        state.tracking.elapsedTimeMs / 1000
+                    ) {
+                        val intent = Intent(this@MainActivity, TrackingService::class.java)
+                        if (state.tracking.trackingStarted) {
+                            intent.putExtra(TrackingService.EXTRA_DISTANCE, state.tracking.trackLengthKm)
+                            intent.putExtra(TrackingService.EXTRA_TIME, state.tracking.elapsedTimeMs)
+                            ContextCompat.startForegroundService(this@MainActivity, intent)
+                        } else {
+                            stopService(intent)
+                        }
+                    }
+
+                    // Auto-open last saved ride and handle back stack requirements
+                    LaunchedEffect(state.lastSavedRideId) {
+                        state.lastSavedRideId?.let { id ->
+                            viewModel.loadFullSession(id)
+                            routeUiState = routeUiState.copy(
+                                showHistory = true,
+                                selectedRideId = id
+                            )
+                        }
+                    }
+
+                    LaunchedEffect(state.tracking.trackingStarted) {
+                        if (!state.tracking.trackingStarted) {
+                            applyPendingEntitlementDowngrade()
+                        }
+                    }
+
+                    LaunchedEffect(routeUiState.introStage) {
+                        if (routeUiState.introStage != IntroStage.LOADING) return@LaunchedEffect
+                        delay(800)
+                        routeUiState = routeUiState.copy(introStage = IntroStage.LEGAL)
+                    }
+
+                    LaunchedEffect(
+                        routeUiState.introStage,
+                        state.settings.isPremiumSubscribed,
+                        hasChosenAdSupportedAccess
+                    ) {
+                        if (
+                            routeUiState.introStage == IntroStage.DONE &&
+                            !state.settings.isPremiumSubscribed &&
+                            hasChosenAdSupportedAccess
+                        ) {
+                            adsConsentManager.showConsentFormIfRequiredWhenReady(
+                                this@MainActivity
+                            )
+                        }
+                    }
+
+                    LaunchedEffect(routeUiState.showPremium) {
+                        if (routeUiState.showPremium) {
+                            premiumBillingManager.loadProductDetails()
+                        }
+                    }
+
+                    val adSupportedAccessState = resolveAdSupportedAccessState(
+                        isPremiumSubscribed = state.settings.isPremiumSubscribed,
+                        hasChosenAdSupportedAccess = hasChosenAdSupportedAccess,
+                        consentRequestStarted = adsConsentRequestStarted,
+                        consentState = adsConsentState
+                    )
+                    val accessRestrictionActive =
+                        routeUiState.introStage == IntroStage.DONE &&
+                            adSupportedAccessState != AdSupportedAccessState.OPEN &&
+                            !state.tracking.trackingStarted
+
+                    val normalRoute = resolveRoute(
+                        introStage = routeUiState.introStage,
+                        showSettings = routeUiState.showSettings,
+                        showPremium = routeUiState.showPremium,
+                        showHistory = routeUiState.showHistory,
+                        selectedRideId = routeUiState.selectedRideId,
+                        legalDocument = routeUiState.legalDocument,
+                        isCalibrated = state.calibration.isCalibrated,
+                        calibrationCompletionPending = state.calibration.completionPending
+                    )
+                    val route = if (accessRestrictionActive) {
+                        resolveRestrictedRoute(routeUiState)
+                    } else {
+                        normalRoute
+                    }
+
+                    // Keep screen on while on the tracking screen
+                    LaunchedEffect(route) {
+                        if (route is AppRoute.Tracking) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                    }
+
+                    BackHandler(enabled = route is AppRoute.Settings || route is AppRoute.Premium || route is AppRoute.TrackReview || route is AppRoute.RideDetail || route is AppRoute.Calibration || route is AppRoute.Legal) {
+                        when (route) {
+                            AppRoute.Settings -> routeUiState = routeUiState.copy(showSettings = false)
+                            AppRoute.Premium -> routeUiState = routeUiState.copy(showPremium = false)
+                            AppRoute.TrackReview -> routeUiState = routeUiState.copy(showHistory = false)
+                            is AppRoute.Legal -> {
+                                routeUiState = routeUiState.copy(legalDocument = null)
+                            }
+                            is AppRoute.RideDetail -> {
+                                routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
+                            }
+                            AppRoute.Calibration -> {
+                                if (state.calibration.isCalibrated) {
+                                    // Normally handled by resolveRoute
+                                }
+                            }
+                            else -> Unit
+                        }
+                    }
+
+                    AnimatedContent(
+                        targetState = route,
+                        transitionSpec = {
+                            val forward = targetState.index() > initialState.index()
+                            val effectiveDirection = if (forward) {
+                                targetState.screen.screenEntryDirection
+                            } else {
+                                initialState.screen.screenEntryDirection
+                            }
+
+                            if (
+                                initialState is AppRoute.Calibration &&
+                                targetState is AppRoute.Tracking
+                            ) {
+                                fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 100)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 300))
+                            } else if (effectiveDirection == ScreenDirection.HORIZONTAL) {
+                                slideInHorizontally(
+                                    animationSpec = tween(300),
+                                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth }
+                                ) togetherWith slideOutHorizontally(
+                                    animationSpec = tween(300),
+                                    targetOffsetX = { fullWidth -> if (forward) -fullWidth else fullWidth }
+                                )
+                            } else {
+                                slideInVertically(
+                                    animationSpec = tween(300),
+                                    initialOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
+                                ) togetherWith slideOutVertically(
+                                    animationSpec = tween(300),
+                                    targetOffsetY = { fullHeight -> if (forward) -fullHeight else fullHeight }
+                                )
+                            }
+                        },
+                        contentKey = { it::class },
+                        label = "app_route"
+                    ) { currentRoute ->
+                        when (currentRoute) {
+                            AppRoute.Access -> AdSupportedAccessScreen(
+                                state = adSupportedAccessState,
+                                subscriptionPriceLabel =
+                                    premiumBillingState.subscriptionPriceLabel,
+                                privacyOptionsRequired =
+                                    adsConsentState.privacyOptionsRequired,
+                                errorMessage = adsConsentState.errorMessage,
+                                onChooseAdSupportedAccess = {
+                                    adSupportedAccessStore.chooseAdSupportedAccess()
+                                    hasChosenAdSupportedAccess = true
+                                    adsConsentManager.showConsentFormIfRequiredWhenReady(
+                                        this@MainActivity
+                                    )
+                                },
+                                onOpenPremium = {
+                                    routeUiState = routeUiState.copy(showPremium = true)
+                                },
+                                onReviewPrivacyChoices = {
+                                    adsConsentManager.showPrivacyOptions(this@MainActivity)
+                                },
+                                onRetryPrivacyCheck = {
+                                    adsConsentManager.refreshConsentInfo(this@MainActivity)
+                                    adsConsentManager.showConsentFormIfRequiredWhenReady(
+                                        this@MainActivity
+                                    )
+                                },
+                                onRestorePurchases =
+                                    premiumBillingManager::refreshPurchases,
+                                onManageRideData = {
+                                    routeUiState = routeUiState.copy(showHistory = true)
+                                },
+                                onOpenPrivacyPolicy = {
+                                    routeUiState = routeUiState.copy(
+                                        legalDocument = LegalDocument.PRIVACY
+                                    )
+                                },
+                                onOpenTerms = {
+                                    routeUiState = routeUiState.copy(
+                                        legalDocument = LegalDocument.TERMS
+                                    )
+                                },
+                                onOpenLegalNotice = {
+                                    routeUiState = routeUiState.copy(
+                                        legalDocument = LegalDocument.LEGAL_NOTICE
+                                    )
+                                }
+                            )
+
+                            is AppRoute.Intro -> renderIntroRoute(
+                                stage = currentRoute.stage,
+                                animationReady = splashScreenExited,
+                                onAction = {
+                                    when (currentRoute.stage) {
+                                        IntroStage.LEGAL -> {
+                                            routeUiState = routeUiState.copy(introStage = IntroStage.ATTACH_PROMPT)
+                                        }
+                                        IntroStage.ATTACH_PROMPT -> {
+                                            routeUiState = routeUiState.copy(introStage = IntroStage.TRANSITION_OUT)
+                                        }
+                                        else -> {}
+                                    }
+                                },
+                                onTransitionFinished = {
+                                    routeUiState = routeUiState.copy(introStage = IntroStage.DONE)
+                                }
+                            )
+
+                            AppRoute.Tracking -> {
+                                // Handle Recovery Dialog only when Tracking screen is active
+                                state.pendingRecovery?.let { recovery ->
+                                    AlertDialog(
+                                        onDismissRequest = { viewModel.resolveRecovery(false) },
+                                        title = { Text(stringResource(R.string.dialog_recovery_title)) },
+                                        text = { Text(stringResource(R.string.dialog_recovery_message)) },
+                                        confirmButton = {
+                                            TextButton(onClick = {
+                                                viewModel.resolveRecovery(true)
+                                            }) {
+                                                Text(stringResource(R.string.dialog_recovery_continue))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = {
+                                                viewModel.resolveRecovery(false)
+                                            }) {
+                                                Text(stringResource(R.string.dialog_recovery_save))
+                                            }
+                                        }
+                                    )
+                                }
+
+                                LeanAngleScreen(
+                                    trackingState = state.tracking,
+                                    onOpenSettings = { routeUiState = routeUiState.copy(showSettings = true) },
+                                    onOpenPremium = { routeUiState = routeUiState.copy(showPremium = true) },
+                                    onOpenHistory = { routeUiState = routeUiState.copy(showHistory = true) },
+                                    onStartTracking = {
+                                        if (missingTrackingPermissions().isEmpty()) {
+                                            viewModel.onLocationPermissionResult(true)
+                                            viewModel.startTracking()
+                                        } else {
+                                            showTrackingPermissionDialog = true
+                                        }
+                                    },
+                                    onFinishRide = {
+                                        viewModel.finishRide()
+                                    },
+                                    onStartCalibration = {
+                                        routeUiState = routeUiState.copy(showSettings = false)
+                                        viewModel.startCalibration()
+                                    },
+                                    onTogglePause = viewModel::togglePauseTracking,
+                                    onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                    onSetSensorSamplingRate = viewModel::setSensorSamplingRate,
+                                    onDebugClearEntitlementCache =
+                                        ::debugClearEntitlementCache,
+                                    onDebugExpireEntitlementCache =
+                                        ::debugExpireEntitlementCache,
+                                    onAutoResumeIndicatorDismissed = viewModel::dismissAutoResumePremiumShortcut,
+                                    appTourState = if (
+                                        state.pendingRecovery == null && state.offerExtendSession == null
+                                    ) {
+                                        state.appTour
+                                    } else {
+                                        AppTourUiState()
+                                    },
+                                    onAcceptAppTourOffer = viewModel::acceptAppTourOffer,
+                                    onDeclineAppTourOffer = viewModel::completeAppTour,
+                                    onPreviousAppTourPage = viewModel::showPreviousAppTourPage,
+                                    onNextAppTourPage = viewModel::showNextAppTourPage,
+                                    onFinishAppTour = viewModel::completeAppTour,
+                                    offerExtend = state.offerExtendSession,
+                                    onConfirmExtend = viewModel::confirmExtendRide,
+                                    showAdBanner =
+                                        !state.settings.isPremiumSubscribed &&
+                                            adsConsentState.canRequestAds
+                                )
+                            }
+
+                            AppRoute.Calibration -> CalibrationScreen(
+                                calibrationState = state.calibration,
+                                offerAppTour = state.appTour.offerPending,
+                                onStartUprightMeasurement = viewModel::startUprightMeasurement,
+                                onFinishCalibration = viewModel::finishCalibrationFlow
+                            )
+
+                            AppRoute.Settings -> SettingsScreen(
+                                state = state.settings,
+                                onBack = { routeUiState = routeUiState.copy(showSettings = false) },
+                                onSetHistoryWindow = viewModel::setHistoryWindowSeconds,
+                                onSetRecorderIntervalMs = viewModel::setRecorderIntervalMs,
+                                onResetGaugeExtrema = viewModel::resetGaugeExtrema,
+                                onStartAppTour = {
+                                    routeUiState = routeUiState.copy(showSettings = false)
+                                    viewModel.startAppTour()
+                                },
+                                onStartCalibration = {
+                                    routeUiState = routeUiState.copy(showSettings = false)
+                                    viewModel.startCalibration()
+                                },
+                                onToggleAutoResume = { enabled ->
+                                    if (shouldOpenPremiumForAutomationToggle(
+                                            enabled = enabled,
+                                            hasAutomationAccess = state.settings.hasAutomationAccess
+                                        )
+                                    ) {
+                                        routeUiState = routeUiState.copy(showPremium = true)
+                                    } else {
+                                        viewModel.setAutoResumeEnabled(enabled)
+                                    }
+                                },
+                                onOpenPremium = { routeUiState = routeUiState.copy(showPremium = true) },
+                                onToggleAutoPause = { enabled ->
+                                    if (shouldOpenPremiumForAutomationToggle(
+                                            enabled = enabled,
+                                            hasAutomationAccess = state.settings.hasAutomationAccess
+                                        )
+                                    ) {
+                                        routeUiState = routeUiState.copy(showPremium = true)
+                                    } else {
+                                        viewModel.setAutoPauseEnabled(enabled)
+                                    }
+                                },
+                                privacyOptionsRequired = adsConsentState.privacyOptionsRequired,
+                                onOpenPrivacyOptions = {
+                                    adsConsentManager.showPrivacyOptions(this@MainActivity)
+                                },
+                                onOpenLegalDocument = { document ->
+                                    routeUiState = routeUiState.copy(legalDocument = document)
+                                }
+                            )
+
+                            AppRoute.Premium -> PremiumScreen(
+                                isAutomationPackPurchased = state.settings.isAutomationPackPurchased,
+                                isPremiumSubscribed = state.settings.isPremiumSubscribed,
+                                billingState = premiumBillingState,
+                                onBack = { routeUiState = routeUiState.copy(showPremium = false) },
+                                onBuyAutomationPack = {
+                                    premiumBillingManager.launchAutomationPackPurchase(this@MainActivity)
+                                },
+                                onSubscribe = {
+                                    premiumBillingManager.launchSubscriptionPurchase(this@MainActivity)
+                                },
+                                onRestorePurchases = premiumBillingManager::refreshPurchases,
+                                onManageSubscription = ::openPremiumSubscriptionManagement,
+                                onOpenTerms = {
+                                    routeUiState = routeUiState.copy(
+                                        legalDocument = LegalDocument.TERMS
+                                    )
+                                },
+                                onOpenPrivacyPolicy = {
+                                    routeUiState = routeUiState.copy(
+                                        legalDocument = LegalDocument.PRIVACY
+                                    )
+                                }
+                            )
+
+                            is AppRoute.Legal -> LegalDocumentScreen(
+                                document = currentRoute.document,
+                                onBack = {
+                                    routeUiState = routeUiState.copy(legalDocument = null)
+                                },
+                                onOpenGeneratedLicenses = ::openOpenSourceLicenses
+                            )
+
+                            AppRoute.TrackReview -> RideHistoryScreen(
+                                rideHistory = state.rideHistory,
+                                onSelectRide = { id -> 
+                                    viewModel.loadFullSession(id)
+                                    routeUiState = routeUiState.copy(selectedRideId = id) 
+                                },
+                                onBack = { routeUiState = routeUiState.copy(showHistory = false) },
+                                onDeleteRide = viewModel::deleteRide,
+                                onImportGpx = { gpxImportLauncher.launch("*/*") },
+                                importState = state.gpxImport,
+                                onImportErrorConsumed = viewModel::consumeGpxImportError,
+                                onCombineRides = viewModel::combineRides,
+                                restrictedToDataManagement = accessRestrictionActive
+                            )
+
+                            is AppRoute.RideDetail -> {
+                                val summary = state.rideHistory.find { it.rideId == currentRoute.rideId }
+                                if (summary != null) {
+                                    RideDetailScreen(
+                                        rideSummary = summary,
+                                        fullSession = state.expandedRides[currentRoute.rideId],
+                                        onBack = { routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true) },
+                                        onUpdateName = { viewModel.updateRideName(summary, it) },
+                                        onDelete = { 
+                                            viewModel.deleteRide(summary)
+                                            routeUiState = routeUiState.copy(selectedRideId = null, showHistory = true)
+                                        },
+                                        isPremiumSubscribed =
+                                            state.settings.isPremiumSubscribed ||
+                                                accessRestrictionActive,
+                                        restrictedToDataManagement = accessRestrictionActive
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::premiumBillingManager.isInitialized) premiumBillingManager.refreshPurchases()
+        
+        // Initial check based on current display rotation
+        val currentRotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display?.rotation
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.rotation
+        }
+
+        if (currentRotation == Surface.ROTATION_90 || currentRotation == Surface.ROTATION_270) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+
+        // Also nudge via OrientationEventListener to catch cases where display rotation hasn't updated yet
+        val listener = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+                val isLandscape = (orientation in 60..120) || (orientation in 240..300)
+                if (isLandscape) {
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else {
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                }
+                disable() // Stop listening after the initial nudge on resume
+            }
+        }
+        if (listener.canDetectOrientation()) {
+            listener.enable()
+        }
+    }
+
+    override fun onDestroy() {
+        if (::premiumBillingManager.isInitialized) premiumBillingManager.close()
+        super.onDestroy()
+    }
+
+    private fun applyOrDeferEntitlements(entitlements: PremiumEntitlements) {
+        runOnUiThread {
+            val currentState = viewModel.uiState.value
+            if (
+                shouldDeferEntitlementUpdate(
+                    trackingStarted = currentState.tracking.trackingStarted,
+                    currentAutomationPackPurchased =
+                        currentState.settings.isAutomationPackPurchased,
+                    currentPremiumSubscribed = currentState.settings.isPremiumSubscribed,
+                    updatedEntitlements = entitlements
+                )
+            ) {
+                pendingEntitlementDowngrade = entitlements
+                return@runOnUiThread
+            }
+
+            pendingEntitlementDowngrade = null
+            viewModel.setPremiumEntitlements(
+                isAutomationPackPurchased = entitlements.isAutomationPackPurchased,
+                isPremiumSubscribed = entitlements.isPremiumSubscribed
+            )
+        }
+    }
+
+    private fun applyPendingEntitlementDowngrade() {
+        val entitlements = pendingEntitlementDowngrade ?: return
+        pendingEntitlementDowngrade = null
+        viewModel.setPremiumEntitlements(
+            isAutomationPackPurchased = entitlements.isAutomationPackPurchased,
+            isPremiumSubscribed = entitlements.isPremiumSubscribed
+        )
+    }
+
+    private fun debugClearEntitlementCache() {
+        if (!BuildConfig.DEBUG) return
+        premiumBillingManager.close()
+        if (SettingsStore(applicationContext).debugClearBillingEntitlementCache()) {
+            restartForEntitlementCacheTest()
+        }
+    }
+
+    private fun debugExpireEntitlementCache() {
+        if (!BuildConfig.DEBUG) return
+        premiumBillingManager.close()
+        if (SettingsStore(applicationContext).debugAgeBillingEntitlementCacheBeyondGrace()) {
+            restartForEntitlementCacheTest()
+        }
+    }
+
+    private fun restartForEntitlementCacheTest() {
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+        )
+        finish()
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun missingTrackingPermissions(): Array<String> = buildList {
+        if (!hasLocationPermission()) {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this@MainActivity,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }.toTypedArray()
+
+    private fun resolveRoute(
+        introStage: IntroStage,
+        showSettings: Boolean,
+        showPremium: Boolean,
+        showHistory: Boolean,
+        selectedRideId: Long?,
+        legalDocument: LegalDocument?,
+        isCalibrated: Boolean,
+        calibrationCompletionPending: Boolean
+    ): AppRoute {
+        if (introStage != IntroStage.DONE) {
+            return AppRoute.Intro(introStage)
+        }
+        if (!isCalibrated || calibrationCompletionPending) {
+            return AppRoute.Calibration
+        }
+        if (legalDocument != null) {
+            return AppRoute.Legal(legalDocument)
+        }
+        if (selectedRideId != null) {
+            return AppRoute.RideDetail(selectedRideId)
+        }
+        if (showHistory) {
+            return AppRoute.TrackReview
+        }
+        if (showPremium) {
+            return AppRoute.Premium
+        }
+        if (showSettings) {
+            return AppRoute.Settings
+        } else {
+            return AppRoute.Tracking
+        }
+    }
+
+    private fun resolveRestrictedRoute(routeUiState: RouteUiState): AppRoute = when {
+        routeUiState.legalDocument != null -> AppRoute.Legal(routeUiState.legalDocument)
+        routeUiState.selectedRideId != null -> AppRoute.RideDetail(routeUiState.selectedRideId)
+        routeUiState.showHistory -> AppRoute.TrackReview
+        routeUiState.showPremium -> AppRoute.Premium
+        else -> AppRoute.Access
+    }
+
+    private fun openPremiumSubscriptionManagement() {
+        val uri = Uri.parse(
+            "https://play.google.com/store/account/subscriptions" +
+                "?sku=${BuildConfig.PREMIUM_SUBSCRIPTION_PRODUCT_ID}&package=$packageName"
+        )
+        startActivity(Intent(Intent.ACTION_VIEW, uri))
+    }
+
+    private fun openOpenSourceLicenses() {
+        startActivity(Intent(this, OssLicensesMenuActivity::class.java))
+    }
+
+    @Composable
+    private fun renderIntroRoute(
+        stage: IntroStage,
+        animationReady: Boolean,
+        onAction: () -> Unit,
+        onTransitionFinished: () -> Unit
+    ) {
+        IntroScreen(
+            stage = stage,
+            animationReady = animationReady,
+            onAction = onAction,
+            onTransitionFinished = onTransitionFinished
+        )
+    }
+}
+
+private data class RouteUiState(
+    val introStage: IntroStage = IntroStage.LOADING,
+    val showSettings: Boolean = false,
+    val showPremium: Boolean = false,
+    val showHistory: Boolean = false,
+    val selectedRideId: Long? = null,
+    val legalDocument: LegalDocument? = null
+) {
+    companion object {
+        val Saver: Saver<RouteUiState, Any> = listSaver(
+            save = {
+                listOf(
+                    it.introStage.name,
+                    it.showSettings,
+                    it.showPremium,
+                    it.showHistory,
+                    it.selectedRideId ?: -1L,
+                    it.legalDocument?.name.orEmpty()
+                )
+            },
+            restore = {
+                val rideId = it[4] as Long
+                val legalDocumentName = it[5] as String
+                RouteUiState(
+                    introStage = IntroStage.valueOf(it[0] as String),
+                    showSettings = it[1] as Boolean,
+                    showPremium = it[2] as Boolean,
+                    showHistory = it[3] as Boolean,
+                    selectedRideId = if (rideId == -1L) null else rideId,
+                    legalDocument = legalDocumentName
+                        .takeIf(String::isNotBlank)
+                        ?.let(LegalDocument::valueOf)
+                )
+            }
+        )
+    }
+}
+
+internal fun shouldOpenPremiumForAutomationToggle(
+    enabled: Boolean,
+    hasAutomationAccess: Boolean
+): Boolean = enabled && !hasAutomationAccess
+
+internal fun shouldDeferEntitlementUpdate(
+    trackingStarted: Boolean,
+    currentAutomationPackPurchased: Boolean,
+    currentPremiumSubscribed: Boolean,
+    updatedEntitlements: PremiumEntitlements
+): Boolean = trackingStarted && (
+    (currentAutomationPackPurchased && !updatedEntitlements.isAutomationPackPurchased) ||
+        (currentPremiumSubscribed && !updatedEntitlements.isPremiumSubscribed)
+    )

@@ -22,11 +22,11 @@ val mapTileUrl = configuredMapTileUrl
     .orElse("https://tile.openstreetmap.org/")
 
 android {
-    namespace = "com.example.leanangletracker"
+    namespace = "de.hasselmeyer.leanangle"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.leanangletracker"
+        applicationId = "de.hasselmeyer.leanangle"
         minSdk = 26
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
