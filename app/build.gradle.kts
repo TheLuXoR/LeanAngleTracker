@@ -18,8 +18,7 @@ val legalProviderEmail = providers.gradleProperty("LEGAL_PROVIDER_EMAIL")
 val privacyPolicyUrl = providers.gradleProperty("PRIVACY_POLICY_URL")
     .orElse("")
 val configuredMapTileUrl = providers.gradleProperty("MAP_TILE_URL")
-val mapTileUrl = configuredMapTileUrl
-    .orElse("https://tile.openstreetmap.org/")
+val mapTileUrl = configuredMapTileUrl.orElse("https://tile.openstreetmap.org/")
 
 android {
     namespace = "de.hasselmeyer.leanangle"
@@ -82,21 +81,21 @@ android {
 }
 
 dependencies {
-    implementation("androidx.compose.animation:animation:1.11.4")
+    implementation("androidx.compose.animation:animation:1.12.0")
     val bom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(bom)
     androidTestImplementation(bom)
 
 
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("androidx.core:core-ktx:1.18.0")
+    implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.core:core-splashscreen:1.2.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("com.google.code.gson:gson:2.14.0")
     implementation("com.google.android.gms:play-services-ads:25.4.0")
