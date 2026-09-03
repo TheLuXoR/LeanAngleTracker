@@ -56,11 +56,11 @@ private const val CALIBRATION_ANGLE_VISUAL_SCALE = 3.25f
 private const val INTRO_BIKE_FADE_IN_FRACTION = 0.25f
 
 
-@Preview(widthDp = 288, heightDp = 288)
+//@Preview(widthDp = 288, heightDp = 288)
 @Composable
 fun IntroBikeLeanAnimation(
 modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-duration: Float = 600f,
+duration: Float = 4000f,
 startAnimation: Boolean = true,
 ) {
 
@@ -303,6 +303,33 @@ private fun Bike(
                 topLeft = Offset(centerX - w * 0.05f, groundY - h * 0.0125f),
                 size = Size(w * 0.1f, h * 0.025f)
             )
+        // Main Wide Body
+        val wideBodyPath = Path().apply {
+            moveTo(centerX, groundY - h * 0.35f)
+            lineTo(centerX - w * 0.095f, groundY - h * 0.23f)
+            lineTo(centerX - w * 0.085f, groundY - h * 0.12f)
+            lineTo(centerX - w * 0.04f, groundY - h * 0.04f)
+            lineTo(centerX + w * 0.055f, groundY - h * 0.04f)
+            lineTo(centerX + w * 0.04f, groundY - h * 0.04f)
+            lineTo(centerX + w * 0.085f, groundY - h * 0.12f)
+            lineTo(centerX + w * 0.095f, groundY - h * 0.23f)
+            lineTo(centerX, groundY - h * 0.35f)
+
+            lineTo(centerX + w * 0.0f, groundY - h * 0.16f)
+            lineTo(centerX + w * 0.065f, groundY - h * 0.15f)
+            lineTo(centerX + w * 0.065f, groundY - h * 0.13f)
+            lineTo(centerX + w * 0.04f, groundY - h * 0.10f)
+
+            lineTo(centerX - w * 0.04f, groundY - h * 0.10f)
+            lineTo(centerX - w * 0.065f, groundY - h * 0.13f)
+            lineTo(centerX - w * 0.065f, groundY - h * 0.15f)
+            lineTo(centerX + w * 0.0f, groundY - h * 0.16f)
+
+
+            close()
+        }
+        drawPath(wideBodyPath, color = primary.copy(red = primary.red* 0.9f, green = primary.green * 0.9f,  blue = primary.blue*0.9f))
+
 
         // Tire
         drawRoundRect(
@@ -339,19 +366,18 @@ private fun Bike(
         // Main Fairing Body
         val fairingPath = Path().apply {
             moveTo(centerX, groundY - h * 0.375f)
-            lineTo(centerX - w * 0.0925f, groundY - h * 0.3f)
-            lineTo(centerX - w * 0.0775f, groundY - h * 0.175f)
-            lineTo(centerX + w * 0.0775f, groundY - h * 0.175f)
-            lineTo(centerX + w * 0.0925f, groundY - h * 0.3f)
+            lineTo(centerX - w * 0.09f, groundY - h * 0.3f)
+            lineTo(centerX - w * 0.07f, groundY - h * 0.175f)
+            lineTo(centerX + w * 0.07f, groundY - h * 0.175f)
+            lineTo(centerX + w * 0.09f, groundY - h * 0.3f)
             close()
         }
         drawPath(fairingPath, color = primary)
 
-
         // Windshield
         val shieldPath = Path().apply {
-            moveTo(centerX - w * 0.0625f, groundY - h * 0.3375f)
-            lineTo(centerX + w * 0.0625f, groundY - h * 0.3375f)
+            moveTo(centerX - w * 0.0625f, groundY - h * 0.3f)
+            lineTo(centerX + w * 0.0625f, groundY - h * 0.3f)
             lineTo(centerX + w * 0.0375f, groundY - h * 0.4125f)
             lineTo(centerX - w * 0.0375f, groundY - h * 0.4125f)
             close()
